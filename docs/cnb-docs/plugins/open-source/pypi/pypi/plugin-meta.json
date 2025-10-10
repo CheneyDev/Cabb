@@ -1,0 +1,10 @@
+{
+  "name": "PyPI",
+  "description": "发布python包",
+  "tags": ["python", "publish"],
+  "images": "https://hub.docker.com/r/drone-plugins/drone-pypi",
+  "source": "https://github.com/drone-plugins/drone-pypi",
+  "bugs": "https://github.com/drone-plugins/drone-pypi/issues",
+  "logo": "logo.svg",
+  "image_tag": "plugins/pypi:latest"
+}

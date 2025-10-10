@@ -1,0 +1,13 @@
+{
+  "name": "commitlint",
+  "description": "基于约定式提交规范，检查提交注释是否符合给定的规范。",
+  "mark": "official",
+  "tags": [
+    "commit",
+    "lint"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/commitlint/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/commitlint",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/commitlint/-/issues"
+}

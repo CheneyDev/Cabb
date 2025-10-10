@@ -1,0 +1,9 @@
+{
+  "name": "SCP",
+  "description": "通过 ssh 复制文件或制品",
+  "tags": ["ssh", "scp", "copy", "transfer"],
+  "images": "https://hub.docker.com/r/tencentcom/scp/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/scp",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/scp/-/issues",
+  "logo": "logo.svg"
+}

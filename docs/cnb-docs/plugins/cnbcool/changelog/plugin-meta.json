@@ -1,0 +1,13 @@
+{
+  "name": "changelog",
+  "description": "根据历史提交信息生成 changelog",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/cnbcool/changelog/tags",
+  "tags": [
+    "changelog",
+    "plugin"
+  ],
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/changelog",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/changelog/-/issues"
+}

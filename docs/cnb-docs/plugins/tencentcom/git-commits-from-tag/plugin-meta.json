@@ -1,0 +1,14 @@
+{
+  "name": "git-commits-from-tag",
+  "description": "获取从最后一个 TAG 到当前的提交信息",
+  "mark": "official",
+  "tags": [
+    "git",
+    "commits",
+    "tag"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-commits-from-tag/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-commits-from-tag",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-commits-from-tag/-/issues"
+}

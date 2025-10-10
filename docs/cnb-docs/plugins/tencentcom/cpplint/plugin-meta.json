@@ -1,0 +1,12 @@
+{
+  "name": "cpplint",
+  "description": "通过 cpplint 对 C++ 代码进行检查",
+  "mark": "official",
+  "images": "https://hub.docker.com/repository/docker/tencentcom/cpplint/tags",
+  "tags": [
+    "lint",
+    "cpp"
+  ],
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/cpplint",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/cpplint/-/issues"
+}

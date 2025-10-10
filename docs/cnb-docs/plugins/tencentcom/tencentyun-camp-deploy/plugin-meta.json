@@ -1,0 +1,14 @@
+{
+    "name": "腾讯云 camp 部署",
+    "description": "场景化封装腾讯云应用管理平台 API 实现更新实例镜像",
+    "tags": [
+      "腾讯云",
+      "CAMP",
+      "deploy"
+    ],
+    "mark": "official",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-camp-deploy/tags",
+    "logo": "logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-camp-deploy",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-camp-deploy/-/issues"
+  }

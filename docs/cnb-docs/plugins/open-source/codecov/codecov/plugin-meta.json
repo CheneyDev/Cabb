@@ -1,0 +1,10 @@
+{
+  "name": "Codecov",
+  "description": "推送测试报告到Codecov",
+  "tags": [ "test","publish", "report", "codecov" ],
+  "images": "https://hub.docker.com/r/robertstettner/drone-codecov",
+  "source": "https://github.com/robertstettner/drone-codecov",
+  "bugs": "https://github.com/robertstettner/drone-codecov/issues",
+  "logo": "logo.svg",
+  "image_tag": "robertstettner/drone-codecov:latest"
+}

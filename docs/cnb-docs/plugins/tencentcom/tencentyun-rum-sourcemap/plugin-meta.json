@@ -1,0 +1,14 @@
+{
+  "name": "Sourcemap 上传到 RUM",
+  "description": "适用于 CI 过程中自动生成 sourcemap 并上传到腾讯云 RUM 服务，以达到服务更新后正确分析报错信息的目的。",
+  "tags": [
+    "腾讯云",
+    "RUM",
+    "sourcemap"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/tencentyun-rum-sourcemap/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-rum-sourcemap",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-rum-sourcemap/-/issues"
+}

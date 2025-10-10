@@ -1,0 +1,9 @@
+{
+  "name": "git-sync",
+  "description": "用于在不同 Git 平台之间同步代码的插件。",
+  "mark": "official",
+  "tags": ["git", "mirror"],
+  "images": "https://hub.docker.com/r/tencentcom/git-sync/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-sync",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-sync/-/issues"
+}

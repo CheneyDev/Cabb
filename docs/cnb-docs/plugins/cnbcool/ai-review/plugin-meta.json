@@ -1,0 +1,15 @@
+{
+    "name": "AI 代码评审",
+    "description": "支持使用 AI 进行四类操作，代码评审、PR 标题和描述的可读性检测、提交注释可读性检测、变更总结",
+    "mark": "official",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/ai-review.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/ai-review/-/issues",
+    "tags": [
+      "AI",
+      "代码评审",
+      "可读性检测",
+      "变更总结"
+    ],
+    "images": "https://hub.docker.com/r/cnbcool/ai-review/tags",
+    "logo": "logo.png"
+  }

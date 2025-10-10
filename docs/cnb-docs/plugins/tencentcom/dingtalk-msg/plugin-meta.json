@@ -1,0 +1,11 @@
+{
+  "name": "dingtalk-msg",
+  "description": "发送钉钉消息",
+  "mark": "official",
+  "tags": [
+    "dingtalk"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/dingtalk-msg/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-msg",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-msg/-/issues"
+}

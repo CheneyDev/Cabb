@@ -1,0 +1,13 @@
+{
+  "name": "git-clone",
+  "description": "clone其他仓库到本地，可提交代码",
+  "mark": "official",
+  "tags": [
+    "git",
+    "clone"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-clone/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-clone",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-clone/-/issues"
+}

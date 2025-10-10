@@ -1,0 +1,13 @@
+{
+  "name": "cyclomatic-complexity",
+  "description": "圈复杂度计算并检查工具，可输出千行圈复杂度超标率等指标",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/cyclomatic-complexity/tags",
+  "tags": [
+    "cyclomatic",
+    "lizard"
+  ],
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/cyclomatic-complexity",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/cyclomatic-complexity/-/issues"
+}

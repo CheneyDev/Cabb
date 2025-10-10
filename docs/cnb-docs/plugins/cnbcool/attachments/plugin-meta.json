@@ -1,0 +1,14 @@
+{
+    "name": "附件",
+    "description": "附件插件，包括 release、commit的附件上传和下载",
+    "mark": "official",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/attachments.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/attachments/-/issues",
+    "tags": [
+      "attachments",
+      "download",
+      "upload"
+    ],
+    "images": "https://hub.docker.com/r/cnbcool/attachments/tags",
+    "logo": "logo.png"
+  }

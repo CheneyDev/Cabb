@@ -1,0 +1,13 @@
+{
+  "name": "feishu-message",
+  "description": "飞书群里发消息的插件，通过机器人，可以向固定的群中推送消息。",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/feishu-message/tags",
+  "tags": [
+    "飞书",
+    "消息"
+  ],
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/feishu-message",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/feishu-message/-/issues"
+}

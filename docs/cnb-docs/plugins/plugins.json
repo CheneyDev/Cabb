@@ -1,0 +1,1680 @@
+[
+  {
+    "id": "cnbcool/ai-review",
+    "name": "AI 代码评审",
+    "description": "支持使用 AI 进行四类操作，代码评审、PR 标题和描述的可读性检测、提交注释可读性检测、变更总结",
+    "tags": [
+      "AI",
+      "代码评审",
+      "可读性检测",
+      "变更总结"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/ai-review/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/ai-review/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/ai-review.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/ai-review/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/ai-review/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/annotations",
+    "name": "GIT 元数据",
+    "description": "上传/获取/删除元数据，元数据是对 tag 或 commit 的注解，用于存储关联数据。",
+    "tags": [
+      "元数据",
+      "git"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/annotations/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/annotations/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/annotations.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/annotations/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/annotations/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/attachments",
+    "name": "附件",
+    "description": "附件插件，包括 release、commit的附件上传和下载",
+    "tags": [
+      "attachments",
+      "download",
+      "upload"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/attachments/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/attachments/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/attachments.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/attachments/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/attachments/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/changelog",
+    "name": "changelog",
+    "description": "根据历史提交信息生成 changelog",
+    "tags": [
+      "changelog",
+      "plugin"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/changelog/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/changelog/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/changelog",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/changelog/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/changelog/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/commitlint",
+    "name": "commitlint",
+    "description": "基于约定式提交规范，检查提交注释是否符合给定的规范。",
+    "tags": [
+      "commit",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/commitlint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/commitlint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/commitlint",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/commitlint/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/commitlint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/create-pr",
+    "name": "创建 pull request",
+    "description": "创建 pull request",
+    "tags": [
+      "create",
+      "pr",
+      "pull request"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/create-pr/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/create-pr/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/create-pr.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/create-pr/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/create-pr/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/data-from-file",
+    "name": "data-from-file",
+    "description": "解析本地文件，指定属性路径导出为指定名称的环境变量",
+    "tags": [
+      "parse",
+      "env",
+      "file"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/data-from-file/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/data-from-file/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/data-from-file",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/data-from-file/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/data-from-file/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/fetch-git-file",
+    "name": "fetch-git-file",
+    "description": "拉取cnb git文件到本地",
+    "tags": [
+      "fetch",
+      "git",
+      "file"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/fetch-git-file",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/fetch-git-file/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/fetch-git-file/tags",
+    "locales": {
+      "en": {
+        "name": "fetch-git-file",
+        "description": "Retrieve CNB git files to local",
+        "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/README.en.md"
+      },
+      "en-US": {
+        "name": "fetch-git-file",
+        "description": "Fetch CNB git files to local",
+        "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/README.en-US.md"
+      }
+    },
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/git-auto-tag",
+    "name": "git-auto-tag",
+    "description": "自动打tag",
+    "tags": [
+      "git",
+      "tag"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-auto-tag/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-auto-tag/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/git-auto-tag",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-auto-tag/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/git-auto-tag/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/git-change-list",
+    "name": "git-change-list",
+    "description": "获取 change list",
+    "tags": [
+      "git change list"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-change-list/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-change-list/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/git-change-list",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-change-list/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/git-change-list/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/git-pr-title-lint",
+    "name": "git-pr-title-lint",
+    "description": "基于约定式提交规范，检查 PR 标题是否符合给定的规范。",
+    "tags": [
+      "PR",
+      "pull_request",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-pr-title-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-pr-title-lint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/git-pr-title-lint",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-pr-title-lint/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/git-pr-title-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/hello-world",
+    "name": "hello world",
+    "description": "一个简单的插件demo",
+    "tags": [
+      "demo",
+      "example"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/hello-world/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/hello-world/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/hello-world",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/hello-world/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/hello-world/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/knowledge-base",
+    "name": "知识库",
+    "description": "将仓库的文档导入到ElasticSearch或向量数据库中，以支持搜索或LLM问答。",
+    "tags": [
+      "知识库"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/knowledge-base/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/knowledge-base/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/knowledge-base.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/knowledge-base/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/knowledge-base/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/manifest",
+    "name": "manifest",
+    "description": "合并并推送 manifest 多系统架构镜像标签",
+    "tags": [
+      "manifest",
+      "docker",
+      "多系统架构",
+      "镜像标签"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/manifest/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/manifest/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/manifest",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/manifest.git/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/manifest/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/plugin-lint",
+    "name": "plugin-lint",
+    "description": "检查插件元数据 plugin-meta.json 是否符合编写规范",
+    "tags": [
+      "lint",
+      "plugin"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/plugin-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/plugin-lint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/plugin-lint",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/plugin-lint/-/issues",
+    "images": "https://hub.docker.com/r/codingci/plugin-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/pr-comments",
+    "name": "pull_request 评论",
+    "description": "上传 PR 评论",
+    "tags": [
+      "PR",
+      "pull_request",
+      "评论"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/pr-comments/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/pr-comments/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/pr-comments.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/pr-comments/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/pr-comments/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/rebase-check",
+    "name": "rebase-check",
+    "description": "检测当前分支是否已合并指定分支",
+    "tags": [
+      "git",
+      "rebase"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/rebase-check/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/rebase-check/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/rebase-check",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/rebase-check/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/rebase-check/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/release-clean",
+    "name": "release-clean",
+    "description": "cnb Release 清理插件",
+    "tags": [
+      "cnb",
+      "release"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/release-clean/README.md",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/release-clean",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/release-clean/-/issues",
+    "images": "https://cnb.cool/cnb/plugins/cnbcool/release-clean/-/packages/docker/release-clean",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/ajv-validator",
+    "name": "ajv-validator",
+    "description": "JSON schema验证",
+    "tags": [
+      "yaml",
+      "lint",
+      "JSON"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ajv-validator/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ajv-validator/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/ajv-validator",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ajv-validator/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/ajv-validator/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/bsca-analysis",
+    "name": "二进制软件成分分析",
+    "description": "一款基于二进制分析能力的自动化软件成分分析工具。",
+    "tags": [
+      "腾讯云",
+      "安全审计"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/bsca-analysis/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/bsca-analysis/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/bsca-analysis",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/bsca-analysis/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/bsca-analysis/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/coscli",
+    "name": "coscli",
+    "description": "使用 coscli 插件，用户可通过简单的命令行指令实现对对象（Object）的批量上传、下载、删除等操作。",
+    "tags": [
+      "腾讯云",
+      "cos"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/coscli/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/coscli/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/coscli.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/coscli/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/coscli/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/coverage-check",
+    "name": "coverage check",
+    "description": "单元测试覆盖率报告检查，可自定义覆盖率达标率",
+    "tags": [
+      "coverage"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/coverage-check/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/coverage-check/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/coverage-check",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/coverage-check/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/coverage-check/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/cpplint",
+    "name": "cpplint",
+    "description": "通过 cpplint 对 C++ 代码进行检查",
+    "tags": [
+      "lint",
+      "cpp"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/cpplint/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/cpplint",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/cpplint/-/issues",
+    "images": "https://hub.docker.com/repository/docker/tencentcom/cpplint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/cyclomatic-complexity",
+    "name": "cyclomatic-complexity",
+    "description": "圈复杂度计算并检查工具，可输出千行圈复杂度超标率等指标",
+    "tags": [
+      "cyclomatic",
+      "lizard"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/cyclomatic-complexity/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/cyclomatic-complexity/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/cyclomatic-complexity",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/cyclomatic-complexity/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/cyclomatic-complexity/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/deploy-to-tke",
+    "name": "腾讯云 TKE 更新镜像",
+    "description": "腾讯云容器服务(TKE)镜像更新插件",
+    "tags": [
+      "腾讯云",
+      "k8s",
+      "deploy"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/deploy-to-tke/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/deploy-to-tke/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/deploy-to-tke",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/deploy-to-tke/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/deploy-to-tke/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/dingtalk-bot-msg",
+    "name": "dingtalk-bot-msg",
+    "description": "发送钉钉机器人消息",
+    "tags": [
+      "dingtalk"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/dingtalk-bot-msg/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-bot-msg",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-bot-msg/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/dingtalk-bot-msg/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/dingtalk-msg",
+    "name": "dingtalk-msg",
+    "description": "发送钉钉消息",
+    "tags": [
+      "dingtalk"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/dingtalk-msg/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-msg",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-msg/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/dingtalk-msg/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/docker-lint",
+    "name": "Docker Lint",
+    "description": "一个更智能的 Dockerfile linter，帮助您构建最佳实践 Docker 镜像",
+    "tags": [
+      "docker",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/docker-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/docker-lint/logo.png",
+    "source": "https://github.com/hadolint/hadolint",
+    "bugs": "https://github.com/hadolint/hadolint/issues",
+    "images": "https://hub.docker.com/r/hadolint/hadolint/tags",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/envsubst",
+    "name": "envsubst",
+    "description": "替换文件中的环境变量",
+    "tags": [
+      "envsubst",
+      "环境变量"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/envsubst/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/envsubst/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/envsubst",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/envsubst/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/envsubst/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/feishu-message",
+    "name": "feishu-message",
+    "description": "飞书群里发消息的插件，通过机器人，可以向固定的群中推送消息。",
+    "tags": [
+      "飞书",
+      "消息"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/feishu-message/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/feishu-message/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/feishu-message",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/feishu-message/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/feishu-message/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/find-files",
+    "name": "find-files",
+    "description": "根据 glob 表达式查询文件，并列出结果",
+    "tags": [
+      "find",
+      "glob"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/find-files/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/find-files/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/find-files",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/find-files/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/find-files/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/ftps",
+    "name": "FTPS",
+    "description": "通过 ftps 上传制品的插件",
+    "tags": [
+      "ftp",
+      "lftp",
+      "transfer"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ftps/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ftps/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/ftps",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ftps/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/ftps/tags",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-clone",
+    "name": "git-clone",
+    "description": "clone其他仓库到本地，可提交代码",
+    "tags": [
+      "git",
+      "clone"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-clone/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-clone/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-clone",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-clone/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-clone/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-commit-list",
+    "name": "git-commit-list",
+    "description": "获取提交记录列表",
+    "tags": [
+      "commit list"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-commit-list/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-commit-list/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-commit-list",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-commit-list/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-comimt-list/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-commit",
+    "name": "git-commit",
+    "description": "提交本地代码",
+    "tags": [
+      "git",
+      "commit"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-commit/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-commit/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-commit",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-commit/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-commit/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-commits-from-tag",
+    "name": "git-commits-from-tag",
+    "description": "获取从最后一个 TAG 到当前的提交信息",
+    "tags": [
+      "git",
+      "commits",
+      "tag"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-commits-from-tag/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-commits-from-tag/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-commits-from-tag",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-commits-from-tag/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-commits-from-tag/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-compare-files",
+    "name": "git-compare-files",
+    "description": "获取差异文件列表，输出到文件。",
+    "tags": [
+      "git",
+      "compare"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-compare-files/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-compare-files",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-compare-files/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-compare-files/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-mr-limit",
+    "name": "git-mr-limit",
+    "description": "MR 变更检查（检查 MR 中 commit 次数 和 代码变更行数）",
+    "tags": [
+      "git"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-mr-limit/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-limit",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-limit/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-mr-limit/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-mr-title-lint",
+    "name": "git-mr-title-lint",
+    "description": "基于约定式提交规范，检查 MR 标题是否符合给定的规范。",
+    "tags": [
+      "MR",
+      "PR",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-mr-title-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-mr-title-lint/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-title-lint",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-title-lint/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-mr-title-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-set-credential",
+    "name": "git-set-credential",
+    "description": "设置git账户、邮箱、登陆信息",
+    "tags": [
+      "git",
+      "login"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-set-credential/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-set-credential/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-set-credential",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-set-credential/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-set-credential/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/git-sync",
+    "name": "git-sync",
+    "description": "用于在不同 Git 平台之间同步代码的插件。",
+    "tags": [
+      "git",
+      "mirror"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/git-sync/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/git-sync",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-sync/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/git-sync/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/golang-swag",
+    "name": "golang-swag",
+    "description": "将 golang 的注释转换为 swagger2.0 API 文档。",
+    "tags": [
+      "swag",
+      "golang"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/golang-swag/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/golang-swag/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/golang-swag",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/golang-swag/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/golang-swag/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/gradle",
+    "name": "gradle",
+    "description": "一个包含 Tencent Kona JDK 和 Gradle 的Docker镜像",
+    "tags": [
+      "publish",
+      "gradle"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/gradle/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/gradle/gradle.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/gradle",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/gradle/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/gradle/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/ksas-audit-suites",
+    "name": "KSAS 安全审计",
+    "description": "用于各种级别安全审计的工具集合，包括：系统基线安全审计、制品安全审计、源码安全审计、安卓应用安全审计。",
+    "tags": [
+      "腾讯云",
+      "安全审计"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ksas-audit-suites/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ksas-audit-suites/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/ksas-audit-suites",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ksas-audit-suites/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/ksas-audit-suites/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/markdown-lint",
+    "name": "markdown-lint",
+    "description": "markdownlint 是一个静态分析工具，带有一个规则库来检查 Markdown 文件的格式是否符合推荐标准，达到提升可读性和可维护性的目的。",
+    "tags": [
+      "markdown",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/markdown-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/markdown-lint/logo.png",
+    "source": "https://github.com/igorshubovych/markdownlint-cli",
+    "bugs": "https://github.com/igorshubovych/markdownlint-cli/issues",
+    "images": "https://hub.docker.com/r/tencentcom/markdown-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/maven",
+    "name": "maven",
+    "description": "一个包含Tencent Kona JDK 和 Maven 的Docker镜像",
+    "tags": [
+      "publish",
+      "maven"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/maven/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/maven/maven.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/maven",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/maven/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/maven/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/miniprogram-ci",
+    "name": "微信小程序",
+    "description": "从微信开发者工具中抽离小程序/小游戏项目代码编译模块，实现一键构建 npm /预览/上传小程序。",
+    "tags": [
+      "小程序",
+      "微信"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/miniprogram-ci/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/miniprogram-ci/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/miniprogram-ci",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/miniprogram-ci/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/miniprogram-ci/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/npm",
+    "name": "npm",
+    "description": "发布 NPM 包到仓库，支持官方仓库和私有仓库。",
+    "tags": [
+      "publish",
+      "npm"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/npm/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/npm/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/npm",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/npm/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/npm/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/pb-lint",
+    "name": "pb-lint",
+    "description": "Protobuf Lint",
+    "tags": [
+      "lint",
+      "protobuf"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/pb-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/pb-lint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/pb-lint",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/pb-lint/-/issues",
+    "images": "https://hub.docker.com/repository/docker/tencentcom/pb-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/random",
+    "name": "random",
+    "description": "根据选项，随机选择",
+    "tags": [
+      "random"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/random/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/random/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/random",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/random/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/random/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/read-file",
+    "name": "read-file",
+    "description": "根据指定编码读取输出本地文件内容。",
+    "tags": [
+      "file"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/read-file/README.md",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/read-file",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/read-file/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/read-file/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/rsync",
+    "name": "rsync",
+    "description": "通过 rsync 将文件同步到远程主机",
+    "tags": [
+      "rsync",
+      "transfer",
+      "文件同步"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/rsync/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/rsync/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/rsync",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/rsync/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/rsync/tags",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/scp",
+    "name": "SCP",
+    "description": "通过 ssh 复制文件或制品",
+    "tags": [
+      "ssh",
+      "scp",
+      "copy",
+      "transfer"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/scp/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/scp/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/scp",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/scp/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/scp/tags",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/semantic-release",
+    "name": "semantic-release",
+    "description": "执行semantic-release插件，通过语义化版本号方式，自动打tag，生成changelog",
+    "tags": [
+      "publish"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/semantic-release/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/semantic-release/logo.avif",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/semantic-release",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/semantic-release/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/semantic-release/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/ssh",
+    "name": "SSH",
+    "description": "通过 ssh 在远端 host 执行命令",
+    "tags": [
+      "ssh",
+      "remote",
+      "command"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ssh/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/ssh/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/ssh",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ssh/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/ssh/tags",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tca",
+    "name": "TCA",
+    "description": "腾讯云代码分析-TCA，内部代号 CodeDog",
+    "tags": [
+      "腾讯云",
+      "代码分析",
+      "TCA",
+      "CodeDog"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tca/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tca/logo.png",
+    "source": "https://github.com/Tencent/CodeAnalysis",
+    "bugs": "https://github.com/Tencent/CodeAnalysis/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tca-plugin/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tem-deploy-app",
+    "name": "TEM 部署应用",
+    "description": "弹性微服务（Tencent Cloud Elastic Microservice）是面向微服务应用的 Serverless PaaS 平台，该插件可用来部署应用。",
+    "tags": [
+      "腾讯云",
+      "TEM"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tem-deploy-app/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tem-deploy-app/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/tem-deploy-app",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tem-deploy-app/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tem-deploy-app/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tencentyun-camp-deploy",
+    "name": "腾讯云 camp 部署",
+    "description": "场景化封装腾讯云应用管理平台 API 实现更新实例镜像",
+    "tags": [
+      "腾讯云",
+      "CAMP",
+      "deploy"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-camp-deploy/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-camp-deploy/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-camp-deploy",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-camp-deploy/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-camp-deploy/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tencentyun-cdn-purge",
+    "name": "tencentyun-cdn-purge",
+    "description": "通过腾讯云 API 接口刷新 CDN 缓存，适用于源站资源更新和发布后让用户更快获取到最新内容。",
+    "tags": [
+      "腾讯云",
+      "CDN",
+      "cache"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-cdn-purge/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-cdn-purge/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-cdn-purge",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-cdn-purge/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-cdn-purge/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tencentyun-rum-sourcemap",
+    "name": "Sourcemap 上传到 RUM",
+    "description": "适用于 CI 过程中自动生成 sourcemap 并上传到腾讯云 RUM 服务，以达到服务更新后正确分析报错信息的目的。",
+    "tags": [
+      "腾讯云",
+      "RUM",
+      "sourcemap"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-rum-sourcemap/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-rum-sourcemap/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-rum-sourcemap",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-rum-sourcemap/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-rum-sourcemap/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tencentyun-scfcli",
+    "name": "云函数 SCF 命令行",
+    "description": "通过腾讯云 SCF 命令行工具，可以方便的实现函数打包、部署、本地调试，也可以方便的生成云函数的项目并基于 demo 项目进一步的开发。",
+    "tags": [
+      "腾讯云",
+      "serverless",
+      "cli"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-scfcli/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-scfcli/logo.png",
+    "source": "https://github.com/tencentyun/scfcli",
+    "bugs": "https://github.com/tencentyun/scfcli/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-scfcli/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tencentyun-tsf-deploy",
+    "name": "微服务平台 TSF 部署",
+    "description": "基于腾讯云命令行工具（TCCLI）实现一键部署腾讯云微服务平台（TSF）容器应用",
+    "tags": [
+      "腾讯云",
+      "TSF"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-tsf-deploy/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-tsf-deploy/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-tsf-deploy",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-tsf-deploy/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-tsf-deploy/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/tencentyun-wecos",
+    "name": "tencentyun-wecos",
+    "description": "通过 WeCOS，将小程序图片资源上传到 腾讯云COS，自动引用线上地址，移除图片资源，解决包大小限制的问题。",
+    "tags": [
+      "腾讯云",
+      "小程序"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-wecos/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/tencentyun-wecos/logo.png",
+    "source": "https://github.com/tencentyun/wecos",
+    "bugs": "https://github.com/tencentyun/wecos/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-wecos/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/trigger-cci-pipeline",
+    "name": "trigger-cci-pipeline",
+    "description": "触发Coding-CI流水线运行",
+    "tags": [
+      "coding"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/trigger-cci-pipeline/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/trigger-cci-pipeline/logo.svg",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/trigger-cci-pipeline",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/trigger-cci-pipeline/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/trigger-cci-pipeline/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/web-a11y-scanner",
+    "name": "web-a11y-scanner",
+    "description": "Web 无障碍 UI 测试工具，可以输出页面对无障碍的支持情况",
+    "tags": [
+      "lint",
+      "无障碍"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/web-a11y-scanner/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/web-a11y-scanner/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/web-a11y-scanner",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/web-a11y-scanner/-/issues",
+    "images": "https://hub.docker.com/repository/docker/tencentcom/web-a11y-scanner/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "tencentcom/wecom-message",
+    "name": "wecom-message",
+    "description": "企业微信群里发消息的插件，通过机器人，可以向固定的群中推送消息。",
+    "tags": [
+      "企业微信",
+      "消息"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/wecom-message/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/tencentcom/wecom-message/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/tencentcom/wecom-message",
+    "bugs": "https://cnb.cool/cnb/plugins/tencentcom/wecom-message/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/wecom-message/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/ansible/ansible",
+    "name": "Ansible",
+    "description": "Ansible can help you demonstrate value, connect teams, and deliver efficiencies for your organization. ",
+    "tags": [
+      "publish",
+      "rsync",
+      "transfer",
+      "ssh"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/ansible/ansible/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/ansible/ansible/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-ansible",
+    "bugs": "https://github.com/drone-plugins/drone-ansible/issues",
+    "images": "https://hub.docker.com/r/plugins/ansible/tags",
+    "image_tag": "plugins/ansible:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/artifactory/artifactory",
+    "name": "Artifactory",
+    "description": "发布文件或者制品到制品库插件",
+    "tags": [
+      "publish",
+      "archive"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/artifactory/artifactory/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/artifactory/artifactory/logo.svg",
+    "source": "https://github.com/athieriot/drone-artifactory",
+    "bugs": "https://github.com/athieriot/drone-artifactory/issues",
+    "images": "https://hub.docker.com/r/lathieriot/drone-artifactory",
+    "image_tag": "athieriot/drone-artifactory:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/clair/clair",
+    "name": "Clair",
+    "description": "通过Clair扫描docker镜像",
+    "tags": [
+      "docker",
+      "scan",
+      "clair"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/clair/clair/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/clair/clair/logo.png",
+    "source": "https://github.com/jmccann/drone-clair",
+    "bugs": "https://github.com/jmccann/drone-clair/issues",
+    "images": "https://hub.docker.com/r/jmccann/drone-clair",
+    "image_tag": "jmccann/drone-clair:1",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/codecov/codecov",
+    "name": "Codecov",
+    "description": "推送测试报告到Codecov",
+    "tags": [
+      "test",
+      "publish",
+      "report",
+      "codecov"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/codecov/codecov/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/codecov/codecov/logo.svg",
+    "source": "https://github.com/robertstettner/drone-codecov",
+    "bugs": "https://github.com/robertstettner/drone-codecov/issues",
+    "images": "https://hub.docker.com/r/robertstettner/drone-codecov",
+    "image_tag": "robertstettner/drone-codecov:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/datadog/datadog",
+    "name": "Datadog",
+    "description": "发送events和metrics到Datadog",
+    "tags": [
+      "monitoring",
+      "metrics",
+      "events",
+      "report"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/datadog/datadog/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/datadog/datadog/logo.svg",
+    "source": "https://github.com/masci/drone-datadog",
+    "bugs": "https://github.com/masci/drone-datadog/issues",
+    "images": "https://hub.docker.com/r/masci/drone-datadog",
+    "image_tag": "masci/drone-datadog:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/diagnostics/diagnostics",
+    "name": "diagnostics",
+    "description": "用来诊断构建中问题的带cli工具的插件",
+    "tags": [
+      "cli",
+      "tools"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/diagnostics/diagnostics/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/diagnostics/diagnostics/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-diagnostics",
+    "bugs": "https://github.com/drone-plugins/drone-diagnostics/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-diagnostics",
+    "image_tag": "plugins/drone-diagnostics:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/download/download",
+    "name": "download",
+    "description": "下载构建所需文件的插件",
+    "tags": [
+      "tarball",
+      "archive",
+      "retrieve",
+      "download"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/download/download/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/download/download/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-download",
+    "bugs": "https://github.com/drone-plugins/drone-download/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-download",
+    "image_tag": "plugins/download:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/email/email",
+    "name": "email",
+    "description": "通过email发送构建消息的插件",
+    "tags": [
+      "email",
+      "notify",
+      "邮件",
+      "邮箱"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/email/email/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/email/email/logo.svg",
+    "source": "https://github.com/drillster/drone-email",
+    "bugs": "https://github.com/drillster/drone-email/issues",
+    "images": "https://hub.docker.com/r/drillster/drone-email",
+    "image_tag": "drillster/drone-email:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/gpgsign/gpgsign",
+    "name": "gpgsign",
+    "description": "通过GunPG给制品加密的插件",
+    "tags": [
+      "gunpg",
+      "encrypt",
+      "sign",
+      "archive"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/gpgsign/gpgsign/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/gpgsign/gpgsign/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-gpgsign",
+    "bugs": "https://github.com/drone-plugins/drone-gpgsign/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-gpgsign",
+    "image_tag": "plugins/gpgsign:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/grafana-annotation/grafana-annotation",
+    "name": "grafana-annotation",
+    "description": "在Grafana中创建注解的插件",
+    "tags": [
+      "annotation",
+      "grafana"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/grafana-annotation/grafana-annotation/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/grafana-annotation/grafana-annotation/logo.svg",
+    "source": "https://github.com/fdeschenes/drone-grafana-annotation",
+    "bugs": "https://github.com/fdeschenes/drone-grafana-annotation/issues",
+    "images": "https://hub.docker.com/r/fdeschenes/drone-grafana-annotation",
+    "image_tag": "fdeschenes/drone-grafana-annotation:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/helm/helm",
+    "name": "helm",
+    "description": "Helm插件",
+    "tags": [
+      "helm",
+      "deploy",
+      "kubernetes",
+      "k8s"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm/helm/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm/helm/logo.svg",
+    "source": "https://github.com/ipedrazas/drone-helm",
+    "bugs": "https://github.com/ipedrazas/drone-helm/issues",
+    "images": "https://hub.docker.com/r/ipedrazas/drone-helm",
+    "image_tag": "fpedrazas/drone-helm:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/helm3/helm3",
+    "name": "helm3",
+    "description": "Helm3插件",
+    "tags": [
+      "helm",
+      "helm3",
+      "kubernetes",
+      "deploy"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm3/helm3/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm3/helm3/logo.svg",
+    "source": "https://github.com/pelotech/drone-helm3",
+    "bugs": "https://github.com/pelotech/drone-helm3/issues",
+    "images": "https://hub.docker.com/r/pelotech/drone-helm3",
+    "image_tag": "pelotech/drone-helm3:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/hugo/hugo",
+    "name": "hugo",
+    "description": "通过Hugo自动创建静态web页面的插件",
+    "tags": [
+      "hugo",
+      "static",
+      "website"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/hugo/hugo/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/hugo/hugo/logo.png",
+    "source": "https://github.com/drone-plugins/drone-hugo",
+    "bugs": "https://github.com/drone-plugins/drone-hugo/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-hugo",
+    "image_tag": "plugins/hugo:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/jenkins/jenkins",
+    "name": "jenkins",
+    "description": "触发Jenkins Jobs的插件",
+    "tags": [
+      "jenkins",
+      "ci",
+      "trigger"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/jenkins/jenkins/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/jenkins/jenkins/logo.svg",
+    "source": "https://github.com/appleboy/drone-jenkins",
+    "bugs": "https://github.com/appleboy/drone-jenkins/issues",
+    "images": "https://hub.docker.com/r/appleboy/drone-jenkins",
+    "image_tag": "appleboy/drone-jenkins:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/k8s/kubectl",
+    "name": "kubectl",
+    "description": "Kubectl 是 Kubernetes 命令行接口。通过 Kubectl 命令可以方便的管理 Kubernetes 集群。Kubectl 同样可以管理腾讯云 TKE 集群。",
+    "tags": [
+      "腾讯云",
+      "cloud",
+      "tke",
+      "kubectl"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/k8s/kubectl/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/k8s/kubectl/logo.png",
+    "source": "https://github.com/kubernetes/kubectl",
+    "bugs": "https://github.com/kubernetes/kubectl/issues",
+    "images": "https://hub.docker.com/r/bitnami/kubectl",
+    "image_tag": "bitnami/kubectl:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/kaniko/kaniko",
+    "name": "kaniko",
+    "description": "调用官方Google Kaniko的插件",
+    "tags": [
+      "kaniko",
+      "docker",
+      "k8s",
+      "kubernetes"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/kaniko/kaniko/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/kaniko/kaniko/logo.svg",
+    "source": "https://github.com/banzaicloud/drone-kaniko",
+    "bugs": "https://github.com/banzaicloud/drone-kaniko/issues",
+    "images": "https://hub.docker.com/r/banzaicloud/drone-kaniko",
+    "image_tag": "plugins/kaniko:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/lint/docker-lint",
+    "name": "Docker Lint",
+    "description": "一个更智能的 Dockerfile linter，帮助您构建最佳实践 Docker 镜像",
+    "tags": [
+      "docker",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/lint/docker-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/lint/docker-lint/logo.png",
+    "source": "https://github.com/hadolint/hadolint",
+    "bugs": "https://github.com/hadolint/hadolint/issues",
+    "images": "https://hub.docker.com/r/hadolint/hadolint/tags",
+    "image_tag": "hadolint/hadolint:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/markdown/markdownlint-cli2",
+    "name": "markdownlint-cli2",
+    "description": "linting Markdown files with the markdownlint.",
+    "tags": [
+      "markdown",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/markdown/markdownlint-cli2/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/markdown/markdownlint-cli2/logo.png",
+    "source": "https://github.com/DavidAnson/markdownlint-cli2",
+    "bugs": "https://github.com/DavidAnson/markdownlint-cli2/issues",
+    "images": "https://hub.docker.com/r/davidanson/markdownlint-cli2/tags",
+    "image_tag": "davidanson/markdownlint-cli2:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/miniprogram/qq-miniprogram",
+    "name": "QQ小程序",
+    "description": "QQ小程序自动构建、支持上传并设置为体验版。",
+    "tags": [
+      "小程序",
+      "QQ",
+      "miniprogram"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/miniprogram/qq-miniprogram/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/miniprogram/qq-miniprogram/logo.png",
+    "images": "https://hub.docker.com/r/qqminiapp/build/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/newrelic-deployment/newrelic-deployment",
+    "name": "Newrelic Deployment",
+    "description": "将部署报告记录到dashboard",
+    "tags": [
+      "report",
+      "dashboard",
+      "newrelic"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/newrelic-deployment/newrelic-deployment/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/newrelic-deployment/newrelic-deployment/logo.svg",
+    "source": "https://github.com/cityfurniture/newrelic-deployment",
+    "bugs": "https://github.com/cityfurniture/newrelic-deployment/issues",
+    "images": "https://hub.docker.com/r/cityfurniture/newrelic-deployment",
+    "image_tag": "cityfurniture/drone-newrelic-deployment:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/npm-auth/npm-auth",
+    "name": "NPM Auth",
+    "description": "通过在本地生成.npmrc文件验证公有和私有NPM仓库",
+    "tags": [
+      "npm"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/npm-auth/npm-auth/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/npm-auth/npm-auth/logo.svg",
+    "source": "https://github.com/robertstettner/drone-npm-auth",
+    "bugs": "https://github.com/robertstettner/drone-npm-auth/issues",
+    "images": "https://hub.docker.com/r/robertstettner/drone-npm-auth",
+    "image_tag": "robertstettner/drone-npm-auth:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/packer/packer",
+    "name": "Packer",
+    "description": "使用Packer自动化构建机器镜像",
+    "tags": [
+      "docker",
+      "packer"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/packer/packer/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/packer/packer/logo.svg",
+    "source": "https://github.com/appleboy/drone-packer",
+    "bugs": "https://github.com/appleboy/drone-packer/issues",
+    "images": "https://hub.docker.com/r/appleboy/drone-packer",
+    "image_tag": "appleboy/drone-packer:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/php/phplint",
+    "name": "phplint",
+    "description": "phplint is a tool that can speed up linting of php files by running several lint processes at once.",
+    "tags": [
+      "lint",
+      "php"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/php/phplint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/php/phplint/logo.png",
+    "source": "https://github.com/overtrue/phplint",
+    "bugs": "https://github.com/overtrue/phplint/issues",
+    "images": "https://hub.docker.com/r/overtrue/phplint/tags",
+    "image_tag": "overtrue/phplint:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/pypi/pypi",
+    "name": "PyPI",
+    "description": "发布python包",
+    "tags": [
+      "python",
+      "publish"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/pypi/pypi/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/pypi/pypi/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-pypi",
+    "bugs": "https://github.com/drone-plugins/drone-pypi/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-pypi",
+    "image_tag": "plugins/pypi:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/rancher/rancher",
+    "name": "Rancher",
+    "description": "在Rancher 1.x部署或者更新项目",
+    "tags": [
+      "deployment",
+      "rancher"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/rancher/rancher/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/rancher/rancher/logo.svg",
+    "source": "https://github.com/josmo/drone-rancher",
+    "bugs": "https://github.com/josmo/drone-rancher/issues",
+    "images": "https://hub.docker.com/r/josmo/drone-rancher",
+    "image_tag": "pelotech/drone-rancher:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/sftp-cache/sftp-cache",
+    "name": "SFTP Cache",
+    "description": "使用rsync将制品缓存到中央服务器",
+    "tags": [
+      "cache",
+      "sftp",
+      "rsync",
+      "sync"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sftp-cache/sftp-cache/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sftp-cache/sftp-cache/logo.svg",
+    "source": "https://github.com/appleboy/drone-sftp-cache",
+    "bugs": "https://github.com/appleboy/drone-sftp-cache/issues",
+    "images": "https://hub.docker.com/r/appleboy/drone-sftp-cache",
+    "image_tag": "appleboy/drone-sftp-cache:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/snyk/snyk",
+    "name": "Snyk",
+    "description": "使用snyk扫描容器镜像漏洞",
+    "tags": [
+      "scan",
+      "snyk",
+      "docker"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/snyk/snyk/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/snyk/snyk/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-snyk",
+    "bugs": "https://github.com/drone-plugins/drone-snyk/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-snyk",
+    "image_tag": "drone-plugins/drone-snyk:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/sonar-qube/sonar-qube",
+    "name": "SonarQube",
+    "description": "SonarQube扫描插件",
+    "tags": [
+      "scan",
+      "sonar"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sonar-qube/sonar-qube/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sonar-qube/sonar-qube/logo.svg",
+    "source": "https://github.com/aosapps/drone-sonar-plugin",
+    "bugs": "https://github.com/aosapps/drone-sonar-plugin/issues",
+    "images": "https://hub.docker.com/r/aosapps/drone-sonar-plugin",
+    "image_tag": "aosapps/drone-sonar-plugin:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/tencentyun/coscmd",
+    "name": "对象存储命令行",
+    "description": "使用 COSCMD 工具，用户可通过简单的命令行指令实现对对象（Object）的批量上传、下载、删除等操作。",
+    "tags": [
+      "腾讯云",
+      "cos",
+      "transfer",
+      "cloud"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/coscmd/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/coscmd/logo.png",
+    "source": "https://github.com/tencentyun/coscmd",
+    "bugs": "https://github.com/tencentyun/coscmd/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-coscmd/tags",
+    "mark": "official",
+    "image_tag": "tencentcom/tencentyun-coscmd:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/tencentyun/tccli",
+    "name": "腾讯云命令行",
+    "description": "通过腾讯云命令行工具，您可以快速轻松的调用腾讯云 API来管理您的腾讯云资源",
+    "tags": [
+      "腾讯云",
+      "cli",
+      "api"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/tccli/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/tccli/logo.png",
+    "source": "https://github.com/TencentCloud/tencentcloud-cli",
+    "bugs": "https://github.com/TencentCloud/tencentcloud-cli/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentcloud-cli/tags",
+    "mark": "official",
+    "image_tag": "tencentcom/tencentcloud-cli:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/terraform/terraform",
+    "name": "Terraform",
+    "description": "执行Terraform plan和apply",
+    "tags": [
+      "terraform"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/terraform/terraform/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/terraform/terraform/logo.svg",
+    "source": "https://github.com/jmccann/drone-terraform",
+    "bugs": "https://github.com/jmccann/drone-terraform/issues",
+    "images": "https://hub.docker.com/r/jmccann/drone-terraform",
+    "image_tag": "jmccann/drone-terraform:1",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/upx/upx",
+    "name": "UPX",
+    "description": "UPX压缩插件",
+    "tags": [
+      "upx",
+      "compress"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/upx/upx/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/upx/upx/logo.svg",
+    "source": "https://github.com/cnbattle/drone-upx",
+    "bugs": "https://github.com/cnbattle/drone-upx/issues",
+    "images": "https://hub.docker.com/r/cnbattle/drone-upx",
+    "image_tag": "cnbattle/drone-upx:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/webhook/webhook",
+    "name": "Webhook",
+    "description": "通过webhook发送构建状态通知",
+    "tags": [
+      "webhook",
+      "notify"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/webhook/webhook/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/webhook/webhook/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-webhook",
+    "bugs": "https://github.com/drone-plugins/drone-webhook/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-webhook",
+    "image_tag": "plugins/webhook:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/wechat-for-work/wechat-for-work",
+    "name": "Wechat for Work",
+    "description": "通过企业微信发送构建状态通知",
+    "tags": [
+      "wework",
+      "message",
+      "notify"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat-for-work/wechat-for-work/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat-for-work/wechat-for-work/logo.svg",
+    "source": "https://github.com/clem109/drone-wechat",
+    "bugs": "https://github.com/clem109/drone-wechat/issues",
+    "images": "https://hub.docker.com/r/clem109/drone-wechat",
+    "image_tag": "clem109/drone-wechat:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/wechat/wechat",
+    "name": "wechat",
+    "description": "基于微信企业号封装的，微信发消息插件。",
+    "tags": [
+      "微信",
+      "wechat",
+      "message",
+      "notify"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat/wechat/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat/wechat/logo.png",
+    "source": "https://github.com/lizheming/drone-wechat",
+    "bugs": "https://github.com/lizheming/drone-wechat/issues",
+    "images": "https://hub.docker.com/r/lizheming/drone-wechat",
+    "mark": "",
+    "image_tag": "lizheming/drone-wechat:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/yaml2json/yaml2json",
+    "name": "yaml2json",
+    "description": "将yaml转换为json格式",
+    "tags": [
+      "yaml",
+      "json",
+      "parse",
+      "convert"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/yaml2json/yaml2json/README.md",
+    "source": "",
+    "bugs": "",
+    "images": "https://hub.docker.com/r/simplealpine/yaml2json",
+    "image_tag": "simplealpine/yaml2json:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  }
+]

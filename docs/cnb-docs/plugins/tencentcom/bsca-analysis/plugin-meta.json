@@ -1,0 +1,13 @@
+{
+  "name": "二进制软件成分分析",
+  "description": "一款基于二进制分析能力的自动化软件成分分析工具。",
+  "mark": "official",
+  "tags": [
+    "腾讯云",
+    "安全审计"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/bsca-analysis/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/bsca-analysis",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/bsca-analysis/-/issues"
+}

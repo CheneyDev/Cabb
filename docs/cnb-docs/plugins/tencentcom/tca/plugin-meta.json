@@ -1,0 +1,16 @@
+{
+  "name": "TCA",
+  "description": "腾讯云代码分析-TCA，内部代号 CodeDog",
+  "tags": [
+    "腾讯云",
+    "代码分析",
+    "TCA",
+    "CodeDog"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/tca-plugin/tags",
+  "source": "https://github.com/Tencent/CodeAnalysis",
+  "bugs": "https://github.com/Tencent/CodeAnalysis/issues",
+  "link": "https://tca.tencent.com",
+  "logo": "logo.png"
+}

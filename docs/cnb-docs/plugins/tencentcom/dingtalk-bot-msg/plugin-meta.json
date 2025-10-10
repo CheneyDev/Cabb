@@ -1,0 +1,11 @@
+{
+  "name": "dingtalk-bot-msg",
+  "description": "发送钉钉机器人消息",
+  "mark": "official",
+  "tags": [
+    "dingtalk"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/dingtalk-bot-msg/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-bot-msg",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/dingtalk-bot-msg/-/issues"
+}

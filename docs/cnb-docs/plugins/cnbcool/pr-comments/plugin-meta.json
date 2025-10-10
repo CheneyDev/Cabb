@@ -1,0 +1,14 @@
+{
+  "name": "pull_request 评论",
+  "description": "上传 PR 评论",
+  "mark": "official",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/pr-comments.git",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/pr-comments/-/issues",
+  "tags": [
+    "PR",
+    "pull_request",
+    "评论"
+  ],
+  "images": "https://hub.docker.com/r/cnbcool/pr-comments/tags",
+  "logo": "logo.png"
+}

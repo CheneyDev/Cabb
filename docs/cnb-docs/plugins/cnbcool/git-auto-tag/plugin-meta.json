@@ -1,0 +1,13 @@
+{
+  "name": "git-auto-tag",
+  "description": "自动打tag",
+  "mark": "official",
+  "tags": [
+    "git",
+    "tag"
+  ],
+  "images": "https://hub.docker.com/r/cnbcool/git-auto-tag/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/git-auto-tag",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-auto-tag/-/issues"
+}

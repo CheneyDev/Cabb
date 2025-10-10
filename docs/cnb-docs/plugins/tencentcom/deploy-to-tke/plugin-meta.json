@@ -1,0 +1,10 @@
+{
+  "name": "腾讯云 TKE 更新镜像",
+  "description": "腾讯云容器服务(TKE)镜像更新插件",
+  "tags": [ "腾讯云", "k8s", "deploy" ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/deploy-to-tke/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/deploy-to-tke",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/deploy-to-tke/-/issues"
+}

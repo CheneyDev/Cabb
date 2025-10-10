@@ -1,0 +1,14 @@
+{
+    "name": "创建 pull request",
+    "description": "创建 pull request",
+    "mark": "official",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/create-pr.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/create-pr/-/issues",
+    "tags": [
+      "create",
+      "pr",
+      "pull request"
+    ],
+    "images": "https://hub.docker.com/r/cnbcool/create-pr/tags",
+    "logo": "logo.png"
+  }

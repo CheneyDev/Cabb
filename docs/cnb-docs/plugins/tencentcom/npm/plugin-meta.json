@@ -1,0 +1,13 @@
+{
+  "name": "npm",
+  "description": "发布 NPM 包到仓库，支持官方仓库和私有仓库。",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/npm/tags",
+  "tags": [
+    "publish",
+    "npm"
+  ],
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/npm",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/npm/-/issues"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "read-file",
+  "description": "根据指定编码读取输出本地文件内容。",
+  "mark": "official",
+  "tags": [
+    "file"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/read-file/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/read-file",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/read-file/-/issues"
+}

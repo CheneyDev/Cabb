@@ -1,0 +1,13 @@
+{
+  "name": "maven",
+  "description": "一个包含Tencent Kona JDK 和 Maven 的Docker镜像",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/maven/tags",
+  "tags": [
+    "publish",
+    "maven"
+  ],
+  "logo": "maven.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/maven",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/maven/-/issues"
+}

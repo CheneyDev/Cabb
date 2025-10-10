@@ -1,0 +1,13 @@
+{
+  "name": "微信小程序",
+  "description": "从微信开发者工具中抽离小程序/小游戏项目代码编译模块，实现一键构建 npm /预览/上传小程序。",
+  "tags": [
+    "小程序",
+    "微信"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/miniprogram-ci/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/miniprogram-ci",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/miniprogram-ci/-/issues"
+}

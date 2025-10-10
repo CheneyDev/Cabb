@@ -1,0 +1,13 @@
+{
+  "name": "plugin-lint",
+  "description": "检查插件元数据 plugin-meta.json 是否符合编写规范",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/codingci/plugin-lint/tags",
+  "tags": [
+    "lint",
+    "plugin"
+  ],
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/plugin-lint",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/plugin-lint/-/issues"
+}

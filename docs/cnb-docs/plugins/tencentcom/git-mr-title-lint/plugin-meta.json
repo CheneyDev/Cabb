@@ -1,0 +1,14 @@
+{
+  "name": "git-mr-title-lint",
+  "description": "基于约定式提交规范，检查 MR 标题是否符合给定的规范。",
+  "mark": "official",
+  "tags": [
+    "MR",
+    "PR",
+    "lint"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-mr-title-lint/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-title-lint",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-title-lint/-/issues"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "golang-swag",
+  "description": "将 golang 的注释转换为 swagger2.0 API 文档。",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/golang-swag/tags",
+  "tags": [
+    "swag",
+    "golang"
+  ],
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/golang-swag",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/golang-swag/-/issues"
+}

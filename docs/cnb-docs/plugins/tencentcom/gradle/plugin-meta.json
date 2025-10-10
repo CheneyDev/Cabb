@@ -1,0 +1,13 @@
+{
+  "name": "gradle",
+  "description": "一个包含 Tencent Kona JDK 和 Gradle 的Docker镜像",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/gradle/tags",
+  "tags": [
+    "publish",
+    "gradle"
+  ],
+  "logo": "gradle.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/gradle",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/gradle/-/issues"
+}

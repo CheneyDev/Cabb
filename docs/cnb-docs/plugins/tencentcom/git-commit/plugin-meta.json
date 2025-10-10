@@ -1,0 +1,13 @@
+{
+  "name": "git-commit",
+  "description": "提交本地代码",
+  "mark": "official",
+  "tags": [
+    "git",
+    "commit"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-commit/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-commit",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-commit/-/issues"
+}

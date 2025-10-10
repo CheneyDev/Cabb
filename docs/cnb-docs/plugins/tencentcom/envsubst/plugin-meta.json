@@ -1,0 +1,13 @@
+{
+  "name": "envsubst",
+  "description": "替换文件中的环境变量",
+  "mark": "official",
+  "tags": [
+    "envsubst",
+    "环境变量"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/envsubst/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/envsubst",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/envsubst/-/issues",
+  "logo": "logo.svg"
+}

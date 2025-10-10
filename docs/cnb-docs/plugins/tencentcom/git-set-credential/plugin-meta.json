@@ -1,0 +1,13 @@
+{
+  "name": "git-set-credential",
+  "description": "设置git账户、邮箱、登陆信息",
+  "mark": "official",
+  "tags": [
+    "git",
+    "login"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-set-credential/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-set-credential",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-set-credential/-/issues"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "GIT 元数据",
+  "description": "上传/获取/删除元数据，元数据是对 tag 或 commit 的注解，用于存储关联数据。",
+  "mark": "official",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/annotations.git",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/annotations/-/issues",
+  "tags": [
+    "元数据",
+    "git"
+  ],
+  "images": "https://hub.docker.com/r/cnbcool/annotations/tags",
+  "logo": "logo.png"
+}

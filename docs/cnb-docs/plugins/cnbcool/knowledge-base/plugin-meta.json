@@ -1,0 +1,12 @@
+{
+    "name": "知识库",
+    "description": "将仓库的文档导入到ElasticSearch或向量数据库中，以支持搜索或LLM问答。",
+    "mark": "official",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/knowledge-base.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/knowledge-base/-/issues",
+    "tags": [
+      "知识库"
+    ],
+    "images": "https://hub.docker.com/r/cnbcool/knowledge-base/tags",
+    "logo": "logo.png"
+  }

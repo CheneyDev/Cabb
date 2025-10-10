@@ -1,0 +1,13 @@
+{
+  "name": "web-a11y-scanner",
+  "description": "Web 无障碍 UI 测试工具，可以输出页面对无障碍的支持情况",
+  "mark": "official",
+  "images": "https://hub.docker.com/repository/docker/tencentcom/web-a11y-scanner/tags",
+  "tags": [
+    "lint",
+    "无障碍"
+  ],
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/web-a11y-scanner",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/web-a11y-scanner/-/issues"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "KSAS 安全审计",
+  "description": "用于各种级别安全审计的工具集合，包括：系统基线安全审计、制品安全审计、源码安全审计、安卓应用安全审计。",
+  "mark": "official",
+  "tags": [
+    "腾讯云",
+    "安全审计"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/ksas-audit-suites/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/ksas-audit-suites",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ksas-audit-suites/-/issues"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "find-files",
+  "description": "根据 glob 表达式查询文件，并列出结果",
+  "mark": "official",
+  "tags": [
+    "find",
+    "glob"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/find-files/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/find-files",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/find-files/-/issues"
+}

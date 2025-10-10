@@ -1,0 +1,12 @@
+{
+  "name": "coverage check",
+  "description": "单元测试覆盖率报告检查，可自定义覆盖率达标率",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/coverage-check/tags",
+  "tags": [
+    "coverage"
+  ],
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/coverage-check",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/coverage-check/-/issues"
+}

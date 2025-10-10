@@ -1,0 +1,11 @@
+{
+  "name": "git-mr-limit",
+  "description": "MR 变更检查（检查 MR 中 commit 次数 和 代码变更行数）",
+  "mark": "official",
+  "tags": [
+    "git"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-mr-limit/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-limit",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-mr-limit/-/issues"
+}

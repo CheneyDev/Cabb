@@ -1,0 +1,10 @@
+{
+  "name": "Newrelic Deployment",
+  "description": "将部署报告记录到dashboard",
+  "tags": ["report", "dashboard", "newrelic"],
+  "images": "https://hub.docker.com/r/cityfurniture/newrelic-deployment",
+  "source": "https://github.com/cityfurniture/newrelic-deployment",
+  "bugs": "https://github.com/cityfurniture/newrelic-deployment/issues",
+  "logo": "logo.svg",
+  "image_tag": "cityfurniture/drone-newrelic-deployment:latest"
+}

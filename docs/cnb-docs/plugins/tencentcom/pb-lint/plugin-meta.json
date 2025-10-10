@@ -1,0 +1,13 @@
+{
+  "name": "pb-lint",
+  "description": "Protobuf Lint",
+  "mark": "official",
+  "tags": [
+    "lint",
+    "protobuf"
+  ],
+  "images": "https://hub.docker.com/repository/docker/tencentcom/pb-lint/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/pb-lint",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/pb-lint/-/issues"
+}

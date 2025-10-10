@@ -1,0 +1,14 @@
+{
+    "name": "data-from-file",
+    "description": "解析本地文件，指定属性路径导出为指定名称的环境变量",
+    "mark": "official",
+    "images": "https://hub.docker.com/r/cnbcool/data-from-file/tags",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/data-from-file",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/data-from-file/-/issues",
+    "tags": [
+      "parse",
+      "env",
+      "file"
+    ],
+    "logo": "logo.png"
+  }

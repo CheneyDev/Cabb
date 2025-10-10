@@ -1,0 +1,13 @@
+{
+  "name": "markdown-lint",
+  "description": "markdownlint 是一个静态分析工具，带有一个规则库来检查 Markdown 文件的格式是否符合推荐标准，达到提升可读性和可维护性的目的。",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/markdown-lint/tags",
+  "source": "https://github.com/igorshubovych/markdownlint-cli",
+  "bugs": "https://github.com/igorshubovych/markdownlint-cli/issues",
+  "tags": [
+    "markdown",
+    "lint"
+  ],
+  "logo": "logo.png"
+}

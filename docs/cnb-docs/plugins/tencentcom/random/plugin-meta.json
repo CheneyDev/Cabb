@@ -1,0 +1,12 @@
+{
+  "name": "random",
+  "description": "根据选项，随机选择",
+  "tags": [
+    "random"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/random/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/random",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/random/-/issues"
+}

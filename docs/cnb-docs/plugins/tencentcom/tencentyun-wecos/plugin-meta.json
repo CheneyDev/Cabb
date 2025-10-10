@@ -1,0 +1,13 @@
+{
+  "name": "tencentyun-wecos",
+  "description": "通过 WeCOS，将小程序图片资源上传到 腾讯云COS，自动引用线上地址，移除图片资源，解决包大小限制的问题。",
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/tencentyun-wecos/tags",
+  "tags": [
+    "腾讯云",
+    "小程序"
+  ],
+  "source": "https://github.com/tencentyun/wecos",
+  "bugs": "https://github.com/tencentyun/wecos/issues",
+  "logo": "logo.png"
+}

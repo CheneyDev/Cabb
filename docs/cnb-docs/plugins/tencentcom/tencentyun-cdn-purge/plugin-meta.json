@@ -1,0 +1,14 @@
+{
+  "name": "tencentyun-cdn-purge",
+  "description": "通过腾讯云 API 接口刷新 CDN 缓存，适用于源站资源更新和发布后让用户更快获取到最新内容。",
+  "tags": [
+    "腾讯云",
+    "CDN",
+    "cache"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/tencentyun-cdn-purge/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-cdn-purge",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-cdn-purge/-/issues"
+}

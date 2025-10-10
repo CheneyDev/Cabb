@@ -1,0 +1,13 @@
+{
+  "name": "Docker Lint",
+  "description": "一个更智能的 Dockerfile linter，帮助您构建最佳实践 Docker 镜像",
+  "source": "https://github.com/hadolint/hadolint",
+  "bugs": "https://github.com/hadolint/hadolint/issues",
+  "images": "https://hub.docker.com/r/hadolint/hadolint/tags",
+  "tags": [
+    "docker",
+    "lint"
+  ],
+  "logo": "logo.png",
+  "image_tag": "hadolint/hadolint:latest"
+}

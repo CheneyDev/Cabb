@@ -1,0 +1,26 @@
+{
+  "name": "fetch-git-file",
+  "description": "拉取cnb git文件到本地",
+  "images": "https://hub.docker.com/r/cnbcool/fetch-git-file/tags",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/fetch-git-file",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/fetch-git-file/-/issues",
+  "tags": [
+    "fetch",
+    "git",
+    "file"
+  ],
+  "mark": "official",
+  "logo": "logo.png",
+  "locales": {
+    "en": {
+      "name": "fetch-git-file",
+      "description": "Retrieve CNB git files to local",
+      "readme": "README.en.md"
+    },
+    "en-US": {
+      "name": "fetch-git-file",
+      "description": "Fetch CNB git files to local",
+      "readme": "README.en-US.md"
+    }
+  }
+}

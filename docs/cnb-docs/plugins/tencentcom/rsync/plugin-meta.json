@@ -1,0 +1,9 @@
+{
+  "name": "rsync",
+  "description": "通过 rsync 将文件同步到远程主机",
+  "tags": ["rsync", "transfer", "文件同步"],
+  "images": "https://hub.docker.com/r/tencentcom/rsync/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/rsync",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/rsync/-/issues",
+  "logo": "logo.svg"
+}

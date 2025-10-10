@@ -1,0 +1,612 @@
+[
+  {
+    "id": "open-source/ansible/ansible",
+    "name": "Ansible",
+    "description": "Ansible can help you demonstrate value, connect teams, and deliver efficiencies for your organization. ",
+    "tags": [
+      "publish",
+      "rsync",
+      "transfer",
+      "ssh"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/ansible/ansible/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/ansible/ansible/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-ansible",
+    "bugs": "https://github.com/drone-plugins/drone-ansible/issues",
+    "images": "https://hub.docker.com/r/plugins/ansible/tags",
+    "image_tag": "plugins/ansible:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/artifactory/artifactory",
+    "name": "Artifactory",
+    "description": "发布文件或者制品到制品库插件",
+    "tags": [
+      "publish",
+      "archive"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/artifactory/artifactory/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/artifactory/artifactory/logo.svg",
+    "source": "https://github.com/athieriot/drone-artifactory",
+    "bugs": "https://github.com/athieriot/drone-artifactory/issues",
+    "images": "https://hub.docker.com/r/lathieriot/drone-artifactory",
+    "image_tag": "athieriot/drone-artifactory:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/clair/clair",
+    "name": "Clair",
+    "description": "通过Clair扫描docker镜像",
+    "tags": [
+      "docker",
+      "scan",
+      "clair"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/clair/clair/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/clair/clair/logo.png",
+    "source": "https://github.com/jmccann/drone-clair",
+    "bugs": "https://github.com/jmccann/drone-clair/issues",
+    "images": "https://hub.docker.com/r/jmccann/drone-clair",
+    "image_tag": "jmccann/drone-clair:1",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/codecov/codecov",
+    "name": "Codecov",
+    "description": "推送测试报告到Codecov",
+    "tags": [
+      "test",
+      "publish",
+      "report",
+      "codecov"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/codecov/codecov/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/codecov/codecov/logo.svg",
+    "source": "https://github.com/robertstettner/drone-codecov",
+    "bugs": "https://github.com/robertstettner/drone-codecov/issues",
+    "images": "https://hub.docker.com/r/robertstettner/drone-codecov",
+    "image_tag": "robertstettner/drone-codecov:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/datadog/datadog",
+    "name": "Datadog",
+    "description": "发送events和metrics到Datadog",
+    "tags": [
+      "monitoring",
+      "metrics",
+      "events",
+      "report"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/datadog/datadog/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/datadog/datadog/logo.svg",
+    "source": "https://github.com/masci/drone-datadog",
+    "bugs": "https://github.com/masci/drone-datadog/issues",
+    "images": "https://hub.docker.com/r/masci/drone-datadog",
+    "image_tag": "masci/drone-datadog:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/diagnostics/diagnostics",
+    "name": "diagnostics",
+    "description": "用来诊断构建中问题的带cli工具的插件",
+    "tags": [
+      "cli",
+      "tools"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/diagnostics/diagnostics/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/diagnostics/diagnostics/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-diagnostics",
+    "bugs": "https://github.com/drone-plugins/drone-diagnostics/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-diagnostics",
+    "image_tag": "plugins/drone-diagnostics:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/download/download",
+    "name": "download",
+    "description": "下载构建所需文件的插件",
+    "tags": [
+      "tarball",
+      "archive",
+      "retrieve",
+      "download"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/download/download/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/download/download/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-download",
+    "bugs": "https://github.com/drone-plugins/drone-download/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-download",
+    "image_tag": "plugins/download:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/email/email",
+    "name": "email",
+    "description": "通过email发送构建消息的插件",
+    "tags": [
+      "email",
+      "notify",
+      "邮件",
+      "邮箱"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/email/email/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/email/email/logo.svg",
+    "source": "https://github.com/drillster/drone-email",
+    "bugs": "https://github.com/drillster/drone-email/issues",
+    "images": "https://hub.docker.com/r/drillster/drone-email",
+    "image_tag": "drillster/drone-email:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/gpgsign/gpgsign",
+    "name": "gpgsign",
+    "description": "通过GunPG给制品加密的插件",
+    "tags": [
+      "gunpg",
+      "encrypt",
+      "sign",
+      "archive"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/gpgsign/gpgsign/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/gpgsign/gpgsign/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-gpgsign",
+    "bugs": "https://github.com/drone-plugins/drone-gpgsign/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-gpgsign",
+    "image_tag": "plugins/gpgsign:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/grafana-annotation/grafana-annotation",
+    "name": "grafana-annotation",
+    "description": "在Grafana中创建注解的插件",
+    "tags": [
+      "annotation",
+      "grafana"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/grafana-annotation/grafana-annotation/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/grafana-annotation/grafana-annotation/logo.svg",
+    "source": "https://github.com/fdeschenes/drone-grafana-annotation",
+    "bugs": "https://github.com/fdeschenes/drone-grafana-annotation/issues",
+    "images": "https://hub.docker.com/r/fdeschenes/drone-grafana-annotation",
+    "image_tag": "fdeschenes/drone-grafana-annotation:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/helm/helm",
+    "name": "helm",
+    "description": "Helm插件",
+    "tags": [
+      "helm",
+      "deploy",
+      "kubernetes",
+      "k8s"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm/helm/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm/helm/logo.svg",
+    "source": "https://github.com/ipedrazas/drone-helm",
+    "bugs": "https://github.com/ipedrazas/drone-helm/issues",
+    "images": "https://hub.docker.com/r/ipedrazas/drone-helm",
+    "image_tag": "fpedrazas/drone-helm:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/helm3/helm3",
+    "name": "helm3",
+    "description": "Helm3插件",
+    "tags": [
+      "helm",
+      "helm3",
+      "kubernetes",
+      "deploy"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm3/helm3/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/helm3/helm3/logo.svg",
+    "source": "https://github.com/pelotech/drone-helm3",
+    "bugs": "https://github.com/pelotech/drone-helm3/issues",
+    "images": "https://hub.docker.com/r/pelotech/drone-helm3",
+    "image_tag": "pelotech/drone-helm3:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/hugo/hugo",
+    "name": "hugo",
+    "description": "通过Hugo自动创建静态web页面的插件",
+    "tags": [
+      "hugo",
+      "static",
+      "website"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/hugo/hugo/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/hugo/hugo/logo.png",
+    "source": "https://github.com/drone-plugins/drone-hugo",
+    "bugs": "https://github.com/drone-plugins/drone-hugo/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-hugo",
+    "image_tag": "plugins/hugo:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/jenkins/jenkins",
+    "name": "jenkins",
+    "description": "触发Jenkins Jobs的插件",
+    "tags": [
+      "jenkins",
+      "ci",
+      "trigger"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/jenkins/jenkins/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/jenkins/jenkins/logo.svg",
+    "source": "https://github.com/appleboy/drone-jenkins",
+    "bugs": "https://github.com/appleboy/drone-jenkins/issues",
+    "images": "https://hub.docker.com/r/appleboy/drone-jenkins",
+    "image_tag": "appleboy/drone-jenkins:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/k8s/kubectl",
+    "name": "kubectl",
+    "description": "Kubectl 是 Kubernetes 命令行接口。通过 Kubectl 命令可以方便的管理 Kubernetes 集群。Kubectl 同样可以管理腾讯云 TKE 集群。",
+    "tags": [
+      "腾讯云",
+      "cloud",
+      "tke",
+      "kubectl"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/k8s/kubectl/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/k8s/kubectl/logo.png",
+    "source": "https://github.com/kubernetes/kubectl",
+    "bugs": "https://github.com/kubernetes/kubectl/issues",
+    "images": "https://hub.docker.com/r/bitnami/kubectl",
+    "image_tag": "bitnami/kubectl:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/kaniko/kaniko",
+    "name": "kaniko",
+    "description": "调用官方Google Kaniko的插件",
+    "tags": [
+      "kaniko",
+      "docker",
+      "k8s",
+      "kubernetes"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/kaniko/kaniko/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/kaniko/kaniko/logo.svg",
+    "source": "https://github.com/banzaicloud/drone-kaniko",
+    "bugs": "https://github.com/banzaicloud/drone-kaniko/issues",
+    "images": "https://hub.docker.com/r/banzaicloud/drone-kaniko",
+    "image_tag": "plugins/kaniko:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/lint/docker-lint",
+    "name": "Docker Lint",
+    "description": "一个更智能的 Dockerfile linter，帮助您构建最佳实践 Docker 镜像",
+    "tags": [
+      "docker",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/lint/docker-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/lint/docker-lint/logo.png",
+    "source": "https://github.com/hadolint/hadolint",
+    "bugs": "https://github.com/hadolint/hadolint/issues",
+    "images": "https://hub.docker.com/r/hadolint/hadolint/tags",
+    "image_tag": "hadolint/hadolint:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/markdown/markdownlint-cli2",
+    "name": "markdownlint-cli2",
+    "description": "linting Markdown files with the markdownlint.",
+    "tags": [
+      "markdown",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/markdown/markdownlint-cli2/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/markdown/markdownlint-cli2/logo.png",
+    "source": "https://github.com/DavidAnson/markdownlint-cli2",
+    "bugs": "https://github.com/DavidAnson/markdownlint-cli2/issues",
+    "images": "https://hub.docker.com/r/davidanson/markdownlint-cli2/tags",
+    "image_tag": "davidanson/markdownlint-cli2:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/miniprogram/qq-miniprogram",
+    "name": "QQ小程序",
+    "description": "QQ小程序自动构建、支持上传并设置为体验版。",
+    "tags": [
+      "小程序",
+      "QQ",
+      "miniprogram"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/miniprogram/qq-miniprogram/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/miniprogram/qq-miniprogram/logo.png",
+    "images": "https://hub.docker.com/r/qqminiapp/build/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/newrelic-deployment/newrelic-deployment",
+    "name": "Newrelic Deployment",
+    "description": "将部署报告记录到dashboard",
+    "tags": [
+      "report",
+      "dashboard",
+      "newrelic"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/newrelic-deployment/newrelic-deployment/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/newrelic-deployment/newrelic-deployment/logo.svg",
+    "source": "https://github.com/cityfurniture/newrelic-deployment",
+    "bugs": "https://github.com/cityfurniture/newrelic-deployment/issues",
+    "images": "https://hub.docker.com/r/cityfurniture/newrelic-deployment",
+    "image_tag": "cityfurniture/drone-newrelic-deployment:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/npm-auth/npm-auth",
+    "name": "NPM Auth",
+    "description": "通过在本地生成.npmrc文件验证公有和私有NPM仓库",
+    "tags": [
+      "npm"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/npm-auth/npm-auth/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/npm-auth/npm-auth/logo.svg",
+    "source": "https://github.com/robertstettner/drone-npm-auth",
+    "bugs": "https://github.com/robertstettner/drone-npm-auth/issues",
+    "images": "https://hub.docker.com/r/robertstettner/drone-npm-auth",
+    "image_tag": "robertstettner/drone-npm-auth:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/packer/packer",
+    "name": "Packer",
+    "description": "使用Packer自动化构建机器镜像",
+    "tags": [
+      "docker",
+      "packer"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/packer/packer/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/packer/packer/logo.svg",
+    "source": "https://github.com/appleboy/drone-packer",
+    "bugs": "https://github.com/appleboy/drone-packer/issues",
+    "images": "https://hub.docker.com/r/appleboy/drone-packer",
+    "image_tag": "appleboy/drone-packer:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/php/phplint",
+    "name": "phplint",
+    "description": "phplint is a tool that can speed up linting of php files by running several lint processes at once.",
+    "tags": [
+      "lint",
+      "php"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/php/phplint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/php/phplint/logo.png",
+    "source": "https://github.com/overtrue/phplint",
+    "bugs": "https://github.com/overtrue/phplint/issues",
+    "images": "https://hub.docker.com/r/overtrue/phplint/tags",
+    "image_tag": "overtrue/phplint:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/pypi/pypi",
+    "name": "PyPI",
+    "description": "发布python包",
+    "tags": [
+      "python",
+      "publish"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/pypi/pypi/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/pypi/pypi/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-pypi",
+    "bugs": "https://github.com/drone-plugins/drone-pypi/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-pypi",
+    "image_tag": "plugins/pypi:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/rancher/rancher",
+    "name": "Rancher",
+    "description": "在Rancher 1.x部署或者更新项目",
+    "tags": [
+      "deployment",
+      "rancher"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/rancher/rancher/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/rancher/rancher/logo.svg",
+    "source": "https://github.com/josmo/drone-rancher",
+    "bugs": "https://github.com/josmo/drone-rancher/issues",
+    "images": "https://hub.docker.com/r/josmo/drone-rancher",
+    "image_tag": "pelotech/drone-rancher:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/sftp-cache/sftp-cache",
+    "name": "SFTP Cache",
+    "description": "使用rsync将制品缓存到中央服务器",
+    "tags": [
+      "cache",
+      "sftp",
+      "rsync",
+      "sync"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sftp-cache/sftp-cache/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sftp-cache/sftp-cache/logo.svg",
+    "source": "https://github.com/appleboy/drone-sftp-cache",
+    "bugs": "https://github.com/appleboy/drone-sftp-cache/issues",
+    "images": "https://hub.docker.com/r/appleboy/drone-sftp-cache",
+    "image_tag": "appleboy/drone-sftp-cache:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/snyk/snyk",
+    "name": "Snyk",
+    "description": "使用snyk扫描容器镜像漏洞",
+    "tags": [
+      "scan",
+      "snyk",
+      "docker"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/snyk/snyk/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/snyk/snyk/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-snyk",
+    "bugs": "https://github.com/drone-plugins/drone-snyk/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-snyk",
+    "image_tag": "drone-plugins/drone-snyk:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/sonar-qube/sonar-qube",
+    "name": "SonarQube",
+    "description": "SonarQube扫描插件",
+    "tags": [
+      "scan",
+      "sonar"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sonar-qube/sonar-qube/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/sonar-qube/sonar-qube/logo.svg",
+    "source": "https://github.com/aosapps/drone-sonar-plugin",
+    "bugs": "https://github.com/aosapps/drone-sonar-plugin/issues",
+    "images": "https://hub.docker.com/r/aosapps/drone-sonar-plugin",
+    "image_tag": "aosapps/drone-sonar-plugin:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/tencentyun/coscmd",
+    "name": "对象存储命令行",
+    "description": "使用 COSCMD 工具，用户可通过简单的命令行指令实现对对象（Object）的批量上传、下载、删除等操作。",
+    "tags": [
+      "腾讯云",
+      "cos",
+      "transfer",
+      "cloud"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/coscmd/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/coscmd/logo.png",
+    "source": "https://github.com/tencentyun/coscmd",
+    "bugs": "https://github.com/tencentyun/coscmd/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentyun-coscmd/tags",
+    "mark": "official",
+    "image_tag": "tencentcom/tencentyun-coscmd:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/tencentyun/tccli",
+    "name": "腾讯云命令行",
+    "description": "通过腾讯云命令行工具，您可以快速轻松的调用腾讯云 API来管理您的腾讯云资源",
+    "tags": [
+      "腾讯云",
+      "cli",
+      "api"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/tccli/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/tencentyun/tccli/logo.png",
+    "source": "https://github.com/TencentCloud/tencentcloud-cli",
+    "bugs": "https://github.com/TencentCloud/tencentcloud-cli/issues",
+    "images": "https://hub.docker.com/r/tencentcom/tencentcloud-cli/tags",
+    "mark": "official",
+    "image_tag": "tencentcom/tencentcloud-cli:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/terraform/terraform",
+    "name": "Terraform",
+    "description": "执行Terraform plan和apply",
+    "tags": [
+      "terraform"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/terraform/terraform/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/terraform/terraform/logo.svg",
+    "source": "https://github.com/jmccann/drone-terraform",
+    "bugs": "https://github.com/jmccann/drone-terraform/issues",
+    "images": "https://hub.docker.com/r/jmccann/drone-terraform",
+    "image_tag": "jmccann/drone-terraform:1",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/upx/upx",
+    "name": "UPX",
+    "description": "UPX压缩插件",
+    "tags": [
+      "upx",
+      "compress"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/upx/upx/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/upx/upx/logo.svg",
+    "source": "https://github.com/cnbattle/drone-upx",
+    "bugs": "https://github.com/cnbattle/drone-upx/issues",
+    "images": "https://hub.docker.com/r/cnbattle/drone-upx",
+    "image_tag": "cnbattle/drone-upx:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/webhook/webhook",
+    "name": "Webhook",
+    "description": "通过webhook发送构建状态通知",
+    "tags": [
+      "webhook",
+      "notify"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/webhook/webhook/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/webhook/webhook/logo.svg",
+    "source": "https://github.com/drone-plugins/drone-webhook",
+    "bugs": "https://github.com/drone-plugins/drone-webhook/issues",
+    "images": "https://hub.docker.com/r/drone-plugins/drone-webhook",
+    "image_tag": "plugins/webhook:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/wechat-for-work/wechat-for-work",
+    "name": "Wechat for Work",
+    "description": "通过企业微信发送构建状态通知",
+    "tags": [
+      "wework",
+      "message",
+      "notify"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat-for-work/wechat-for-work/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat-for-work/wechat-for-work/logo.svg",
+    "source": "https://github.com/clem109/drone-wechat",
+    "bugs": "https://github.com/clem109/drone-wechat/issues",
+    "images": "https://hub.docker.com/r/clem109/drone-wechat",
+    "image_tag": "clem109/drone-wechat:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/wechat/wechat",
+    "name": "wechat",
+    "description": "基于微信企业号封装的，微信发消息插件。",
+    "tags": [
+      "微信",
+      "wechat",
+      "message",
+      "notify"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat/wechat/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/wechat/wechat/logo.png",
+    "source": "https://github.com/lizheming/drone-wechat",
+    "bugs": "https://github.com/lizheming/drone-wechat/issues",
+    "images": "https://hub.docker.com/r/lizheming/drone-wechat",
+    "mark": "",
+    "image_tag": "lizheming/drone-wechat:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "open-source/yaml2json/yaml2json",
+    "name": "yaml2json",
+    "description": "将yaml转换为json格式",
+    "tags": [
+      "yaml",
+      "json",
+      "parse",
+      "convert"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/open-source/yaml2json/yaml2json/README.md",
+    "source": "",
+    "bugs": "",
+    "images": "https://hub.docker.com/r/simplealpine/yaml2json",
+    "image_tag": "simplealpine/yaml2json:latest",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  }
+]

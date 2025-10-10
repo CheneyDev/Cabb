@@ -1,0 +1,12 @@
+{
+  "name": "git-compare-files",
+  "description": "获取差异文件列表，输出到文件。",
+  "mark": "official",
+  "tags": [
+    "git",
+    "compare"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-compare-files/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-compare-files",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-compare-files/-/issues"
+}

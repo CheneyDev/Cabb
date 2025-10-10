@@ -1,0 +1,9 @@
+{
+  "name": "FTPS",
+  "description": "通过 ftps 上传制品的插件",
+  "tags": ["ftp", "lftp", "transfer"],
+  "images": "https://hub.docker.com/r/tencentcom/ftps/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/ftps",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ftps/-/issues",
+  "logo": "logo.svg"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "SSH",
+  "description": "通过 ssh 在远端 host 执行命令",
+  "tags": ["ssh", "remote", "command"],
+  "images": "https://hub.docker.com/r/tencentcom/ssh/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/ssh",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ssh/-/issues",
+  "logo": "logo.svg"
+}

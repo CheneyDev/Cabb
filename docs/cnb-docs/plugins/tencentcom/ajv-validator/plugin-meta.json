@@ -1,0 +1,14 @@
+{
+  "name": "ajv-validator",
+  "description": "JSON schema验证",
+  "tags": [
+    "yaml",
+    "lint",
+    "JSON"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/ajv-validator/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/ajv-validator",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/ajv-validator/-/issues",
+  "logo": "logo.svg"
+}

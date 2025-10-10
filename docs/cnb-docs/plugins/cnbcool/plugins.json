@@ -1,0 +1,308 @@
+[
+  {
+    "id": "cnbcool/ai-review",
+    "name": "AI 代码评审",
+    "description": "支持使用 AI 进行四类操作，代码评审、PR 标题和描述的可读性检测、提交注释可读性检测、变更总结",
+    "tags": [
+      "AI",
+      "代码评审",
+      "可读性检测",
+      "变更总结"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/ai-review/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/ai-review/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/ai-review.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/ai-review/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/ai-review/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/annotations",
+    "name": "GIT 元数据",
+    "description": "上传/获取/删除元数据，元数据是对 tag 或 commit 的注解，用于存储关联数据。",
+    "tags": [
+      "元数据",
+      "git"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/annotations/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/annotations/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/annotations.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/annotations/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/annotations/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/attachments",
+    "name": "附件",
+    "description": "附件插件，包括 release、commit的附件上传和下载",
+    "tags": [
+      "attachments",
+      "download",
+      "upload"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/attachments/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/attachments/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/attachments.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/attachments/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/attachments/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/changelog",
+    "name": "changelog",
+    "description": "根据历史提交信息生成 changelog",
+    "tags": [
+      "changelog",
+      "plugin"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/changelog/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/changelog/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/changelog",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/changelog/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/changelog/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/commitlint",
+    "name": "commitlint",
+    "description": "基于约定式提交规范，检查提交注释是否符合给定的规范。",
+    "tags": [
+      "commit",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/commitlint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/commitlint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/commitlint",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/commitlint/-/issues",
+    "images": "https://hub.docker.com/r/tencentcom/commitlint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/create-pr",
+    "name": "创建 pull request",
+    "description": "创建 pull request",
+    "tags": [
+      "create",
+      "pr",
+      "pull request"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/create-pr/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/create-pr/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/create-pr.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/create-pr/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/create-pr/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/data-from-file",
+    "name": "data-from-file",
+    "description": "解析本地文件，指定属性路径导出为指定名称的环境变量",
+    "tags": [
+      "parse",
+      "env",
+      "file"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/data-from-file/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/data-from-file/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/data-from-file",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/data-from-file/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/data-from-file/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/fetch-git-file",
+    "name": "fetch-git-file",
+    "description": "拉取cnb git文件到本地",
+    "tags": [
+      "fetch",
+      "git",
+      "file"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/fetch-git-file",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/fetch-git-file/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/fetch-git-file/tags",
+    "locales": {
+      "en": {
+        "name": "fetch-git-file",
+        "description": "Retrieve CNB git files to local",
+        "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/README.en.md"
+      },
+      "en-US": {
+        "name": "fetch-git-file",
+        "description": "Fetch CNB git files to local",
+        "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/fetch-git-file/README.en-US.md"
+      }
+    },
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/git-auto-tag",
+    "name": "git-auto-tag",
+    "description": "自动打tag",
+    "tags": [
+      "git",
+      "tag"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-auto-tag/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-auto-tag/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/git-auto-tag",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-auto-tag/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/git-auto-tag/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/git-change-list",
+    "name": "git-change-list",
+    "description": "获取 change list",
+    "tags": [
+      "git change list"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-change-list/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-change-list/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/git-change-list",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-change-list/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/git-change-list/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/git-pr-title-lint",
+    "name": "git-pr-title-lint",
+    "description": "基于约定式提交规范，检查 PR 标题是否符合给定的规范。",
+    "tags": [
+      "PR",
+      "pull_request",
+      "lint"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-pr-title-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/git-pr-title-lint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/git-pr-title-lint",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-pr-title-lint/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/git-pr-title-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/hello-world",
+    "name": "hello world",
+    "description": "一个简单的插件demo",
+    "tags": [
+      "demo",
+      "example"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/hello-world/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/hello-world/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/hello-world",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/hello-world/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/hello-world/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/knowledge-base",
+    "name": "知识库",
+    "description": "将仓库的文档导入到ElasticSearch或向量数据库中，以支持搜索或LLM问答。",
+    "tags": [
+      "知识库"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/knowledge-base/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/knowledge-base/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/knowledge-base.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/knowledge-base/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/knowledge-base/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/manifest",
+    "name": "manifest",
+    "description": "合并并推送 manifest 多系统架构镜像标签",
+    "tags": [
+      "manifest",
+      "docker",
+      "多系统架构",
+      "镜像标签"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/manifest/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/manifest/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/manifest",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/manifest.git/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/manifest/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/plugin-lint",
+    "name": "plugin-lint",
+    "description": "检查插件元数据 plugin-meta.json 是否符合编写规范",
+    "tags": [
+      "lint",
+      "plugin"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/plugin-lint/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/plugin-lint/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/plugin-lint",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/plugin-lint/-/issues",
+    "images": "https://hub.docker.com/r/codingci/plugin-lint/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/pr-comments",
+    "name": "pull_request 评论",
+    "description": "上传 PR 评论",
+    "tags": [
+      "PR",
+      "pull_request",
+      "评论"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/pr-comments/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/pr-comments/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/pr-comments.git",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/pr-comments/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/pr-comments/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/rebase-check",
+    "name": "rebase-check",
+    "description": "检测当前分支是否已合并指定分支",
+    "tags": [
+      "git",
+      "rebase"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/rebase-check/README.md",
+    "logo": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/rebase-check/logo.png",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/rebase-check",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/rebase-check/-/issues",
+    "images": "https://hub.docker.com/r/cnbcool/rebase-check/tags",
+    "mark": "official",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  },
+  {
+    "id": "cnbcool/release-clean",
+    "name": "release-clean",
+    "description": "cnb Release 清理插件",
+    "tags": [
+      "cnb",
+      "release"
+    ],
+    "readme": "https://cnb.cool/cnb/plugins/market/-/git/raw/main/plugins/cnbcool/release-clean/README.md",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/release-clean",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/release-clean/-/issues",
+    "images": "https://cnb.cool/cnb/plugins/cnbcool/release-clean/-/packages/docker/release-clean",
+    "generate_from": "cnb/plugins/cnbcool/market"
+  }
+]

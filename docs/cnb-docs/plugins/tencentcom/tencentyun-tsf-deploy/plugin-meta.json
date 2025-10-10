@@ -1,0 +1,13 @@
+{
+  "name": "微服务平台 TSF 部署",
+  "description": "基于腾讯云命令行工具（TCCLI）实现一键部署腾讯云微服务平台（TSF）容器应用",
+  "tags": [
+    "腾讯云",
+    "TSF"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/tencentcom/tencentyun-tsf-deploy/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-tsf-deploy",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tencentyun-tsf-deploy/-/issues"
+}

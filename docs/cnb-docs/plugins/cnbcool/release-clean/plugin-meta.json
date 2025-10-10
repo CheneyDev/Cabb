@@ -1,0 +1,11 @@
+{
+    "name": "release-clean",
+    "description": "cnb Release 清理插件",
+    "tags": [
+        "cnb",
+        "release"
+    ],
+    "images": "https://cnb.cool/cnb/plugins/cnbcool/release-clean/-/packages/docker/release-clean",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/release-clean",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/release-clean/-/issues"
+}

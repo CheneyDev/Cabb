@@ -1,0 +1,10 @@
+{
+  "name": "email",
+  "description": "通过email发送构建消息的插件",
+  "tags": ["email", "notify", "邮件", "邮箱"],
+  "images": "https://hub.docker.com/r/drillster/drone-email",
+  "source": "https://github.com/drillster/drone-email",
+  "bugs": "https://github.com/drillster/drone-email/issues",
+  "logo": "logo.svg",
+  "image_tag": "drillster/drone-email:latest"
+}

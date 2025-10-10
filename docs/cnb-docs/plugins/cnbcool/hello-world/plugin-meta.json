@@ -1,0 +1,13 @@
+{
+    "name": "hello world",
+    "description": "一个简单的插件demo",
+    "mark": "official",
+    "images": "https://hub.docker.com/r/cnbcool/hello-world/tags",
+    "source": "https://cnb.cool/cnb/plugins/cnbcool/hello-world",
+    "bugs": "https://cnb.cool/cnb/plugins/cnbcool/hello-world/-/issues",
+    "tags": [
+      "demo",
+      "example"
+    ],
+    "logo": "logo.png"
+  }

@@ -1,0 +1,13 @@
+{
+  "name": "TEM 部署应用",
+  "description": "弹性微服务（Tencent Cloud Elastic Microservice）是面向微服务应用的 Serverless PaaS 平台，该插件可用来部署应用。",
+  "mark": "official",
+  "tags": [
+    "腾讯云",
+    "TEM"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/tem-deploy-app/tags",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/tem-deploy-app",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/tem-deploy-app/-/issues",
+  "logo": "logo.png"
+}

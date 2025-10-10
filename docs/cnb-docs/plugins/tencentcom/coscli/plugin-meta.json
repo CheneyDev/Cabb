@@ -1,0 +1,13 @@
+{
+  "name": "coscli",
+  "description": "使用 coscli 插件，用户可通过简单的命令行指令实现对对象（Object）的批量上传、下载、删除等操作。",
+  "mark": "official",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/coscli.git",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/coscli/-/issues",
+  "tags": [
+    "腾讯云",
+    "cos"
+  ],
+  "images": "https://hub.docker.com/r/cnbcool/coscli/tags",
+  "logo": "logo.png"
+}

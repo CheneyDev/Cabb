@@ -1,0 +1,13 @@
+{
+  "name": "rebase-check",
+  "description": "检测当前分支是否已合并指定分支",
+  "mark": "official",
+  "tags": [
+    "git",
+    "rebase"
+  ],
+  "images": "https://hub.docker.com/r/cnbcool/rebase-check/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/rebase-check",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/rebase-check/-/issues"
+}

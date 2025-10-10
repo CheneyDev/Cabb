@@ -1,0 +1,12 @@
+{
+  "name": "git-commit-list",
+  "description": "获取提交记录列表",
+  "mark": "official",
+  "tags": [
+    "commit list"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/git-comimt-list/tags",
+  "logo": "logo.svg",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/git-commit-list",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/git-commit-list/-/issues"
+}

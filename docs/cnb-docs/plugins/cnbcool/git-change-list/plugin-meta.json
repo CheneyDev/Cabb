@@ -1,0 +1,12 @@
+{
+  "name": "git-change-list",
+  "description": "获取 change list",
+  "mark": "official",
+  "tags": [
+    "git change list"
+  ],
+  "images": "https://hub.docker.com/r/cnbcool/git-change-list/tags",
+  "logo": "logo.png",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/git-change-list",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/git-change-list/-/issues"
+}

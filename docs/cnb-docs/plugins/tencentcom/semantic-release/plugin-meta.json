@@ -1,0 +1,12 @@
+{
+  "name": "semantic-release",
+  "description": "执行semantic-release插件，通过语义化版本号方式，自动打tag，生成changelog",
+  "mark": "official",
+  "tags": [
+    "publish"
+  ],
+  "images": "https://hub.docker.com/r/tencentcom/semantic-release/tags",
+  "logo": "logo.avif",
+  "source": "https://cnb.cool/cnb/plugins/tencentcom/semantic-release",
+  "bugs": "https://cnb.cool/cnb/plugins/tencentcom/semantic-release/-/issues"
+}

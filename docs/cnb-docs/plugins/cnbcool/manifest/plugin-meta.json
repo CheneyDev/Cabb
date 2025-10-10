@@ -1,0 +1,15 @@
+{
+  "name": "manifest",
+  "description": "合并并推送 manifest 多系统架构镜像标签",
+  "tags": [
+    "manifest",
+    "docker",
+    "多系统架构",
+    "镜像标签"
+  ],
+  "mark": "official",
+  "images": "https://hub.docker.com/r/cnbcool/manifest/tags",
+  "source": "https://cnb.cool/cnb/plugins/cnbcool/manifest",
+  "bugs": "https://cnb.cool/cnb/plugins/cnbcool/manifest.git/-/issues",
+  "logo": "logo.png"
+}
