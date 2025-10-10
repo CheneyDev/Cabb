@@ -198,6 +198,8 @@ flowchart LR
 - `POST /webhooks/plane`：Plane webhook（校验 `X-Plane-Delivery`/`X-Plane-Event`/`X-Plane-Signature`，HMAC-SHA256）。
 - `POST /ingest/cnb/issue`：接收 `.cnb.yml` 流水线在 Issue 事件中回调的最小负载（repo、issue_iid、event）。
 - `POST /ingest/cnb/pr`：接收 PR 相关事件回调（iid、action、状态等）。
+- `POST /ingest/cnb/branch`：接收分支创建/删除/推送事件（若 CNB 不支持则由后台轮询替代）。
+- `POST /jobs/issue-summary/daily`：手动触发当日提交摘要生成（支持限定 project/repo/issue）。
   请求示例：
   - `/ingest/cnb/issue`
     ```json
@@ -219,6 +221,88 @@ flowchart LR
 - `POST /admin/mappings/repo-project`：创建/更新仓库-项目映射（含状态映射与方向）。
 - `POST /admin/mappings/pr-states`：配置 PR 生命周期映射。
 - `POST /admin/mappings/users`：批量用户映射。
+
+**Issue 自动更新（分支与提交 AI 摘要）**
+- 目标：当开发者以 Issue 标识（如 `#PROJ-002`/`PROJ-002`）命名分支并在该分支提交代码时，自动用 AI 汇总当日提交，在 Plane 对应 Issue 下追加评论，形成“进度日报”；当分支被创建→标记 Issue 已开始；当分支被删除→标记 Issue 结束并给出收尾摘要。
+
+- 识别与关联
+  - 分支命名规则（可配置）：默认采用正则 `(?i)#?([A-Z][A-Z0-9]+-\d+)` 提取 Issue Key，支持可选 `#` 前缀与大小写；同时支持从提交信息中解析（如 `feat: impl foo (#PROJ-002)`）。
+  - 关联优先级：分支名 > 提交信息 > PR 标题/描述。出现多个 Key 时以第一个为主，其余作为引用。
+  - 建立 `branch_issue_link` 关系：`(repo, branch) → plane_issue_id`，用于后续汇总与生命周期判定。
+
+- 触发与时序
+  - 分支创建：
+    - 事件来源：`/ingest/cnb/branch`（action=`create`，或首次 push 视作 create）；若 CNB 不支持分支事件，则以服务侧轮询 CNB API 的方式检测新分支（按映射项目限定 repo 范围）。
+    - 行为：解析分支→定位 Plane Issue→在 Issue 下评论“已创建开发分支 `<branch>`（repo: `<repo>`）”，并将 Issue 状态切至“进行中”（映射 `issue_open_state_id`）。
+  - 每日汇总：
+    - 调度：服务内置 `jobs` 定时任务（支持 CRON，如本地时区每日 18:00），对所有“活跃关联”的 `(repo, branch)` 拉取自上次汇总后的 commits（CNB API），汇总后以评论形式写回对应 Plane Issue。
+    - 汇总范围：默认仅统计“同一分支”上的提交；若存在多个分支关联同一 Issue，则为该 Issue 聚合多条分支摘要并合并为一条评论（分支分节展示）。
+  - 分支删除：
+    - 事件来源：`/ingest/cnb/branch`（action=`delete`）；若缺失该事件，服务可在每日轮询中发现分支消失并标记删除。
+    - 行为：生成“收尾摘要”（自上次汇总起的剩余提交 + 合并状态），在 Issue 下评论，并将 Issue 状态切至“已完成/已关闭”（`issue_closed_state_id`，可配置）。
+
+- 汇总内容（AI 提示词模板）
+  - 提示词包含：
+    - 时间窗口（如：`YYYY-MM-DD` 日报 / `start_ts ~ end_ts`）。
+    - 提交条目（提交信息、作者、合并/回退、关联 PR、变更统计：新增/删除/文件数）与代表性文件路径样本（≤ N 条，避免超长）。
+    - 生成结构化评论：
+      1) 今日进展概览（要点 3-6 条）
+      2) 主要代码变更 / 影响范围
+      3) 风险与待办（含阻塞项）
+      4) 预计下个里程碑
+  - 长度与合规：
+    - 避免粘贴完整 diff 与敏感数据；仅引用提交标题与高层描述，以及少量文件路径样本。
+    - 失败回退：若 AI 生成失败，则回写“原始提交列表（精简版）”。
+
+- 接口与事件（新增）
+  - `POST /ingest/cnb/branch`：分支事件入站回调（如 CNB 支持）；否则可不启用，由后台轮询替代。
+    - 负载示例：
+      ```json
+      {
+        "event": "branch",
+        "action": "create|delete|push",
+        "repo": "group/repo",
+        "branch": "feature/PROJ-002-impl-x",
+        "head": "abc123", // 可选：最新提交 SHA
+        "commits": ["abc123","def456"] // 可选：push 扩展
+      }
+      ```
+  - `POST /jobs/issue-summary/daily`：手动触发某项目/仓库范围的当日汇总（便于验收或补偿），支持查询参数：`project_id`/`repo_id`/`issue_id`。
+
+- 存储与幂等（新增表）
+  - `branch_issue_links`：`id`、`plane_issue_id`、`cnb_repo_id`、`branch`、`primary`（是否主分支）、`created_at`、`deleted_at`、`active`。
+  - `commit_summaries`：`id`、`plane_issue_id`、`cnb_repo_id`、`branch`、`window_start`、`window_end`、`commit_count`、`files_changed`、`additions`、`deletions`、`summary_md`、`model`、`status`（ok/failed）、`dedup_key`（`issueId+branch+date`）。
+  - 幂等：每日仅生成一次同键摘要（以 `dedup_key` 限定）；分支创建/删除事件以（repo+branch+action+ts_window）判重。
+
+- 配置项（新增）
+  - `SUMMARY_CRON`（如 `0 18 * * 1-5` 工作日 18:00）、`SUMMARY_TIMEZONE`、`SUMMARY_MAX_FILES`、`SUMMARY_MAX_COMMITS`、`SUMMARY_MODEL`。
+  - `ISSUE_KEY_PATTERNS`（数组，默认包含 `#?([A-Z][A-Z0-9]+-\d+)`）。
+  - `AUTO_STATE_TRANSITIONS` 开关：分支 create→`issue_open_state_id`，分支 delete→`issue_closed_state_id`。
+
+- `.cnb.yml`（可选增强）
+  - 若 CNB 支持 push/branch 事件的流水线触发，可在对应事件中使用 curl 通知 `/ingest/cnb/branch`：
+    ```yaml
+    $:
+      push:
+        - stages:
+            - name: notify plane sync (branch push)
+              image: curlimages/curl:8.7.1
+              script: >
+                curl -sS -X POST "$INTEGRATION_URL/ingest/cnb/branch" \
+                  -H "Authorization: Bearer $INTEGRATION_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d '{"event":"branch","action":"push","repo":"'"$CNB_REPO_SLUG"'","branch":"'"$CNB_BRANCH"'","head":"'"$CNB_COMMIT_SHA"'"}'
+    ```
+
+- 权限与风险
+  - 仅在已建立 repo↔project 映射的仓库范围内执行分支扫描与汇总。
+  - 摘要避免泄露敏感字符串（密钥/令牌/URL 参数等），内置敏感词裁剪与掩码。
+  - 大量提交时进行抽样与聚合，防止评论过长；如超出上限，将分块多条评论发布并在首条附目录。
+
+- 验收要点
+  - 创建名为 `feature/PROJ-002-xxx` 的分支并 push 首次提交 → Plane Issue 自动评论“已开始开发”，状态切换为“进行中”。
+  - 连续提交后，当日 18:00 触发汇总 → 在 Issue 下追加“每日进展摘要”。
+  - 删除分支 → Plane Issue 自动评论“已结束（分支删除）”，并切至“完成/关闭”。
 
 **事件与处理（概要）**
 - 入站回调处理（校验、去重与重试）：
@@ -333,3 +417,4 @@ $:
 - M1：最小可用（CNB→Plane 单向：Issue 创建/更新/评论、基础映射 UI/接口）。
 - M2：Plane→CNB 双向、用户映射、评论归属。
 - M3：PR 生命周期自动化、引用行为、性能与可观测性完善。
+- M4：Issue 自动更新（分支与提交 AI 日报）：分支生命周期联动、每日提交汇总评论、可配置 CRON 与模型、幂等与抽样控制。
