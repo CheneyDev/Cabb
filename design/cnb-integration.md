@@ -1,7 +1,7 @@
 ```mermaid
 flowchart LR
   U[团队成员] -->|使用 Plane 管理需求| PlaneNode
-  U -->|提交代码/Issue/PR| CNBNode
+  U -->|提交代码/Issue/PR/分支| CNBNode
 
   subgraph PlaneNode[Plane]
     PWH[Webhook]
@@ -9,21 +9,27 @@ flowchart LR
   end
 
   subgraph CNBNode[CNB 代码托管]
-    PIPE[.cnb.yml 内置任务/流水线]
+    PIPE[".cnb.yml 内置任务/流水线<br/>(issue/pr/branch/push)"]
     CAPI[API]
   end
 
-  SVC[集成服务] --> PAPI
+  SVC[集成服务]
+  SVC --> PAPI
   SVC --> CAPI
   PWH --> SVC
-  PIPE -->|HTTP回调| SVC
+  PIPE -->|HTTP 回调| SVC
+
+  SCH[Scheduler/Cron（每日提交摘要）]
+  AI[AI Summarizer]
+  SCH -->|触发| SVC
+  SVC -->|生成摘要| AI
 
   DB[(Postgres 映射/凭据/日志)]
   SVC --- DB
 
   U -. 一次性安装与授权 .- SVC
 
-  CFG[["同步策略<br/>- 单向/双向可配置<br/>- Issue/评论<br/>- PR → 状态自动化"]]
+  CFG[["同步策略<br/>- 单向/双向可配置<br/>- Issue/评论<br/>- PR/分支 → 状态自动化"]]
   SVC --- CFG
 ```
 
@@ -39,19 +45,6 @@ flowchart LR
   - `sync-core`：映射与路由层（项目/仓库/用户/状态/标签/PR 状态映射、方向控制、去重与幂等）。
   - `storage`：Postgres 存储凭据、映射关系、事件投递日志、去重指纹。
   - `jobs`：异步任务与重试（本地队列/表驱动，事务内投递，指数退避）。
-
-**部署与配置**
-- 进程配置：
-  - `PORT`（服务端口），`DATABASE_URL`，`ENCRYPTION_KEY`（KMS/本地），`LOG_LEVEL`。
-  - Plane：`PLANE_CLIENT_ID`，`PLANE_CLIENT_SECRET`，`PLANE_BASE_URL`（如 https://api.plane.so），`PLANE_WEBHOOK_SECRET`。
-  - CNB：`CNB_BASE_URL`，`CNB_APP_TOKEN`（服务调用 CNB API 的凭据，按需配置）。
-  - 集成入站鉴权：`INTEGRATION_SHARED_SECRET`（供 CNB 流水线以 Bearer 传入）。
-- 回调与事件端点：
-  - Plane OAuth：`/plane/oauth/start`、`/plane/oauth/callback`
-  - Plane Webhook：`/webhooks/plane`
-  - CNB 事件入站（由 .cnb.yml 流水线触发）：
-    - `POST /ingest/cnb/issue`（issue.open/issue.close/issue.reopen）
-    - `POST /ingest/cnb/pr`（pull_request/pull_request.update/pull_request.target/...）
 
 **数据模型（Postgres）**
 - 下图仅展示核心表及主要关系，帮助理解“凭据/映射/链接/投递日志”的职责分工。
@@ -120,12 +113,40 @@ classDiagram
     timestamptz next_retry_at
     timestamptz created_at
   }
+  class branch_issue_links {
+    uuid id
+    uuid plane_issue_id
+    string cnb_repo_id
+    string branch
+    bool primary
+    timestamptz created_at
+    timestamptz deleted_at
+    bool active
+  }
+  class commit_summaries {
+    uuid id
+    uuid plane_issue_id
+    string cnb_repo_id
+    string branch
+    timestamptz window_start
+    timestamptz window_end
+    int commit_count
+    int files_changed
+    int additions
+    int deletions
+    text summary_md
+    string model
+    enum status
+    string dedup_key
+  }
 
   workspaces --> repo_project_mappings : plane_workspace_id
   repo_project_mappings --> issue_links : project/repo
   cnb_installations --> repo_project_mappings : installation scope
   user_mappings .. issue_links : assignees/comments via mapping
   event_deliveries ..> repo_project_mappings : idempotency & retry
+  repo_project_mappings --> branch_issue_links : repo scope
+  branch_issue_links --> commit_summaries : summaries per branch/issue
 ```
 - `workspaces`：存 Plane 侧安装与令牌
   - `id` (pk)、`plane_workspace_id`、`app_installation_id`、`token_type`（user/bot）、`access_token`（加密）、`refresh_token`（加密，可空）、`expires_at`。
@@ -141,6 +162,10 @@ classDiagram
   - `id`、`plane_issue_id`、`cnb_issue_id`、`cnb_repo_id`、`linked_at`。
 - `event_deliveries`：事件去重与可观测
   - `id`、`source`（plane/cnb）、`event_type`、`delivery_id`/`signature`、`payload_sha256`、`status`、`retries`、`next_retry_at`、`created_at`。
+ - `branch_issue_links`：分支与 Issue 关联
+   - `id`、`plane_issue_id`、`cnb_repo_id`、`branch`、`primary`、`created_at`、`deleted_at`、`active`。
+ - `commit_summaries`：提交摘要记录
+   - `id`、`plane_issue_id`、`cnb_repo_id`、`branch`、`window_start`、`window_end`、`commit_count`、`files_changed`、`additions`、`deletions`、`summary_md`、`model`、`status`、`dedup_key`。
 
 **同步模型与规则**
 - 典型的双向/单向同步时序如下（CNB 侧通过 .cnb.yml 触发回调，非 Webhook）：
@@ -169,6 +194,7 @@ sequenceDiagram
 - 触发机制（CNB 无 Webhook 的适配）：
   - CNB→Plane：在 `issue.open/issue.close/issue.reopen` 等事件中通过 `.cnb.yml` 以内置任务回调集成服务；服务侧拉取 Issue 详情并判断是否含 `Plane` 标签，满足则创建/链接 Plane Work Item（标签作为“门槛”而非事件源）。
   - Plane→CNB：在 Plane Work Item 打上 `CNB` 标签 → 由 Plane Webhook 触发服务回写 CNB（创建/链接 Issue）。若需“补同步”，可在 CNB 仓库提供 `web_trigger` 按钮手动触发一次回调。
+  - 分支与提交：分支 create/delete/push 事件通过 `.cnb.yml` 回调 `/ingest/cnb/branch`（或由后台轮询发现）→ 建立/更新 `branch_issue_links`、推动 Issue 状态自动化；每日由 Scheduler 执行汇总任务，使用 AI 生成提交摘要并在 Issue 下评论。
 - 评论同步：
   - 双向同步，若未映射用户则以 Bot 身份留言（Plane 侧可绑定“个人账户”以便归属评论，参考 GitHub 文档“Connect personal GitHub account”）。
 - 用户映射：
@@ -339,11 +365,14 @@ flowchart TD
 - 目录：
   - `cmd/server/main.go`（引导、路由、依赖注入）
   - `internal/handlers/plane.go`（Plane Webhook 回调）
-  - `internal/handlers/cnb_ingest.go`（接收 `.cnb.yml` 回调入口）
+  - `internal/handlers/cnb_ingest.go`（接收 `.cnb.yml` 回调入口：issue/pr/branch）
+  - `internal/handlers/jobs.go`（手动触发：`/jobs/issue-summary/daily`）
   - `internal/services/sync.go`（核心映射/路由）
+  - `internal/services/summaries.go`（提交拉取与窗口聚合、AI 提示词构建、评论写回）
   - `internal/connectors/plane.go`、`internal/connectors/cnb.go`（各平台 API 客户端）
+  - `internal/connectors/ai.go`（AI Summarizer 客户端，带速率/重试）
   - `internal/store/...`（Repo/Project/User/PR 映射、凭据）
-  - `internal/jobs/...`（异步任务/重试）
+  - `internal/jobs/...`（异步任务/重试、定时调度器）
 
 **关键流程（文字时序）**
 - CNB Issue 事件（open/close/reopen）→ `.cnb.yml` 回调 → 服务查映射（repo→project）→ 拉取 Issue 详情（含标签）→ 若含 Plane 标签则在 Plane 创建/链接 Work Item → 记录 `issue_links` → 回写 CNB 评论附 Plane 链接。
@@ -399,19 +428,6 @@ $:
 - 使用 `.cnb.yml` 的 `env` 或 `imports` 将密钥仓库中的变量注入为环境变量，避免明文暴露。
   - 参考：docs/cnb-docs/docs/build/env.md:9、docs/cnb-docs/docs/repo/secret.md:54
   - 环境变量命名限制参考：docs/cnb-docs/docs/build/env.md:61
-
-**证据（CNB 无 Webhook，使用内置任务/事件）**
-- 事件列表：`docs/cnb-docs/docs/build/trigger-rule.md:282`
-  - 列出了 Issue 事件：`issue.open` / `issue.close` / `issue.reopen`；PR 事件：`pull_request` 系列。
-- 内置任务：`docs/cnb-docs/docs/build/internal-steps/README.md:135`
-  - 展示流水线 `script/commands` 能力，可用 curl 发送 HTTP 回调。
-- 环境变量：`docs/cnb-docs/docs/build/build-in-env.md:286`, `docs/cnb-docs/docs/build/build-in-env.md:352`
-  - 提供 `CNB_ISSUE_*` 与 `CNB_PULL_REQUEST_*` 变量，可拼装回调负载。
-
-**测试与验收**
-- 单元：映射、签名校验、幂等、方向策略。
-- 集成：模拟 Webhook 负载（Plane 示例见 intro-webhooks.mdx），本地回调。
-- 试点：单项目、双向同步关闭（仅 CNB→Plane）；稳定后开放双向与 PR 自动化。
 
 **里程碑**
 - M1：最小可用（CNB→Plane 单向：Issue 创建/更新/评论、基础映射 UI/接口）。
