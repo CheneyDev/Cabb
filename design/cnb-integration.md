@@ -16,7 +16,7 @@ flowchart LR
   SVC[集成服务] --> PAPI
   SVC --> CAPI
   PWH --> SVC
-  PIPE -->|HTTP 回调(脚本/curl)| SVC
+  PIPE -->|HTTP回调| SVC
 
   DB[(Postgres 映射/凭据/日志)]
   SVC --- DB
