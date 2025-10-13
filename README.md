@@ -96,7 +96,7 @@ make ci-verify
   - Blueprint 会创建：
     - Web 服务：基于 `Dockerfile` 构建，健康检查路径 `/healthz`。
     - Postgres 数据库：`plane-integration-db`，连接串注入为 `DATABASE_URL`。
-  - 首次部署会自动执行迁移：`psql "$DATABASE_URL" -f /app/db/migrations/0001_init.sql`。
+  - 首次部署会自动执行迁移：容器入口脚本 `scripts/entrypoint.sh` 会在启动时运行 `psql "$DATABASE_URL" -f /app/db/migrations/0001_init.sql`。
   - 在服务的环境变量中补齐：
     - 必填：`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`
     - 可选：`PLANE_WEBHOOK_SECRET`、`INTEGRATION_TOKEN`、`LARK_*`

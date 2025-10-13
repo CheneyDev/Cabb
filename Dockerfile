@@ -26,9 +26,10 @@ USER app
 # App files
 COPY --from=build /out/server /server
 COPY db/migrations /app/db/migrations
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 ENV PORT=8080
 EXPOSE 8080
 
-ENTRYPOINT ["/server"]
-
+ENTRYPOINT ["/entrypoint.sh"]

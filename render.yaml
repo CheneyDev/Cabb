@@ -21,10 +21,8 @@ services:
         fromDatabase:
           name: plane-integration-db
           property: connectionString
-    postDeployCommand: >-
-      psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /app/db/migrations/0001_init.sql
+    # Migrations are applied in Docker entrypoint (scripts/entrypoint.sh)
 
 databases:
   - name: plane-integration-db
     plan: free
-
