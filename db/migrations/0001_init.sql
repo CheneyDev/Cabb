@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS branch_issue_links (
   plane_issue_id uuid NOT NULL,
   cnb_repo_id text NOT NULL,
   branch text NOT NULL,
-  primary boolean NOT NULL DEFAULT false,
+  is_primary boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   deleted_at timestamptz,
   active boolean NOT NULL DEFAULT true,
@@ -188,4 +188,3 @@ CREATE TABLE IF NOT EXISTS lark_accounts (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_lark_accounts_tenant ON lark_accounts(tenant_key);
-

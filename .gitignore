@@ -4,3 +4,27 @@
 # VSCode
 .vscode/
 *.code-workspace
+
+# IDE
+.idea/
+
+# Env files (keep example tracked)
+.env
+.env.*
+!.env.example
+
+# Go build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Logs
+*.log
