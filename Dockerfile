@@ -21,13 +21,14 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata postgresql-client && update-ca-certificates \
     && adduser -D -u 10001 app
 
-USER app
-
-# App files
+# App files (set perms as root, then drop privileges)
 COPY --from=build /out/server /server
 COPY db/migrations /app/db/migrations
 COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh \
+    && chown -R app:app /server /app /entrypoint.sh
+
+USER app
 
 ENV PORT=8080
 EXPOSE 8080
