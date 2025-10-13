@@ -74,8 +74,8 @@ go build -o bin/plane-integration ./cmd/server
 - 健康检查
   - `GET /healthz`
 - Plane（OAuth/Webhook）
-  - `GET /plane/oauth/start`（占位）
-  - `GET /plane/oauth/callback`（占位）
+  - `GET /plane/oauth/start`（重定向到 Plane 授权页）
+  - `GET /plane/oauth/callback`（处理 app_installation_id 或 code，换取 Token 并回传安装信息摘要）
   - `POST /webhooks/plane`（支持 `X-Plane-Signature` HMAC-SHA256 验签）
 - CNB（来自 `.cnb.yml` 的回调）
   - `POST /ingest/cnb/issue`
@@ -101,6 +101,20 @@ curl -X POST "$INTEGRATION_URL/ingest/cnb/issue" \
   -H "Content-Type: application/json" \
   -d '{"event":"issue.open","repo":"group/repo","issue_iid":"42"}'
 ```
+
+### 示例：Plane OAuth
+- 启动安装/同意（浏览器访问，支持可选 `state`）：
+```
+open "http://localhost:8080/plane/oauth/start?state=dev"
+```
+
+- 回调（Plane 完成安装后将携带 `app_installation_id` 与 `code` 调用）：
+```
+# 示例：本地手动验证（模拟 Plane 回调）
+curl "http://localhost:8080/plane/oauth/callback?app_installation_id=<uuid>&code=<code>&state=dev"
+```
+
+注意：服务端会调用 Plane 的 `/auth/o/token/` 与 `/auth/o/app-installation/` 完成 Token 交换与安装信息查询；当前仅返回摘要 JSON，不回显敏感 Token。令牌持久化与加密存储将在接入数据库后启用。
 
 ## 安全与鉴权
 - Plane Webhook：校验 `X-Plane-Signature`（HMAC-SHA256(secret, raw_body)）。

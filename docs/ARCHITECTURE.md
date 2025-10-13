@@ -17,8 +17,8 @@ This repository hosts a Go service that bridges Plane with CNB (internal code ho
 
 ## Endpoints (scaffold)
 - `GET /healthz` – liveness with version & timestamp
-- `GET /plane/oauth/start` – placeholder
-- `GET /plane/oauth/callback` – placeholder
+- `GET /plane/oauth/start` – redirect to Plane consent (authorize-app)
+- `GET /plane/oauth/callback` – handle app_installation_id/code, exchange tokens, return summary
 - `POST /webhooks/plane` – HMAC verification stub (`X-Plane-Signature`)
 - `POST /ingest/cnb/issue|pr|branch` – `.cnb.yml` callbacks with Bearer auth (`INTEGRATION_TOKEN`)
 - `POST /webhooks/lark/events|interactivity|commands` – Feishu endpoints (challenge handled)
