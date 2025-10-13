@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+
+      - name: Build binary
+        run: go build -o bin/server ./cmd/server
+
+      - name: Launch server and verify /healthz
+        run: |
+          PORT=18080 ./bin/server & echo $! > server.pid
+          for i in {1..20}; do curl -fsS http://localhost:18080/healthz && ok=1 && break || sleep 1; done
+          if [ -z "$ok" ]; then echo "health check failed"; cat server.pid || true; exit 1; fi
+          kill $(cat server.pid)
+
+      - name: Docker build
+        run: docker build -t plane-integration:ci .
+
+      - name: Run container and verify /healthz
+        run: |
+          docker run -d --rm --name plane-ci -p 18081:8080 plane-integration:ci
+          for i in {1..30}; do curl -fsS http://localhost:18081/healthz && ok=1 && break || sleep 1; done
+          if [ -z "$ok" ]; then docker logs plane-ci; echo "container health check failed"; exit 1; fi
+          docker rm -f plane-ci
+

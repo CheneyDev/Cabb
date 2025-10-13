@@ -70,6 +70,59 @@ go build -o bin/plane-integration ./cmd/server
 
 启动后访问健康检查：`GET http://localhost:8080/healthz`
 
+### Makefile（本地便捷命令）
+```
+# 编译二进制
+make build
+
+# 本地运行（可用 PORT=xxxx 指定端口）
+make run PORT=8080
+
+# 构建并运行 Docker 镜像
+make docker-build
+make docker-run PORT=8080
+
+# 执行迁移（需设置 DATABASE_URL）
+make migrate
+
+# 本地 CI 验证：启动服务并检查 /healthz
+make ci-verify
+```
+
+## 部署（Render）
+- 方式一：使用 Blueprint（推荐）
+  - 本仓库已包含 `render.yaml` 与 `Dockerfile`。
+  - 在 Render 仪表盘选择“Blueprint”→ 连接你的 GitHub 仓库 → 部署。
+  - Blueprint 会创建：
+    - Web 服务：基于 `Dockerfile` 构建，健康检查路径 `/healthz`。
+    - Postgres 数据库：`plane-integration-db`，连接串注入为 `DATABASE_URL`。
+  - 首次部署会自动执行迁移：`psql "$DATABASE_URL" -f /app/db/migrations/0001_init.sql`。
+  - 在服务的环境变量中补齐：
+    - 必填：`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`
+    - 可选：`PLANE_WEBHOOK_SECRET`、`INTEGRATION_TOKEN`、`LARK_*`
+    - `PLANE_REDIRECT_URI`：部署后改为 `https://<your-service>.onrender.com/plane/oauth/callback`
+  - 验证：
+    - 健康检查：`https://<your-service>.onrender.com/healthz`
+    - OAuth 起始：`https://<your-service>.onrender.com/plane/oauth/start`
+
+- 方式二：原生 Go（非 Docker）
+  - 在 Render 创建 Web Service（Go），设置 `Build Command: go build -o server ./cmd/server`、`Start Command: ./server`。
+  - 配置 `GO_VERSION` 至 1.23.x（若 1.24 暂不支持）；或临时将 `go.mod` 中 `go 1.24` 降为 `1.23` 用于测试（不建议长期）。
+  - 迁移：在本地使用 `psql "$DATABASE_URL" -f db/migrations/0001_init.sql` 连接 Render Postgres 执行，或在“Post‑deploy Command”中配置执行。
+
+注意
+- 免费实例可能冷启动，首次请求有延迟；Webhook 超时敏感场景建议升级或保持活跃。
+- 迁移脚本使用 `pgcrypto` 扩展，Render 托管 Postgres 支持该扩展。
+
+## 使用 Docker 本地运行
+```
+docker build -t plane-integration:dev .
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL="postgres://root:123456@host.docker.internal:15432/plane_intergration?sslmode=disable" \
+  -e PLANE_REDIRECT_URI="http://localhost:8080/plane/oauth/callback" \
+  plane-integration:dev
+```
+
 ## API 与端点（脚手架）
 - 健康检查
   - `GET /healthz`
