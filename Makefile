@@ -19,10 +19,12 @@ docker-run: docker-build
 
 migrate:
 	@: $${DATABASE_URL?Set DATABASE_URL}; \
-	psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_init.sql
+	psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_init.sql; \
+	psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0002_unique_workspaces.sql; \
+	psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0003_pr_links.sql; \
+	psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0004_label_mappings.sql
 
 ci-verify: build
 	PORT=18080 ./bin/server & echo $$! > .server.pid; \
 	sleep 2; curl -fsS http://localhost:18080/healthz; \
 	kill `cat .server.pid`; rm .server.pid
-

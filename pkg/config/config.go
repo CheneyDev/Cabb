@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "strconv"
+    "strings"
 )
 
 type Config struct {
@@ -28,6 +29,12 @@ type Config struct {
     // CNB
     CNBAppToken       string
     IntegrationToken  string
+    CNBBaseURL        string
+    CNBOutboundEnabled bool
+    CNBIssueCreatePath  string
+    CNBIssueUpdatePath  string
+    CNBIssueCommentPath string
+    CNBIssueClosePath   string
 
     // Crypto
     EncryptionKey     string
@@ -53,6 +60,12 @@ func FromEnv() Config {
 
         CNBAppToken:        os.Getenv("CNB_APP_TOKEN"),
         IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),
+        CNBBaseURL:         os.Getenv("CNB_BASE_URL"),
+        CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", false),
+        CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
+        CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),
+        CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
+        CNBIssueClosePath:   os.Getenv("CNB_ISSUE_CLOSE_PATH"),
 
         EncryptionKey:      os.Getenv("ENCRYPTION_KEY"),
     }
@@ -80,4 +93,17 @@ func strFromEnv(key, def string) string {
         return def
     }
     return v
+}
+
+func boolFromEnv(key string, def bool) bool {
+    v := os.Getenv(key)
+    if v == "" { return def }
+    switch strings.ToLower(v) {
+    case "1","t","true","yes","y","on":
+        return true
+    case "0","f","false","no","n","off":
+        return false
+    default:
+        return def
+    }
 }

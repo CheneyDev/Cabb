@@ -39,3 +39,12 @@ Note: external dependencies (Echo) will be fetched at build time.
 - Implement token encryption and connectors (Plane/CNB/Lark/AI)
 - Build Sync Core, idempotency store, retries & scheduler
 - Flesh out admin APIs and webhook processing per `docs/design/*`
+
+## Redis (optional)
+Redis is not required for the minimal architecture. Postgres can back durable idempotency (`event_deliveries`), mappings and retries. Redis can be introduced later for:
+- Hot idempotency cache: short-circuit duplicates before DB, reduce QPS on hot keys.
+- Distributed locks: avoid double-processing across instances for the same key.
+- Rate limiting/burst control: protect Plane/CNB APIs and internal workers.
+- Ephemeral queues: buffering heavy tasks before handing to workers (optional; DB-backed queues also work).
+
+Recommendation: start without Redis for M1. Add behind a feature flag (`REDIS_URL`) when we scale out workers or need stricter rate limiting/locks.

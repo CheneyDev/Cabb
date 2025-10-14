@@ -16,6 +16,7 @@ import (
     "time"
 
     "github.com/labstack/echo/v4"
+    "plane-integration/internal/cnb"
 )
 
 // OAuthStart redirects the user to Plane's consent page
@@ -97,7 +98,10 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
         expiresAt = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
     }
 
-    // TODO: 持久化 tokens（透明加密存储），落库 workspaces（待接入 DB）
+    // 持久化 tokens（透明加密存储：待实现）
+    if inst != nil && token != nil && hHasDB(h) {
+        _ = h.db.UpsertWorkspaceToken(c.Request().Context(), inst.WorkspaceID(), appInstallationID, tType, token.AccessToken, token.RefreshToken, expiresAt, inst.WorkspaceSlug(), inst.AppBot)
+    }
 
     // Build safe response (do not leak tokens)
     resp := map[string]any{
@@ -142,12 +146,12 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
     return c.HTML(http.StatusOK, html)
 }
 
+func hHasDB(h *Handler) bool { return h != nil && h.db != nil && h.db.SQL != nil }
+
 func (h *Handler) PlaneWebhook(c echo.Context) error {
     // Verify signature if provided
     body, err := io.ReadAll(c.Request().Body)
-    if err != nil {
-        return c.NoContent(http.StatusBadRequest)
-    }
+    if err != nil { return c.NoContent(http.StatusBadRequest) }
     sig := c.Request().Header.Get("X-Plane-Signature")
     if h.cfg.PlaneWebhookSecret != "" {
         if !verifyHMACSHA256(body, h.cfg.PlaneWebhookSecret, sig) {
@@ -155,14 +159,25 @@ func (h *Handler) PlaneWebhook(c echo.Context) error {
         }
     }
 
-    // Acknowledge; actual routing will be implemented later.
+    // idempotency
     deliveryID := c.Request().Header.Get("X-Plane-Delivery")
     eventType := c.Request().Header.Get("X-Plane-Event")
-    return c.JSON(http.StatusOK, map[string]any{
-        "accepted":    true,
-        "delivery_id": deliveryID,
-        "event_type":  eventType,
-    })
+    hsum := sha256.Sum256(body)
+    sum := hex.EncodeToString(hsum[:])
+    if h.dedupe != nil && h.dedupe.CheckAndMark("plane."+eventType, deliveryID, sum) {
+        return c.JSON(http.StatusOK, map[string]any{"accepted": true, "delivery_id": deliveryID, "event_type": eventType, "status": "duplicate"})
+    }
+    if hHasDB(h) && deliveryID != "" {
+        dup, err := h.db.IsDuplicateDelivery(c.Request().Context(), "plane."+eventType, deliveryID, sum)
+        if err == nil && dup {
+            return c.JSON(http.StatusOK, map[string]any{"accepted": true, "delivery_id": deliveryID, "event_type": eventType, "status": "duplicate"})
+        }
+        _ = h.db.UpsertEventDelivery(c.Request().Context(), "plane."+eventType, "incoming", deliveryID, sum, "queued")
+    }
+
+    // async process
+    go h.processPlaneWebhook(eventType, body, deliveryID)
+    return c.JSON(http.StatusOK, map[string]any{"accepted": true, "delivery_id": deliveryID, "event_type": eventType, "status": "queued"})
 }
 
 func verifyHMACSHA256(body []byte, secret, got string) bool {
@@ -373,6 +388,107 @@ func writeError(c echo.Context, status int, code, message string, details map[st
             "request_id": reqID,
         },
     })
+}
+
+// ==== Plane webhook processing ====
+type planeWebhookEnvelope struct {
+    Event       string         `json:"event"`
+    Action      string         `json:"action"`
+    WebhookID   string         `json:"webhook_id"`
+    WorkspaceID string         `json:"workspace_id"`
+    Data        map[string]any `json:"data"`
+}
+
+func (h *Handler) processPlaneWebhook(event string, body []byte, deliveryID string) {
+    var env planeWebhookEnvelope
+    if err := json.Unmarshal(body, &env); err != nil { return }
+    switch strings.ToLower(event) {
+    case "issue":
+        h.handlePlaneIssueEvent(env, deliveryID)
+    case "issue comment", "issue_comment":
+        h.handlePlaneIssueComment(env, deliveryID)
+    default:
+        // ignore others for CNB integration
+    }
+}
+
+func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID string) {
+    if !hHasDB(h) { return }
+    ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+    defer cancel()
+    // Extract
+    action := strings.ToLower(env.Action)
+    data := env.Data
+    planeIssueID, _ := dataGetString(data, "id")
+    planeProjectID, _ := dataGetString(data, "project")
+    name, _ := dataGetString(data, "name")
+    descHTML, _ := dataGetString(data, "description_html")
+
+    // Find mapping by project
+    mapping, err := h.db.GetRepoProjectMappingByPlaneProject(ctx, planeProjectID)
+    if err != nil || mapping == nil { return }
+    // Only act when bidirectional sync is configured
+    if !mapping.SyncDirection.Valid || strings.ToLower(mapping.SyncDirection.String) != "bidirectional" {
+        return
+    }
+
+    // Resolve CNB link if exists
+    cnbRepoID := mapping.CNBRepoID
+    linkedRepo, linkedIssue, _ := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
+
+    // Build CNB client (feature-flagged)
+    if !h.cfg.CNBOutboundEnabled { return }
+    cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+
+    switch action {
+    case "create":
+        if linkedIssue == "" {
+            iid, err := cn.CreateIssue(ctx, cnbRepoID, name, descHTML)
+            if err == nil && iid != "" {
+                _ = h.db.CreateIssueLink(ctx, planeIssueID, cnbRepoID, iid)
+            }
+        }
+    case "update":
+        if linkedIssue != "" {
+            fields := map[string]any{}
+            if name != "" { fields["title"] = name }
+            if descHTML != "" { fields["description_html"] = descHTML }
+            _ = cn.UpdateIssue(ctx, linkedRepo, linkedIssue, fields)
+        }
+    case "delete", "close":
+        if linkedIssue != "" {
+            _ = cn.CloseIssue(ctx, linkedRepo, linkedIssue)
+        }
+    }
+    if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue", deliveryID, "succeeded", nil) }
+}
+
+func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID string) {
+    if !hHasDB(h) { return }
+    if !h.cfg.CNBOutboundEnabled { return }
+    ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+    defer cancel()
+    data := env.Data
+    planeIssueID, _ := dataGetString(data, "issue")
+    commentHTML, _ := dataGetString(data, "comment_html")
+
+    if planeIssueID == "" || commentHTML == "" { return }
+    cnbRepo, cnbIID, err := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
+    if err != nil || cnbIID == "" { return }
+    cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+    _ = cn.AddComment(ctx, cnbRepo, cnbIID, commentHTML)
+    if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil) }
+}
+
+func dataGetString(m map[string]any, key string) (string, bool) {
+    if m == nil { return "", false }
+    if v, ok := m[key]; ok {
+        switch t := v.(type) {
+        case string:
+            return t, true
+        }
+    }
+    return "", false
 }
 
 // preferredReturnURL selects a safe redirect destination back to Plane

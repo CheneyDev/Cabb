@@ -45,6 +45,13 @@
 - Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`、`PLANE_APP_BASE_URL`
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
 - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
+- CNB（出站开启 + 端点配置，待确认官方 OpenAPI）：
+  - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
+  - `CNB_ISSUE_CREATE_PATH=/api/v1/repos/{repo}/issues`
+  - `CNB_ISSUE_UPDATE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
+  - `CNB_ISSUE_COMMENT_PATH=/api/v1/repos/{repo}/issues/{issue_iid}/comments`
+  - `CNB_ISSUE_CLOSE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
+  - 以上路径模板中的 `{repo}`、`{issue_iid}` 会在运行时替换；若与你的 CNB OpenAPI 不一致，请按规范调整对应 PATH。
 
 ### 初始化数据库
 - 创建数据库并执行迁移：
