@@ -453,8 +453,8 @@ func (h *Handler) preferredReturnURL(workspaceSlug, state, returnTo string) stri
 }
 
 func (h *Handler) buildRedirectHTML(target string, payload map[string]any) string {
-    // Serialize a small, safe debug payload (without tokens)
-    b, _ := json.MarshalIndent(payload, "", "  ")
+    // Minimal, clean handoff page with auto-redirect
+    _ = payload // intentionally unused (no debug output on the page)
     esc := func(s string) string {
         r := strings.NewReplacer(
             "&", "&amp;",
@@ -465,18 +465,27 @@ func (h *Handler) buildRedirectHTML(target string, payload map[string]any) strin
         )
         return r.Replace(s)
     }
-    // HTML with immediate JS redirect and fallback meta refresh
     return "<!DOCTYPE html><html lang=\"zh-CN\"><head>" +
         "<meta charset=\"utf-8\">" +
-        "<meta http-equiv=\"refresh\" content=\"3; url=" + esc(target) + "\">" +
+        "<meta http-equiv=\"refresh\" content=\"2; url=" + esc(target) + "\">" +
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
-        "<title>返回 Plane...</title>" +
-        "<style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;padding:24px;color:#1f2937} .box{max-width:640px;margin:10vh auto 0;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.04)} .btn{display:inline-block;background:#111827;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none} pre{max-height:240px;overflow:auto;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px}</style>" +
-        "</head><body><div class=\"box\">" +
-        "<h2>安装完成，正在返回 Plane...</h2>" +
-        "<p>若未自动跳转，请点击：<a class=\"btn\" href=\"" + esc(target) + "\">返回 Plane</a></p>" +
-        "<details style=\"margin-top:12px\"><summary>调试信息（不含敏感字段）</summary><pre>" + esc(string(b)) + "</pre></details>" +
-        "</div><script>(function(){try{var t='" + esc(target) + "'; if(window.opener && !window.opener.closed){try{window.opener.postMessage({type:'plane_installation',status:'ok',target:t}, '*');}catch(e){} window.location.replace(t); setTimeout(function(){window.close();}, 500);} else {window.location.replace(t);} }catch(e){ /* ignore */ }})();</script></body></html>"
+        "<meta name=\"color-scheme\" content=\"light dark\">" +
+        "<title>返回 Plane</title>" +
+        "<style>" +
+        "html,body{height:100%}body{margin:0;font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:grid;place-items:center}" +
+        ".wrap{text-align:center;padding:24px}h1{font-size:20px;margin:0 0 8px}p{margin:6px 0;color:#6b7280}" +
+        ".spinner{width:28px;height:28px;border:3px solid currentColor;border-right-color:transparent;border-radius:50%;margin:14px auto;animation:s .8s linear infinite;opacity:.7}" +
+        "a.btn{display:inline-block;margin-top:10px;padding:8px 12px;border:1px solid currentColor;border-radius:8px;text-decoration:none}" +
+        "@keyframes s{to{transform:rotate(360deg)}}" +
+        "</style></head><body>" +
+        "<div class=\"wrap\">" +
+        "<div class=\"spinner\" aria-hidden=\"true\"></div>" +
+        "<h1>安装完成，正在返回 Plane…</h1>" +
+        "<p>若未自动跳转，请点击下方按钮</p>" +
+        "<p><a class=\"btn\" href=\"" + esc(target) + "\">返回 Plane</a></p>" +
+        "</div>" +
+        "<script>(function(){try{var t='" + esc(target) + "'; if(window.opener && !window.opener.closed){try{window.opener.postMessage({type:'plane_installation',status:'ok',target:t}, '*');}catch(e){}} window.location.replace(t);}catch(e){}}</script>" +
+        "</body></html>"
 }
 
 // planeAppBase returns a parsed URL for PLANE_APP_BASE_URL or derives from PLANE_BASE_URL (api.* -> app.*)
