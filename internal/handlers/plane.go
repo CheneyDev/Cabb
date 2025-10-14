@@ -438,7 +438,14 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 
     // Build CNB client (feature-flagged)
     if !h.cfg.CNBOutboundEnabled { return }
-    cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+    cn := &cnb.Client{
+        BaseURL: h.cfg.CNBBaseURL,
+        Token:   h.cfg.CNBAppToken,
+        IssueCreatePath:  h.cfg.CNBIssueCreatePath,
+        IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
+        IssueCommentPath: h.cfg.CNBIssueCommentPath,
+        IssueClosePath:   h.cfg.CNBIssueClosePath,
+    }
 
     switch action {
     case "create":
@@ -475,7 +482,14 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
     if planeIssueID == "" || commentHTML == "" { return }
     cnbRepo, cnbIID, err := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
     if err != nil || cnbIID == "" { return }
-    cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+    cn := &cnb.Client{
+        BaseURL: h.cfg.CNBBaseURL,
+        Token:   h.cfg.CNBAppToken,
+        IssueCreatePath:  h.cfg.CNBIssueCreatePath,
+        IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
+        IssueCommentPath: h.cfg.CNBIssueCommentPath,
+        IssueClosePath:   h.cfg.CNBIssueClosePath,
+    }
     _ = cn.AddComment(ctx, cnbRepo, cnbIID, commentHTML)
     if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil) }
 }

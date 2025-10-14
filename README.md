@@ -44,7 +44,14 @@
 - 通用：`PORT`、`DATABASE_URL`、`TIMEZONE`、`ENCRYPTION_KEY`
 - Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`、`PLANE_APP_BASE_URL`
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
-- CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
+ - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
+ - CNB（出站开启 + 端点配置，待确认官方 OpenAPI）：
+   - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
+   - `CNB_ISSUE_CREATE_PATH=/api/v1/repos/{repo}/issues`
+   - `CNB_ISSUE_UPDATE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
+   - `CNB_ISSUE_COMMENT_PATH=/api/v1/repos/{repo}/issues/{issue_iid}/comments`
+   - `CNB_ISSUE_CLOSE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
+   - 以上路径模板中的 `{repo}`、`{issue_iid}` 会在运行时替换；若与你的 CNB OpenAPI 不一致，请按规范调整对应 PATH。
 - CNB（出站开启 + 端点配置，待确认官方 OpenAPI）：
   - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
   - `CNB_ISSUE_CREATE_PATH=/api/v1/repos/{repo}/issues`
@@ -268,7 +275,7 @@ docker run --rm -p 8080:8080 \
 - Plane（OAuth/Webhook）
   - `GET /plane/oauth/start`（重定向到 Plane 授权页）
   - `GET /plane/oauth/callback`（处理 app_installation_id 或 code，换取 Token 并回传安装信息摘要）
-  - `POST /webhooks/plane`（支持 `X-Plane-Signature` HMAC-SHA256 验签）
+  - `POST /webhooks/plane`（支持 `X-Plane-Signature` HMAC-SHA256 验签，支持幂等与异步处理）
 - CNB（来自 `.cnb.yml` 的回调）
   - `POST /ingest/cnb/issue`
   - `POST /ingest/cnb/pr`
@@ -285,6 +292,24 @@ docker run --rm -p 8080:8080 \
   - `POST /admin/mappings/channel-project`
 - 任务
   - `POST /jobs/issue-summary/daily`
+
+### CNB ↔ Plane（链路说明）
+- CNB → Plane：
+  - issue.open：
+    - 查 `repo_project_mappings` 与 `workspaces`（Bot Token、workspace_slug）。
+    - 若不存在 `issue_links`，`POST /api/v1/workspaces/{slug}/projects/{project_id}/issues/` 创建 Work Item（可携带 open_state、labels/assignees 映射）。
+    - 写入 `issue_links` 并评论来源。
+  - issue.close/reopen：按 `issue_closed_state_id` / `issue_open_state_id` 更新状态。
+  - issue.update/comment：更新标题/标签/指派、追加评论。
+  - pr/branch：
+    - pr：按 `pr_state_mappings` 将 opened/merged/closed 等动作映射为 Plane 状态；可用 `issue_iid` 建立/补充关联。
+    - branch：create/delete 维护 `branch_issue_links`；create 可按 open_state 推进状态。
+
+- Plane → CNB（双向，需 `sync_direction=bidirectional` 且开启出站）：
+  - issue.create：在 CNB 创建 Issue（需要配置 `CNB_ISSUE_CREATE_PATH`），成功后建立 `issue_links`。
+  - issue.update/close：按配置路径更新/关闭 CNB Issue。
+  - issue_comment：在 CNB Issue 追加评论（HTML）。
+  - 出站端点模板与鉴权：`Authorization: Bearer $CNB_APP_TOKEN`；若路径未配置，将返回“端点未配置（待确认）”。
 
 ### 示例：CNB Issue 回调
 ```
