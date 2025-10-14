@@ -148,7 +148,7 @@ make ci-verify
    - 说明：Plane 可能同时携带 `app_installation_id`（用于应用级 Bot 授权）与 `code`（用于用户授权）。本服务会分别处理。
     - 回调页面行为：
       - 默认返回一个 HTML 页面，自动跳回 Plane；调试或 API 场景可用 `?format=json` 强制返回 JSON。
-      - 跳转目标优先级：`return_to`（query）→ `https://app.plane.so/{workspace_id}/settings/integrations/`（若拿到工作区 ID）→ 将 `state` 作为 URL（若安全）→ `PLANE_APP_BASE_URL` → 从 `PLANE_BASE_URL` 推断（`api.*` → `app.*`）→ `PLANE_BASE_URL`。
+      - 跳转目标优先级：`return_to`（query）→ `https://app.plane.so/{workspace_slug}/settings/integrations/`（若拿到工作区 slug）→ 将 `state` 作为 URL（若安全）→ `PLANE_APP_BASE_URL` → 从 `PLANE_BASE_URL` 推断（`api.*` → `app.*`）→ `PLANE_BASE_URL`。
       - 安全：仅允许跳转到与 `PLANE_APP_BASE_URL`/`PLANE_BASE_URL` 同主机（或 `api.*` → `app.*`）的站点，避免开放重定向。
 
 三、服务端向 Plane 发起的 API 请求
@@ -198,6 +198,7 @@ GET {PLANE_BASE_URL}/auth/o/app-installation?id={app_installation_id}
 Authorization: Bearer <bot-token>
 ```
   - 响应要点：`workspace_id`、`workspace_slug`、`app_bot`。
+  - 注意：回跳 URL 使用 `workspace_slug` 作为路径段（不是 `workspace_id`）。
 
 四、Webhook 投递与验签（安装后）
 - Plane 将把工作区内的事件投递到 `POST /webhooks/plane`。

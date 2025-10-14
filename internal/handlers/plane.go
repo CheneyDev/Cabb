@@ -131,12 +131,12 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
         return c.JSON(http.StatusOK, resp)
     }
 
-    // Build redirect target (prefer explicit return_to, then workspace integrations, then state URL, else fallback app/base)
-    wsID := ""
+    // Build redirect target (prefer explicit return_to, then workspace integrations by slug, then state URL, else fallback app/base)
+    wsSlug := ""
     if inst != nil {
-        wsID = inst.WorkspaceID()
+        wsSlug = inst.WorkspaceSlug()
     }
-    target := h.preferredReturnURL(wsID, c.QueryParam("state"), c.QueryParam("return_to"))
+    target := h.preferredReturnURL(wsSlug, c.QueryParam("state"), c.QueryParam("return_to"))
 
     html := h.buildRedirectHTML(target, resp)
     return c.HTML(http.StatusOK, html)
@@ -195,7 +195,11 @@ type tokenResponse struct {
 type appInstallation struct {
     ID               string `json:"id"`
     Status           string `json:"status"`
+    // Some Plane versions use "workspace" for ID, others may use "workspace_id"
     Workspace        string `json:"workspace"`
+    WorkspaceIDAlt   string `json:"workspace_id"`
+    // Slug may be directly provided or nested under workspace_detail
+    WorkspaceSlugTop string `json:"workspace_slug"`
     AppBot           string `json:"app_bot"`
     WorkspaceDetail  struct {
         ID   string `json:"id"`
@@ -204,8 +208,18 @@ type appInstallation struct {
     } `json:"workspace_detail"`
 }
 
-func (a *appInstallation) WorkspaceID() string  { return a.Workspace }
-func (a *appInstallation) WorkspaceSlug() string { return a.WorkspaceDetail.Slug }
+func (a *appInstallation) WorkspaceID() string {
+    if a.Workspace != "" {
+        return a.Workspace
+    }
+    return a.WorkspaceIDAlt
+}
+func (a *appInstallation) WorkspaceSlug() string {
+    if a.WorkspaceSlugTop != "" {
+        return a.WorkspaceSlugTop
+    }
+    return a.WorkspaceDetail.Slug
+}
 
 func (h *Handler) tokenEndpoint() (string, error) {
     u, err := url.Parse(h.cfg.PlaneBaseURL)
@@ -368,7 +382,7 @@ func writeError(c echo.Context, status int, code, message string, details map[st
 // 3) PLANE_APP_BASE_URL if configured
 // 4) Derived from PLANE_BASE_URL (api.* -> app.*) when applicable
 // 5) PLANE_BASE_URL as last resort
-func (h *Handler) preferredReturnURL(workspaceID, state, returnTo string) string {
+func (h *Handler) preferredReturnURL(workspaceSlug, state, returnTo string) string {
     // Allowed hosts
     allowed := map[string]struct{}{}
     addHost := func(raw string) {
@@ -401,10 +415,10 @@ func (h *Handler) preferredReturnURL(workspaceID, state, returnTo string) string
             return u.String()
         }
     }
-    // 2) workspace integrations page
-    if workspaceID != "" {
+    // 2) workspace integrations page (needs workspace slug)
+    if workspaceSlug != "" {
         if base := h.planeAppBase(); base != nil {
-            base.Path = strings.TrimRight(base.Path, "/") + "/" + workspaceID + "/settings/integrations/"
+            base.Path = strings.TrimRight(base.Path, "/") + "/" + workspaceSlug + "/settings/integrations/"
             base.RawQuery = ""
             base.Fragment = ""
             return base.String()
