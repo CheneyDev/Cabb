@@ -22,6 +22,10 @@ bin/
 *.test
 *.out
 
+# Local Go caches (created when building without global cache)
+.gocache/
+.gomodcache/
+
 # Go workspace files
 go.work
 go.work.sum

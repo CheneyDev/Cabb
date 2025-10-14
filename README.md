@@ -42,7 +42,7 @@
 
 常用变量（完整列表见 `.env.example`）：
 - 通用：`PORT`、`DATABASE_URL`、`TIMEZONE`、`ENCRYPTION_KEY`
-- Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`
+- Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`、`PLANE_APP_BASE_URL`
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
 - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
 
@@ -114,6 +114,137 @@ make ci-verify
 - 免费实例可能冷启动，首次请求有延迟；Webhook 超时敏感场景建议升级或保持活跃。
 - 迁移脚本使用 `pgcrypto` 扩展，Render 托管 Postgres 支持该扩展。
 
+## 在 Plane 设置页面配置与安装（全流程）
+以下指引面向“从 Plane 的设置页面完成安装”的场景，覆盖跳转链路与服务端对 Plane 的 API 调用。协议细节以 `docs/` 为准。
+
+结论（要做什么）
+- 在 Plane 中创建应用，设置 `Setup URL`/`Redirect URI`/`Webhook URL` 指向本服务。
+- 用户在 Plane 设置页点击“Install/Authorize”后，浏览器完成 2 次跳转返回本服务的回调；本服务随后向 Plane 发起 1–2 次令牌交换与 1 次安装信息查询。
+- 安装完成后，Plane 的事件将投递到 `POST /webhooks/plane`，由本服务处理。
+
+前置准备
+- 本服务已可访问（本地或线上），并设置：
+  - `PLANE_BASE_URL`（默认 `https://api.plane.so`）
+  - `PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`
+  - `PLANE_REDIRECT_URI`（如 `https://<your-domain>/plane/oauth/callback`）
+  - `PLANE_WEBHOOK_SECRET`（用于校验 Plane Webhook 签名）
+
+一、在 Plane 配置应用
+1) 进入 Plane 工作区设置 → Apps/Integrations 或 Developer/Apps → 新建应用（例如 `plane-cnb-app` 或 `plane-feishu-app`）。
+2) 填写：
+   - Setup URL：`https://<your-domain>/plane/oauth/start`
+   - Redirect URI：`https://<your-domain>/plane/oauth/callback`
+   - Webhook URL：`https://<your-domain>/webhooks/plane`
+3) 记录发给你的 `client_id` 与 `client_secret`，填入本服务环境变量。
+4) 保存并发布（如有“启用/可见范围/权限”等选项，按业务需要开启）。
+
+二、安装/授权跳转链路（浏览器）
+1) 用户在 Plane 的应用详情页点击 Install/Authorize。
+2) 浏览器跳转至本服务的 Setup URL：
+   - Plane → `GET /plane/oauth/start?state=<opaque>`（由 Plane 传入或你自定义的 `state` 会被回传）。
+3) 本服务立即 302 重定向到 Plane 的授权/安装确认页（URL 由 Plane 控制，参数包含 `client_id`、`redirect_uri`、`response_type=code`、`state`）。
+4) 用户在 Plane 同意后，浏览器被重定向回本服务回调（该页面会自动返回到 Plane）：
+   - Plane → `GET /plane/oauth/callback?app_installation_id=<uuid>&code=<code>&state=<opaque>`
+   - 说明：Plane 可能同时携带 `app_installation_id`（用于应用级 Bot 授权）与 `code`（用于用户授权）。本服务会分别处理。
+    - 回调页面行为：
+      - 默认返回一个 HTML 页面，自动跳回 Plane；调试或 API 场景可用 `?format=json` 强制返回 JSON。
+      - 跳转目标优先级：`return_to`（query）→ `https://app.plane.so/{workspace_id}/settings/integrations/`（若拿到工作区 ID）→ 将 `state` 作为 URL（若安全）→ `PLANE_APP_BASE_URL` → 从 `PLANE_BASE_URL` 推断（`api.*` → `app.*`）→ `PLANE_BASE_URL`。
+      - 安全：仅允许跳转到与 `PLANE_APP_BASE_URL`/`PLANE_BASE_URL` 同主机（或 `api.*` → `app.*`）的站点，避免开放重定向。
+
+三、服务端向 Plane 发起的 API 请求
+- 1) 交换 Bot Token（应用安装维度，可选但推荐）
+  - 触发条件：回调中含有 `app_installation_id`。
+  - 请求：
+```
+POST {PLANE_BASE_URL}/auth/o/token
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic base64({PLANE_CLIENT_ID}:{PLANE_CLIENT_SECRET})
+
+grant_type=client_credentials&app_installation_id={UUID}
+```
+  - 响应（示例）：
+```
+{
+  "access_token": "<bot-token>",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+- 2) 交换用户 Token（用户维度，可选，需在 Plane 显示用户同意）
+  - 触发条件：回调中含有 `code`。
+  - 请求：
+```
+POST {PLANE_BASE_URL}/auth/o/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&code={CODE}&redirect_uri={PLANE_REDIRECT_URI}&client_id={PLANE_CLIENT_ID}&client_secret={PLANE_CLIENT_SECRET}
+```
+  - 响应（示例）：
+```
+{
+  "access_token": "<user-access-token>",
+  "refresh_token": "<user-refresh-token>",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+- 3) 获取安装信息（用于落库工作区/安装上下文）
+  - 触发条件：通常在拿到 Bot Token 后立即调用。
+  - 请求：
+```
+GET {PLANE_BASE_URL}/auth/o/app-installation?id={app_installation_id}
+Authorization: Bearer <bot-token>
+```
+  - 响应要点：`workspace_id`、`workspace_slug`、`app_bot`。
+
+四、Webhook 投递与验签（安装后）
+- Plane 将把工作区内的事件投递到 `POST /webhooks/plane`。
+- 安全校验：`X-Plane-Signature: sha256=...`；本服务使用 `HMAC-SHA256(PLANE_WEBHOOK_SECRET, raw_body)` 做常量时间比较。
+- 幂等：以 `delivery_id + payload_sha256` 去重，重复投递返回 `200` 并可标注 `status=duplicate`。
+
+五、时序图（端到端）
+```mermaid
+sequenceDiagram
+  participant User as 用户
+  participant Plane as Plane(设置/授权)
+  participant Svc as 集成服务
+
+  User->>Plane: 点击 Install/Authorize
+  Plane-->>Svc: GET /plane/oauth/start?state=...
+  Svc-->>Plane: 302 到授权确认页(带 client_id/redirect_uri/state)
+  Plane-->>Svc: GET /plane/oauth/callback?app_installation_id&code&state
+  Svc->>Plane: POST /auth/o/token (client_credentials)
+  Plane-->>Svc: 200 access_token(bot)
+  Svc->>Plane: GET /auth/o/app-installation?id=...
+  Plane-->>Svc: 200 workspace/install 信息
+  Note over Plane,Svc: (可选) 用户授权
+  Svc->>Plane: POST /auth/o/token (authorization_code)
+  Plane-->>Svc: 200 access_token(user), refresh_token
+  Plane->>Svc: POST /webhooks/plane (后续事件)
+```
+
+六、常见错误与排查
+- 回调未带参数：`/plane/oauth/callback` 缺少 `app_installation_id` 与 `code` → 返回 `400 invalid_request`。
+- 令牌交换失败：Plane 返回 `400 invalid_client/invalid_grant` → 检查 `client_id/secret` 与 `redirect_uri` 是否一致。
+- Webhook 验签失败：检查 `PLANE_WEBHOOK_SECRET` 是否与 Plane 配置一致；确认使用原始请求体计算 HMAC。
+
+七、验收要点（DoD）
+- 在 Plane 设置页完成安装后，`/plane/oauth/callback` 返回安装摘要 JSON（当前实现不回显敏感令牌）。
+- 本服务日志打印：安装成功（含 `workspace_slug`/`app_installation_id`），并在 Bot Token 过期前可自动续期。
+- 触发一次 Plane 事件（如 issue 更新），`/webhooks/plane` 能验签并记录投递。
+
+八、本地调试最小示例
+- 启动授权（浏览器）：
+```
+open "http://localhost:8080/plane/oauth/start?state=dev"
+```
+- 模拟 Plane 回调：
+```
+curl "http://localhost:8080/plane/oauth/callback?app_installation_id=<uuid>&code=<code>&state=dev"
+```
+
 ## 使用 Docker 本地运行
 ```
 docker build -t plane-integration:dev .
@@ -166,6 +297,10 @@ open "http://localhost:8080/plane/oauth/start?state=dev"
 # 示例：本地手动验证（模拟 Plane 回调）
 curl "http://localhost:8080/plane/oauth/callback?app_installation_id=<uuid>&code=<code>&state=dev"
 ```
+
+可选参数
+- `return_to`：指定回跳 URL（需与 Plane 主机一致，否则忽略）。
+- `format=json`：强制以 JSON 返回（默认浏览器为 HTML 自动跳转）。
 
 注意：服务端会调用 Plane 的 `/auth/o/token/` 与 `/auth/o/app-installation/` 完成 Token 交换与安装信息查询；当前仅返回摘要 JSON，不回显敏感 Token。令牌持久化与加密存储将在接入数据库后启用。
 

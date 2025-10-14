@@ -64,10 +64,9 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
     defer cancel()
 
     var (
-        token  *tokenResponse
-        err    error
-        tType  = ""
-        result = map[string]any{}
+        token *tokenResponse
+        err   error
+        tType = ""
     )
 
     // Prefer app_installation_id flow when present (bot token)
@@ -77,7 +76,6 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
             return writeError(c, http.StatusBadGateway, "token_exchange_failed", "获取 Bot Token 失败", map[string]any{"error": err.Error()})
         }
         tType = "bot"
-        result["app_installation_id"] = appInstallationID
     } else {
         token, err = h.exchangeAuthorizationCode(ctx, code)
         if err != nil {
@@ -90,10 +88,7 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
     var inst *appInstallation
     if appInstallationID != "" {
         inst, err = h.getAppInstallation(ctx, token.AccessToken, appInstallationID)
-        if err != nil {
-            // Non-fatal: return token metadata even if installation lookup fails
-            result["installation_lookup_error"] = err.Error()
-        }
+        _ = err // 非致命错误，忽略安装信息查询失败（仍返回成功摘要）
     }
 
     // Compute expires_at (RFC3339 UTC)
@@ -123,7 +118,28 @@ func (h *Handler) PlaneOAuthCallback(c echo.Context) error {
         }
     }
 
-    return c.JSON(http.StatusOK, resp)
+    // Decide response format: default to HTML for browsers, JSON for API callers
+    // Force JSON if query param format=json
+    if strings.EqualFold(c.QueryParam("format"), "json") {
+        return c.JSON(http.StatusOK, resp)
+    }
+    accept := c.Request().Header.Get("Accept")
+    ua := c.Request().Header.Get("User-Agent")
+    wantsJSON := strings.Contains(accept, "application/json") && !strings.Contains(accept, "text/html")
+    isCLI := strings.Contains(strings.ToLower(ua), "curl/") || strings.Contains(strings.ToLower(ua), "httpie/")
+    if wantsJSON || isCLI {
+        return c.JSON(http.StatusOK, resp)
+    }
+
+    // Build redirect target (prefer explicit return_to, then workspace integrations, then state URL, else fallback app/base)
+    wsID := ""
+    if inst != nil {
+        wsID = inst.WorkspaceID()
+    }
+    target := h.preferredReturnURL(wsID, c.QueryParam("state"), c.QueryParam("return_to"))
+
+    html := h.buildRedirectHTML(target, resp)
+    return c.HTML(http.StatusOK, html)
 }
 
 func (h *Handler) PlaneWebhook(c echo.Context) error {
@@ -343,4 +359,127 @@ func writeError(c echo.Context, status int, code, message string, details map[st
             "request_id": reqID,
         },
     })
+}
+
+// preferredReturnURL selects a safe redirect destination back to Plane
+// Priority:
+// 1) return_to query param if absolute http(s) URL and host is allowed
+// 2) state if it looks like an absolute http(s) URL and host is allowed
+// 3) PLANE_APP_BASE_URL if configured
+// 4) Derived from PLANE_BASE_URL (api.* -> app.*) when applicable
+// 5) PLANE_BASE_URL as last resort
+func (h *Handler) preferredReturnURL(workspaceID, state, returnTo string) string {
+    // Allowed hosts
+    allowed := map[string]struct{}{}
+    addHost := func(raw string) {
+        if raw == "" { return }
+        if u, err := url.Parse(raw); err == nil && u.Host != "" {
+            allowed[strings.ToLower(u.Host)] = struct{}{}
+        }
+    }
+    addHost(h.cfg.PlaneAppBaseURL)
+    addHost(h.cfg.PlaneBaseURL)
+
+    isAllowed := func(u *url.URL) bool {
+        if u == nil || (u.Scheme != "http" && u.Scheme != "https") { return false }
+        host := strings.ToLower(u.Host)
+        if _, ok := allowed[host]; ok { return true }
+        // If PLANE_BASE_URL host starts with api., accept app.<rest> too
+        if base, err := url.Parse(h.cfg.PlaneBaseURL); err == nil {
+            bh := strings.ToLower(base.Host)
+            if strings.HasPrefix(bh, "api.") {
+                alt := "app." + strings.TrimPrefix(bh, "api.")
+                if host == alt { return true }
+            }
+        }
+        return false
+    }
+
+    // 1) return_to
+    if returnTo != "" {
+        if u, err := url.Parse(returnTo); err == nil && isAllowed(u) {
+            return u.String()
+        }
+    }
+    // 2) workspace integrations page
+    if workspaceID != "" {
+        if base := h.planeAppBase(); base != nil {
+            base.Path = strings.TrimRight(base.Path, "/") + "/" + workspaceID + "/settings/integrations/"
+            base.RawQuery = ""
+            base.Fragment = ""
+            return base.String()
+        }
+    }
+    // 3) state as URL
+    if state != "" {
+        if u, err := url.Parse(state); err == nil && isAllowed(u) {
+            return u.String()
+        }
+    }
+    // 4) PLANE_APP_BASE_URL
+    if h.cfg.PlaneAppBaseURL != "" {
+        return h.cfg.PlaneAppBaseURL
+    }
+    // 5) derive from PLANE_BASE_URL (api.* -> app.*)
+    if u, err := url.Parse(h.cfg.PlaneBaseURL); err == nil {
+        if strings.HasPrefix(strings.ToLower(u.Host), "api.") {
+            u.Host = "app." + strings.TrimPrefix(u.Host, "api.")
+            u.Path = "/"
+            u.RawQuery = ""
+            u.Fragment = ""
+            return u.String()
+        }
+        // 6) fallback
+        u.Path = "/"
+        u.RawQuery = ""
+        u.Fragment = ""
+        return u.String()
+    }
+    return "/" // final fallback
+}
+
+func (h *Handler) buildRedirectHTML(target string, payload map[string]any) string {
+    // Serialize a small, safe debug payload (without tokens)
+    b, _ := json.MarshalIndent(payload, "", "  ")
+    esc := func(s string) string {
+        r := strings.NewReplacer(
+            "&", "&amp;",
+            "<", "&lt;",
+            ">", "&gt;",
+            "\"", "&quot;",
+            "'", "&#39;",
+        )
+        return r.Replace(s)
+    }
+    // HTML with immediate JS redirect and fallback meta refresh
+    return "<!DOCTYPE html><html lang=\"zh-CN\"><head>" +
+        "<meta charset=\"utf-8\">" +
+        "<meta http-equiv=\"refresh\" content=\"3; url=" + esc(target) + "\">" +
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+        "<title>返回 Plane...</title>" +
+        "<style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;padding:24px;color:#1f2937} .box{max-width:640px;margin:10vh auto 0;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.04)} .btn{display:inline-block;background:#111827;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none} pre{max-height:240px;overflow:auto;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px}</style>" +
+        "</head><body><div class=\"box\">" +
+        "<h2>安装完成，正在返回 Plane...</h2>" +
+        "<p>若未自动跳转，请点击：<a class=\"btn\" href=\"" + esc(target) + "\">返回 Plane</a></p>" +
+        "<details style=\"margin-top:12px\"><summary>调试信息（不含敏感字段）</summary><pre>" + esc(string(b)) + "</pre></details>" +
+        "</div><script>(function(){try{var t='" + esc(target) + "'; if(window.opener && !window.opener.closed){try{window.opener.postMessage({type:'plane_installation',status:'ok',target:t}, '*');}catch(e){} window.location.replace(t); setTimeout(function(){window.close();}, 500);} else {window.location.replace(t);} }catch(e){ /* ignore */ }})();</script></body></html>"
+}
+
+// planeAppBase returns a parsed URL for PLANE_APP_BASE_URL or derives from PLANE_BASE_URL (api.* -> app.*)
+func (h *Handler) planeAppBase() *url.URL {
+    if h.cfg.PlaneAppBaseURL != "" {
+        if u, err := url.Parse(h.cfg.PlaneAppBaseURL); err == nil {
+            return u
+        }
+    }
+    if u, err := url.Parse(h.cfg.PlaneBaseURL); err == nil {
+        if strings.HasPrefix(strings.ToLower(u.Host), "api.") {
+            u.Host = "app." + strings.TrimPrefix(u.Host, "api.")
+        }
+        u.Path = "/"
+        u.RawQuery = ""
+        u.Fragment = ""
+        return u
+    }
+    return nil
 }

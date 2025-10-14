@@ -17,6 +17,7 @@ type Config struct {
     PlaneClientSecret string
     PlaneRedirectURI  string
     PlaneWebhookSecret string
+    PlaneAppBaseURL   string
 
     // Feishu (Lark)
     LarkAppID         string
@@ -43,6 +44,7 @@ func FromEnv() Config {
         PlaneClientSecret:  os.Getenv("PLANE_CLIENT_SECRET"),
         PlaneRedirectURI:   strFromEnv("PLANE_REDIRECT_URI", "http://localhost:8080/plane/oauth/callback"),
         PlaneWebhookSecret: os.Getenv("PLANE_WEBHOOK_SECRET"),
+        PlaneAppBaseURL:    os.Getenv("PLANE_APP_BASE_URL"),
 
         LarkAppID:              os.Getenv("LARK_APP_ID"),
         LarkAppSecret:          os.Getenv("LARK_APP_SECRET"),
@@ -79,4 +81,3 @@ func strFromEnv(key, def string) string {
     }
     return v
 }
-
