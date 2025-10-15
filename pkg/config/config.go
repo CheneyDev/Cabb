@@ -31,10 +31,6 @@ type Config struct {
     IntegrationToken  string
     CNBBaseURL        string
     CNBOutboundEnabled bool
-    CNBIssueCreatePath  string
-    CNBIssueUpdatePath  string
-    CNBIssueCommentPath string
-    CNBIssueClosePath   string
 
     // Crypto
     EncryptionKey     string
@@ -62,10 +58,6 @@ func FromEnv() Config {
         IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),
         CNBBaseURL:         os.Getenv("CNB_BASE_URL"),
         CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", false),
-        CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
-        CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),
-        CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
-        CNBIssueClosePath:   os.Getenv("CNB_ISSUE_CLOSE_PATH"),
 
         EncryptionKey:      os.Getenv("ENCRYPTION_KEY"),
     }

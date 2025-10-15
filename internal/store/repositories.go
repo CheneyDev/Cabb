@@ -52,17 +52,18 @@ type RepoProjectMapping struct {
     IssueClosedStateID sql.NullString
     Active bool
     SyncDirection    sql.NullString
+    LabelSelector    sql.NullString
 }
 
 func (d *DB) GetRepoProjectMapping(ctx context.Context, cnbRepoID string) (*RepoProjectMapping, error) {
     if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
     const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE cnb_repo_id=$1 AND active=true
 LIMIT 1`
     var m RepoProjectMapping
-    err := d.SQL.QueryRowContext(ctx, q, cnbRepoID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection)
+    err := d.SQL.QueryRowContext(ctx, q, cnbRepoID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
     if err != nil { return nil, err }
     return &m, nil
 }
@@ -70,24 +71,45 @@ LIMIT 1`
 func (d *DB) GetRepoProjectMappingByPlaneProject(ctx context.Context, planeProjectID string) (*RepoProjectMapping, error) {
     if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
     const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE plane_project_id=$1::uuid AND active=true
 LIMIT 1`
     var m RepoProjectMapping
-    err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection)
+    err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
     if err != nil { return nil, err }
     return &m, nil
 }
 
+// List all mappings for a Plane project (active=true)
+func (d *DB) ListRepoProjectMappingsByPlaneProject(ctx context.Context, planeProjectID string) ([]RepoProjectMapping, error) {
+    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
+    const q = `
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+FROM repo_project_mappings
+WHERE plane_project_id=$1::uuid AND active=true`
+    rows, err := d.SQL.QueryContext(ctx, q, planeProjectID)
+    if err != nil { return nil, err }
+    defer rows.Close()
+    var out []RepoProjectMapping
+    for rows.Next() {
+        var m RepoProjectMapping
+        if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
+            return nil, err
+        }
+        out = append(out, m)
+    }
+    return out, rows.Err()
+}
+
 func (d *DB) UpsertRepoProjectMapping(ctx context.Context, m RepoProjectMapping) error {
     if d == nil || d.SQL == nil { return sql.ErrConnDone }
-    const upd = `UPDATE repo_project_mappings SET plane_workspace_id=$2::uuid, issue_open_state_id=$4::uuid, issue_closed_state_id=$5::uuid, active=$6, sync_direction=COALESCE($7::sync_direction, sync_direction), updated_at=now() WHERE plane_project_id=$1::uuid AND cnb_repo_id=$3`
-    res, err := d.SQL.ExecContext(ctx, upd, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection))
+    const upd = `UPDATE repo_project_mappings SET plane_workspace_id=$2::uuid, issue_open_state_id=$4::uuid, issue_closed_state_id=$5::uuid, active=$6, sync_direction=COALESCE($7::sync_direction, sync_direction), label_selector=COALESCE($8,label_selector), updated_at=now() WHERE plane_project_id=$1::uuid AND cnb_repo_id=$3`
+    res, err := d.SQL.ExecContext(ctx, upd, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
     if err != nil { return err }
     if n, _ := res.RowsAffected(); n > 0 { return nil }
-    const ins = `INSERT INTO repo_project_mappings (plane_project_id, plane_workspace_id, cnb_repo_id, issue_open_state_id, issue_closed_state_id, active, sync_direction, created_at, updated_at) VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5::uuid,$6,COALESCE($7::sync_direction,'cnb_to_plane'),now(),now())`
-    _, err = d.SQL.ExecContext(ctx, ins, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection))
+    const ins = `INSERT INTO repo_project_mappings (plane_project_id, plane_workspace_id, cnb_repo_id, issue_open_state_id, issue_closed_state_id, active, sync_direction, label_selector, created_at, updated_at) VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5::uuid,$6,COALESCE($7::sync_direction,'cnb_to_plane'),$8,now(),now())`
+    _, err = d.SQL.ExecContext(ctx, ins, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
     return err
 }
 
@@ -238,6 +260,21 @@ func (d *DB) CreateIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIs
     const q = `INSERT INTO issue_links (plane_issue_id, cnb_issue_id, cnb_repo_id, linked_at, created_at, updated_at) VALUES ($1::uuid,$2,$3,now(),now(),now()) ON CONFLICT DO NOTHING`
     _, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbIssueID, cnbRepoID)
     return err
+}
+
+// ListCNBIssuesByPlaneIssue returns all CNB links for a Plane issue.
+func (d *DB) ListCNBIssuesByPlaneIssue(ctx context.Context, planeIssueID string) (links []struct{ Repo string; Number string }, err error) {
+    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
+    const q = `SELECT cnb_repo_id, cnb_issue_id FROM issue_links WHERE plane_issue_id=$1::uuid`
+    rows, err := d.SQL.QueryContext(ctx, q, planeIssueID)
+    if err != nil { return nil, err }
+    defer rows.Close()
+    for rows.Next() {
+        var repo, iid string
+        if err := rows.Scan(&repo, &iid); err != nil { return nil, err }
+        links = append(links, struct{ Repo string; Number string }{Repo: repo, Number: iid})
+    }
+    return links, rows.Err()
 }
 
 // Branch links

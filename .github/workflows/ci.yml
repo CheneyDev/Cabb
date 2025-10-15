@@ -38,3 +38,53 @@ jobs:
           if [ -z "$ok" ]; then docker logs plane-ci; echo "container health check failed"; exit 1; fi
           docker rm -f plane-ci
 
+  db-migrate-verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: plane_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+      - name: Build binary
+        run: go build -o bin/server ./cmd/server
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Run server with DATABASE_URL (auto-migrate) and verify schema
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/plane_integration?sslmode=disable
+          PORT: 18082
+        run: |
+          ./bin/server & echo $! > server.pid
+          for i in {1..20}; do curl -fsS http://localhost:18082/healthz && ok=1 && break || sleep 1; done
+          if [ -z "$ok" ]; then echo "server not healthy"; kill $(cat server.pid) || true; exit 1; fi
+          # verify some core tables exist
+          psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.workspaces')" | grep -q workspaces
+          psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.repo_project_mappings')" | grep -q repo_project_mappings
+          psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.thread_links')" | grep -q thread_links
+          kill $(cat server.pid)
+
+      - name: Optional migration against external DATABASE_URL (disabled by default)
+        if: ${{ env.ACTION_MIGRATE_TARGET == 'true' && secrets.DATABASE_URL != '' }}
+        env:
+          ACTION_MIGRATE_TARGET: ${{ secrets.ACTION_MIGRATE_TARGET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PORT: 18083
+        run: |
+          echo "Running migrations against external DATABASE_URL (be careful!)"
+          ./bin/server & echo $! > server.pid
+          sleep 5
+          kill $(cat server.pid)

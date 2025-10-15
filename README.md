@@ -44,21 +44,71 @@
 - 通用：`PORT`、`DATABASE_URL`、`TIMEZONE`、`ENCRYPTION_KEY`
 - Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`、`PLANE_APP_BASE_URL`
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
- - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
- - CNB（出站开启 + 端点配置，待确认官方 OpenAPI）：
+- CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
+ - CNB（出站开启）：
    - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
-   - `CNB_ISSUE_CREATE_PATH=/api/v1/repos/{repo}/issues`
-   - `CNB_ISSUE_UPDATE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
-   - `CNB_ISSUE_COMMENT_PATH=/api/v1/repos/{repo}/issues/{issue_iid}/comments`
-   - `CNB_ISSUE_CLOSE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
-   - 以上路径模板中的 `{repo}`、`{issue_iid}` 会在运行时替换；若与你的 CNB OpenAPI 不一致，请按规范调整对应 PATH。
-- CNB（出站开启 + 端点配置，待确认官方 OpenAPI）：
+   - 路径模板通常无需配置，按 swagger 默认：
+     - Create:  `/{repo}/-/issues`
+     - Update:  `/{repo}/-/issues/{number}`
+     - Comment: `/{repo}/-/issues/{number}/comments`
+   - 如网关存在前缀或路径差异，可通过 `CNB_ISSUE_*_PATH` 覆盖（保留 `{repo}`/`{number}`）。
+- CNB（出站开启）：
   - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
-  - `CNB_ISSUE_CREATE_PATH=/api/v1/repos/{repo}/issues`
-  - `CNB_ISSUE_UPDATE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
-  - `CNB_ISSUE_COMMENT_PATH=/api/v1/repos/{repo}/issues/{issue_iid}/comments`
-  - `CNB_ISSUE_CLOSE_PATH=/api/v1/repos/{repo}/issues/{issue_iid}`
-  - 以上路径模板中的 `{repo}`、`{issue_iid}` 会在运行时替换；若与你的 CNB OpenAPI 不一致，请按规范调整对应 PATH。
+  - 路径模板通常无需配置，按 swagger 默认：Create/Update/Comment 如上。
+  - 如网关存在前缀或路径差异，可使用 `CNB_ISSUE_*_PATH` 覆盖。
+
+### 配置飞书（Lark）机器人
+
+本项目当前已实现“群聊绑定 Issue + Plane→飞书 通知 + 话题内 `/comment` 评论”能力。为保证事件校验与向飞书发送消息，建议配置以下 4 个环境变量：
+
+- `LARK_APP_ID`（必需）
+  - 用途：获取 `tenant_access_token` 以调用飞书 IM 接口（发送群消息/线程回复）。
+  - 获取：登录飞书开放平台开发者后台 → 选择应用 → 左侧“凭证与基础信息” → 复制 `App ID`。
+- `LARK_APP_SECRET`（必需）
+  - 用途：与 `App ID` 一起换取 `tenant_access_token`。
+  - 获取：同上页面复制 `App Secret`（注意权限控制，勿泄露）。
+- `LARK_ENCRYPT_KEY`（推荐）
+  - 用途：签名校验。按官方文档，用 `sha256(timestamp + nonce + encrypt_key + raw_body)` 计算 hex，与请求头 `X-Lark-Signature` 比对，确保事件来源可信。
+  - 获取：开发者后台 → “事件与回调 > 加密策略（或安全设置）” → 设置并复制 `Encrypt Key`。
+  - 说明：本服务当前“未实现加密事件的解密”，仅做签名校验；请“不要开启事件消息体加密”或确保平台未对事件 body 进行加密，否则无法解析事件。
+- `LARK_VERIFICATION_TOKEN`（可选/兜底）
+  - 用途：当未配置 `Encrypt Key` 时，使用 Verification Token 进行来源校验；本服务也会在签名校验失败时回退到该校验。
+  - 获取：开发者后台 → “事件与回调 > 加密策略（或安全设置）” 页面可见 `Verification Token`。
+
+最小配置建议：
+- 发送消息能力必需：`LARK_APP_ID`、`LARK_APP_SECRET`。
+- 事件校验推荐：配置 `LARK_ENCRYPT_KEY` 开启签名校验；若暂不配置，可至少设置 `LARK_VERIFICATION_TOKEN` 作为兜底。
+
+事件订阅与权限（控制台）：
+- 事件订阅 URL：`POST {YOUR_BASE_URL}/webhooks/lark/events`
+- 订阅事件：`im.message.receive_v1`（接收消息）。
+- 相关权限：根据需要申请“接收群聊中 @ 机器人消息（im:message.group_at_msg:readonly）”等权限，以确保群内 @ 触发事件可达。
+
+### 配置 CNB 凭据
+
+用于“CNB → 本服务（回调）”与“本服务 → CNB（API 出站）”的安全配置：
+
+- `INTEGRATION_TOKEN`（必需，回调共享密钥）
+  - 用途：`.cnb.yml` 回调到本服务 `/ingest/cnb/*` 端点时，作为 `Authorization: Bearer <token>` 被校验。
+  - 获取/设置：生成一段高强度随机字符串，并在“本服务”和“CNB 的流水线密钥库”中同时配置为同一值。
+    - 生成示例：
+      - macOS/Linux：`openssl rand -hex 32`
+      - 或：`python3 - <<<'import secrets; print(secrets.token_hex(32))'`
+    - 在 CNB 中注入到流水线环境变量：参考 docs/cnb-docs/docs/repo/secret.md 与 docs/design/cnb-integration.md 的“提示：如何注入 $INTEGRATION_URL / $INTEGRATION_TOKEN”。
+
+- `CNB_APP_TOKEN`（必需，CNB API 访问令牌）
+  - 用途：当开启 Plane→CNB 双向或需要拉取 CNB 详情时，作为出站调用 CNB OpenAPI 的 `Authorization: Bearer <token>`。
+  - 获取路径（参考 CNB 文档片段）：
+    - 在 CNB 平台“个人设置 → 访问令牌”创建并获取 Token（docs/cnb-docs/plugins/cnbcool/attachments/README.md: CNB_TOKEN 说明）。
+    - 勾选需要的最小权限（例如仓库内容读写 `repo-contents`）。
+    - 将该 Token 配置为本服务环境变量 `CNB_APP_TOKEN`。
+
+- `CNB_BASE_URL`（必需，出站 API 基础地址）
+  - 含义：CNB OpenAPI 基础 URL（协议+主机，可包含前缀路径；不要以 `/` 结尾）。
+  - 示例：
+    - SaaS：`https://api.cnb.cool`
+    - 自建：`https://cnb.example.com` 或 `https://gateway.example.com/cnb`
+  - 使用 swagger 默认路径，无需额外配置路径模板。
 
 ### 初始化数据库
 - 创建数据库并执行迁移：
@@ -67,6 +117,10 @@
 createdb plane_integration
 psql "$DATABASE_URL" -f db/migrations/0001_init.sql
 ```
+
+提示：迁移具备“只执行一次”的保障：
+- 容器（Render/Docker）内 Entrypoint 会按顺序执行 `db/migrations/*.sql`，并在 `schema_migrations` 表记录已应用的文件名；重复部署不会再次执行。
+- 服务启动时也会自动执行一次迁移（扫描未记录的文件并应用），与容器入口互相兼容。
 
 ### 启动服务
 - 开发运行：
@@ -288,12 +342,71 @@ docker run --rm -p 8080:8080 \
   - 绑定命令（群聊内）：在群里 @ 机器人，输入 `/bind <Plane Issue 链接>` 或 `绑定 <Plane Issue 链接>`，服务会解析链接中的 Issue UUID 并将该群话题（root message）与该 Issue 绑定。后续 Plane 的“更新/评论”将以线程回复方式推送到该话题（M1 文本通知，卡片交互待后续）。
   - 评论命令（群聊内）：在已绑定的话题中回复 `/comment 这是一条评论` 或 `评论 这是一条评论`，服务会将该文本作为评论追加到对应的 Plane Issue（需要在绑定时能解析到 `workspace_slug` 与 `project_id`）。
 - 管理映射
-  - `POST /admin/mappings/repo-project`
+  - `POST /admin/mappings/repo-project`（支持 label_selector：如 “后端,backend”）
+    - 多仓库场景：为同一个 `plane_project_id` 配置多条映射（不同 `cnb_repo_id`），并分别设置 `label_selector`。当 Plane 中创建 Issue 时，若其标签命中某条映射的 selector，则在对应 CNB 仓库下创建 Issue（支持一对多 fan-out）。后续 Plane 的更新/评论会同步到所有已建立链接的 CNB Issue。
+    - label_selector 语义：
+      - 分隔符支持逗号/空格/分号/竖线；不区分大小写。
+      - 只要 Issue 标签命中其中任意一个 token 即匹配成功。
+      - 特殊值：`*` 或 `all` 表示“任意非空标签均匹配”；空字符串不匹配（避免误全投放）。
   - `POST /admin/mappings/pr-states`
   - `POST /admin/mappings/users`
   - `POST /admin/mappings/channel-project`
 - 任务
   - `POST /jobs/issue-summary/daily`
+
+## 多仓库 Fan-out 示例（标签驱动）
+
+目标：同一个 Plane 项目需要同时对接“前端仓库”和“后端仓库”。当 Plane Issue 包含“前端/后端”标签时，分别在对应 CNB 仓库创建并同步。
+
+1) 建立两条 repo↔project 映射（同一个项目，不同仓库），并设置 `label_selector`
+
+```
+# 前端仓库（label_selector 命中：前端 或 frontend）
+curl -X POST "$INTEGRATION_URL/admin/mappings/repo-project" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cnb_repo_id": "org/frontend-repo",
+    "plane_workspace_id": "<plane_workspace_uuid>",
+    "plane_project_id": "<plane_project_uuid>",
+    "issue_open_state_id": "<可选_open_state_uuid>",
+    "issue_closed_state_id": "<可选_closed_state_uuid>",
+    "sync_direction": "bidirectional",
+    "label_selector": "前端,frontend"
+  }'
+
+# 后端仓库（label_selector 命中：后端 或 backend）
+curl -X POST "$INTEGRATION_URL/admin/mappings/repo-project" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cnb_repo_id": "org/backend-repo",
+    "plane_workspace_id": "<plane_workspace_uuid>",
+    "plane_project_id": "<plane_project_uuid>",
+    "sync_direction": "bidirectional",
+    "label_selector": "后端,backend"
+  }'
+```
+
+2) 在 Plane 中创建 Issue 并打上标签
+
+- 若 Issue 标签包含“后端”，服务将在 `org/backend-repo` 创建对应 CNB Issue 并写入 `issue_links`。
+- 若标签同时包含“前端、后端”，服务会分别在两个仓库创建对应 Issue（fan-out）。
+- 之后 Plane 的“更新/评论/关闭”将同步到所有已建立链接的 CNB Issue。
+ - 如后续在 Plane 中新增标签导致命中更多映射，服务会为新命中的仓库补创建 Issue 并建立链接。
+
+3) 可选：配置标签/用户映射，增强字段对齐
+
+```
+# 将 CNB 标签名映射为 Plane label_id（更新/创建时翻译为 Plane 标签）
+curl -X POST "$INTEGRATION_URL/admin/mappings/labels" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cnb_repo_id": "org/backend-repo",
+    "plane_project_id": "<plane_project_uuid>",
+    "items": [
+      {"cnb_label": "bug", "plane_label_id": "<plane_label_uuid>"}
+    ]
+  }'
+```
 
 ### CNB ↔ Plane（链路说明）
 - CNB → Plane：
@@ -308,7 +421,7 @@ docker run --rm -p 8080:8080 \
     - branch：create/delete 维护 `branch_issue_links`；create 可按 open_state 推进状态。
 
 - Plane → CNB（双向，需 `sync_direction=bidirectional` 且开启出站）：
-  - issue.create：在 CNB 创建 Issue（需要配置 `CNB_ISSUE_CREATE_PATH`），成功后建立 `issue_links`。
+  - issue.create：在 CNB 创建 Issue（按 swagger 默认路径），成功后建立 `issue_links`。
   - issue.update/close：按配置路径更新/关闭 CNB Issue。
   - issue_comment：在 CNB Issue 追加评论（HTML）。
   - 出站端点模板与鉴权：`Authorization: Bearer $CNB_APP_TOKEN`；若路径未配置，将返回“端点未配置（待确认）”。

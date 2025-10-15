@@ -25,6 +25,7 @@ This repository hosts a Go service that bridges Plane with CNB (internal code ho
   - 群聊绑定：在群内 @ 机器人执行 `/bind <Plane Issue 链接>`（或 `绑定 <链接>`）后，记录 `thread_links(lark_thread_id↔plane_issue_id)`，Plane 侧的“更新/评论”通过线程回复推送到该话题（M1 文本，卡片待后续）。
   - 线程评论：在已绑定话题中回复 `/comment <文本>`（或 `评论 <文本>`）将把文本追加为 Plane Issue 评论（需要能解析出 `workspace_slug` 与 `project_id`）。
 - `POST /admin/mappings/repo-project|pr-states|users|channel-project` – stubs
+  - repo-project 支持 `label_selector`（逗号/空格分隔）；当 Plane Issue 创建时，若命中该项目下某映射的 selector，按映射的 CNB 仓库创建对应 Issue（支持一对多 fan-out）。
 - `POST /jobs/issue-summary/daily` – stub (202 Accepted)
 
 ## Configure

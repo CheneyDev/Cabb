@@ -1,6 +1,7 @@
 package main
 
 import (
+    "context"
     "log"
     "net/http"
     "time"
@@ -33,6 +34,12 @@ func main() {
     db, err := store.Open(cfg.DatabaseURL)
     if err != nil {
         log.Printf("db connect error: %v", err)
+    }
+    // Auto-run SQL migrations when DB is available
+    if db != nil && db.SQL != nil {
+        if err := db.RunMigrations(context.Background(), "."); err != nil {
+            log.Fatalf("apply migrations failed: %v", err)
+        }
     }
 
     handlers.RegisterRoutes(e, cfg, db)

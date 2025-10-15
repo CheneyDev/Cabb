@@ -9,7 +9,7 @@ import (
 )
 
 // POST /admin/mappings/repo-project
-// Body: { "cnb_repo_id": "group/repo", "plane_workspace_id": "uuid", "plane_project_id": "uuid", "issue_open_state_id": "uuid?", "issue_closed_state_id": "uuid?", "active": true }
+// Body: { "cnb_repo_id": "group/repo", "plane_workspace_id": "uuid", "plane_project_id": "uuid", "issue_open_state_id": "uuid?", "issue_closed_state_id": "uuid?", "active": true, "sync_direction": "cnb_to_plane|bidirectional", "label_selector": "后端,backend" }
 func (h *Handler) AdminRepoProject(c echo.Context) error {
     if !hHasDB(h) {
         return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
@@ -22,6 +22,7 @@ func (h *Handler) AdminRepoProject(c echo.Context) error {
         IssueClosedStateID string `json:"issue_closed_state_id"`
         Active *bool `json:"active"`
         SyncDirection string `json:"sync_direction"`
+        LabelSelector string `json:"label_selector"`
     }
     if err := c.Bind(&req); err != nil { return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil) }
     if req.CNBRepoID == "" || req.PlaneWorkspaceID == "" || req.PlaneProjectID == "" {
@@ -35,6 +36,7 @@ func (h *Handler) AdminRepoProject(c echo.Context) error {
         IssueClosedStateID: sql.NullString{String: req.IssueClosedStateID, Valid: req.IssueClosedStateID != ""},
         Active: true,
         SyncDirection: sql.NullString{String: req.SyncDirection, Valid: req.SyncDirection != ""},
+        LabelSelector: sql.NullString{String: req.LabelSelector, Valid: req.LabelSelector != ""},
     }
     if req.Active != nil { m.Active = *req.Active }
     if err := h.db.UpsertRepoProjectMapping(c.Request().Context(), m); err != nil {

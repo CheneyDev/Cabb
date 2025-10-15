@@ -21,7 +21,7 @@ services:
         fromDatabase:
           name: plane-integration-db
           property: connectionString
-    # Migrations are applied in Docker entrypoint (scripts/entrypoint.sh)
+    # Migrations are applied in Docker entrypoint (scripts/entrypoint.sh) across all db/migrations/*.sql
 
 databases:
   - name: plane-integration-db

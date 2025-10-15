@@ -424,50 +424,55 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
     name, _ := dataGetString(data, "name")
     descHTML, _ := dataGetString(data, "description_html")
 
-    // Find mapping by project
-    mapping, err := h.db.GetRepoProjectMappingByPlaneProject(ctx, planeProjectID)
-    if err != nil || mapping == nil { return }
-    // Only act when bidirectional sync is configured
-    if !mapping.SyncDirection.Valid || strings.ToLower(mapping.SyncDirection.String) != "bidirectional" {
-        return
-    }
-
-    // Resolve CNB link if exists
-    cnbRepoID := mapping.CNBRepoID
-    linkedRepo, linkedIssue, _ := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
+    // Attempt to extract labels for routing
+    labels := dataGetLabels(data)
+    // Load all mappings for project
+    mappings, err := h.db.ListRepoProjectMappingsByPlaneProject(ctx, planeProjectID)
+    if err != nil || len(mappings) == 0 { goto notifyOnly }
 
     // Build CNB client (feature-flagged)
     if !h.cfg.CNBOutboundEnabled { return }
-    cn := &cnb.Client{
-        BaseURL: h.cfg.CNBBaseURL,
-        Token:   h.cfg.CNBAppToken,
-        IssueCreatePath:  h.cfg.CNBIssueCreatePath,
-        IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
-        IssueCommentPath: h.cfg.CNBIssueCommentPath,
-        IssueClosePath:   h.cfg.CNBIssueClosePath,
-    }
+    cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
 
     switch action {
     case "create":
-        if linkedIssue == "" {
-            iid, err := cn.CreateIssue(ctx, cnbRepoID, name, descHTML)
-            if err == nil && iid != "" {
-                _ = h.db.CreateIssueLink(ctx, planeIssueID, cnbRepoID, iid)
-            }
+        // Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
+        for _, m := range mappings {
+            if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
+            if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
+            // Skip if already linked for this repo
+            links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
+            exists := false
+            for _, lk := range links { if lk.Repo == m.CNBRepoID { exists = true; break } }
+            if exists { continue }
+            iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
+            if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
         }
     case "update":
-        if linkedIssue != "" {
+        if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
             fields := map[string]any{}
             if name != "" { fields["title"] = name }
-            if descHTML != "" { fields["description_html"] = descHTML }
-            _ = cn.UpdateIssue(ctx, linkedRepo, linkedIssue, fields)
+            if descHTML != "" { fields["body"] = descHTML }
+            for _, lk := range links { _ = cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields) }
+        }
+        // If new labels now match additional mappings, create missing CNB issues
+        for _, m := range mappings {
+            if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
+            if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
+            existing, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
+            found := false
+            for _, lk := range existing { if lk.Repo == m.CNBRepoID { found = true; break } }
+            if !found {
+                iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
+                if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
+            }
         }
     case "delete", "close":
-        if linkedIssue != "" {
-            _ = cn.CloseIssue(ctx, linkedRepo, linkedIssue)
+        if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
+            for _, lk := range links { _ = cn.CloseIssue(ctx, lk.Repo, lk.Number) }
         }
     }
-
+notifyOnly:
     // Notify Feishu thread if bound
     if planeIssueID != "" {
         if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
@@ -488,19 +493,11 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
     commentHTML, _ := dataGetString(data, "comment_html")
 
     if planeIssueID == "" || commentHTML == "" { return }
-    // CNB outbound when enabled
+    // CNB outbound when enabled (fan-out to all linked issues)
     if h.cfg.CNBOutboundEnabled {
-        cnbRepo, cnbIID, err := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
-        if err == nil && cnbIID != "" {
-            cn := &cnb.Client{
-                BaseURL: h.cfg.CNBBaseURL,
-                Token:   h.cfg.CNBAppToken,
-                IssueCreatePath:  h.cfg.CNBIssueCreatePath,
-                IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
-                IssueCommentPath: h.cfg.CNBIssueCommentPath,
-                IssueClosePath:   h.cfg.CNBIssueClosePath,
-            }
-            _ = cn.AddComment(ctx, cnbRepo, cnbIID, commentHTML)
+        if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
+            cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+            for _, lk := range links { _ = cn.AddComment(ctx, lk.Repo, lk.Number, commentHTML) }
         }
     }
     // Notify Feishu thread if bound (strip tags, keep short)
@@ -524,6 +521,50 @@ func dataGetString(m map[string]any, key string) (string, bool) {
         }
     }
     return "", false
+}
+
+// dataGetLabels tries to extract label names from Plane webhook payload
+func dataGetLabels(m map[string]any) []string {
+    names := make([]string, 0, 8)
+    if m == nil { return names }
+    if v, ok := m["labels"]; ok {
+        if arr, ok := v.([]any); ok {
+            for _, it := range arr {
+                switch t := it.(type) {
+                case map[string]any:
+                    if n, ok := t["name"].(string); ok && n != "" { names = append(names, n) }
+                case string:
+                    if t != "" { names = append(names, t) }
+                }
+            }
+        }
+    }
+    if len(names) == 0 {
+        if v, ok := m["label_names"]; ok {
+            if arr, ok := v.([]any); ok {
+                for _, it := range arr { if s, ok := it.(string); ok && s != "" { names = append(names, s) } }
+            }
+        }
+    }
+    return names
+}
+
+// labelSelectorMatch returns true if selector contains any token present in labels (case-insensitive)
+func labelSelectorMatch(selector string, labels []string) bool {
+    selector = strings.TrimSpace(selector)
+    if selector == "" { return false }
+    tokens := make([]string, 0, 8)
+    for _, p := range strings.FieldsFunc(selector, func(r rune) bool { return r == ',' || r == ' ' || r == ';' || r == '|' }) {
+        p = strings.TrimSpace(p)
+        if p != "" { tokens = append(tokens, strings.ToLower(p)) }
+    }
+    if len(tokens) == 0 { return false }
+    // wildcard support: '*' or 'all' matches any non-empty label set
+    for _, t := range tokens { if t == "*" || t == "all" { return len(labels) > 0 } }
+    set := make(map[string]struct{}, len(labels))
+    for _, l := range labels { if l != "" { set[strings.ToLower(l)] = struct{}{} } }
+    for _, tok := range tokens { if _, ok := set[tok]; ok { return true } }
+    return false
 }
 
 // preferredReturnURL selects a safe redirect destination back to Plane
