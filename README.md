@@ -47,15 +47,11 @@
 - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
  - CNB（出站开启）：
    - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
-   - 路径模板通常无需配置，按 swagger 默认：
+   - 路径遵循官方 swagger，固定且无需通过环境变量配置：
      - Create:  `/{repo}/-/issues`
      - Update:  `/{repo}/-/issues/{number}`
      - Comment: `/{repo}/-/issues/{number}/comments`
-   - 如网关存在前缀或路径差异，可通过 `CNB_ISSUE_*_PATH` 覆盖（保留 `{repo}`/`{number}`）。
-- CNB（出站开启）：
-  - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
-  - 路径模板通常无需配置，按 swagger 默认：Create/Update/Comment 如上。
-  - 如网关存在前缀或路径差异，可使用 `CNB_ISSUE_*_PATH` 覆盖。
+     - Close:   通过 Update `state=closed`
 
 ### 配置飞书（Lark）机器人
 
