@@ -40,6 +40,9 @@ jobs:
 
   db-migrate-verify:
     runs-on: ubuntu-latest
+    env:
+      ACTION_MIGRATE_TARGET: ${{ secrets.ACTION_MIGRATE_TARGET }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     services:
       postgres:
         image: postgres:16
@@ -78,10 +81,8 @@ jobs:
           kill $(cat server.pid)
 
       - name: Optional migration against external DATABASE_URL (disabled by default)
-        if: ${{ env.ACTION_MIGRATE_TARGET == 'true' && secrets.DATABASE_URL != '' }}
+        if: ${{ env.ACTION_MIGRATE_TARGET == 'true' && env.DATABASE_URL != '' }}
         env:
-          ACTION_MIGRATE_TARGET: ${{ secrets.ACTION_MIGRATE_TARGET }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PORT: 18083
         run: |
           echo "Running migrations against external DATABASE_URL (be careful!)"
