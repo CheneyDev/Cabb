@@ -428,51 +428,50 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
     labels := dataGetLabels(data)
     // Load all mappings for project
     mappings, err := h.db.ListRepoProjectMappingsByPlaneProject(ctx, planeProjectID)
-    if err != nil || len(mappings) == 0 { goto notifyOnly }
 
-    // Build CNB client (feature-flagged)
-    if !h.cfg.CNBOutboundEnabled { return }
-    cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
-
-    switch action {
-    case "create":
-        // Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
-        for _, m := range mappings {
-            if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
-            if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
-            // Skip if already linked for this repo
-            links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
-            exists := false
-            for _, lk := range links { if lk.Repo == m.CNBRepoID { exists = true; break } }
-            if exists { continue }
-            iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
-            if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
-        }
-    case "update":
-        if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
-            fields := map[string]any{}
-            if name != "" { fields["title"] = name }
-            if descHTML != "" { fields["body"] = descHTML }
-            for _, lk := range links { _ = cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields) }
-        }
-        // If new labels now match additional mappings, create missing CNB issues
-        for _, m := range mappings {
-            if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
-            if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
-            existing, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
-            found := false
-            for _, lk := range existing { if lk.Repo == m.CNBRepoID { found = true; break } }
-            if !found {
+    // CNB outbound fan-out only when enabled and mappings exist
+    if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
+        cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+        switch action {
+        case "create":
+            // Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
+            for _, m := range mappings {
+                if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
+                if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
+                // Skip if already linked for this repo
+                links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
+                exists := false
+                for _, lk := range links { if lk.Repo == m.CNBRepoID { exists = true; break } }
+                if exists { continue }
                 iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
                 if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
             }
-        }
-    case "delete", "close":
-        if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
-            for _, lk := range links { _ = cn.CloseIssue(ctx, lk.Repo, lk.Number) }
+        case "update":
+            if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
+                fields := map[string]any{}
+                if name != "" { fields["title"] = name }
+                if descHTML != "" { fields["body"] = descHTML }
+                for _, lk := range links { _ = cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields) }
+            }
+            // If new labels now match additional mappings, create missing CNB issues
+            for _, m := range mappings {
+                if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
+                if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
+                existing, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
+                found := false
+                for _, lk := range existing { if lk.Repo == m.CNBRepoID { found = true; break } }
+                if !found {
+                    iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
+                    if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
+                }
+            }
+        case "delete", "close":
+            if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
+                for _, lk := range links { _ = cn.CloseIssue(ctx, lk.Repo, lk.Number) }
+            }
         }
     }
-notifyOnly:
+
     // Notify Feishu thread if bound
     if planeIssueID != "" {
         if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
