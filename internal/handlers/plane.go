@@ -467,12 +467,20 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
             _ = cn.CloseIssue(ctx, linkedRepo, linkedIssue)
         }
     }
+
+    // Notify Feishu thread if bound
+    if planeIssueID != "" {
+        if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
+            summary := "Plane 工作项更新: " + truncate(name, 80)
+            if action != "" { summary += " (" + action + ")" }
+            go h.sendLarkTextToThread("", tid, summary)
+        }
+    }
     if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue", deliveryID, "succeeded", nil) }
 }
 
 func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID string) {
     if !hHasDB(h) { return }
-    if !h.cfg.CNBOutboundEnabled { return }
     ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
     defer cancel()
     data := env.Data
@@ -480,17 +488,30 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
     commentHTML, _ := dataGetString(data, "comment_html")
 
     if planeIssueID == "" || commentHTML == "" { return }
-    cnbRepo, cnbIID, err := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
-    if err != nil || cnbIID == "" { return }
-    cn := &cnb.Client{
-        BaseURL: h.cfg.CNBBaseURL,
-        Token:   h.cfg.CNBAppToken,
-        IssueCreatePath:  h.cfg.CNBIssueCreatePath,
-        IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
-        IssueCommentPath: h.cfg.CNBIssueCommentPath,
-        IssueClosePath:   h.cfg.CNBIssueClosePath,
+    // CNB outbound when enabled
+    if h.cfg.CNBOutboundEnabled {
+        cnbRepo, cnbIID, err := h.db.FindCNBIssueByPlaneIssue(ctx, planeIssueID)
+        if err == nil && cnbIID != "" {
+            cn := &cnb.Client{
+                BaseURL: h.cfg.CNBBaseURL,
+                Token:   h.cfg.CNBAppToken,
+                IssueCreatePath:  h.cfg.CNBIssueCreatePath,
+                IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
+                IssueCommentPath: h.cfg.CNBIssueCommentPath,
+                IssueClosePath:   h.cfg.CNBIssueClosePath,
+            }
+            _ = cn.AddComment(ctx, cnbRepo, cnbIID, commentHTML)
+        }
     }
-    _ = cn.AddComment(ctx, cnbRepo, cnbIID, commentHTML)
+    // Notify Feishu thread if bound (strip tags, keep short)
+    if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
+        txt := commentHTML
+        txt = strings.ReplaceAll(txt, "<br>", "\n")
+        txt = stripTags(txt)
+        if txt == "" { txt = "(空评论)" }
+        msg := "Plane 评论: " + truncate(txt, 140)
+        go h.sendLarkTextToThread("", tid, msg)
+    }
     if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil) }
 }
 
@@ -635,4 +656,21 @@ func (h *Handler) planeAppBase() *url.URL {
         return u
     }
     return nil
+}
+
+// stripTags removes HTML tags (best-effort, not full HTML sanitizer)
+func stripTags(s string) string {
+    out := make([]rune, 0, len(s))
+    inTag := false
+    for _, r := range s {
+        switch r {
+        case '<':
+            inTag = true
+        case '>':
+            inTag = false
+        default:
+            if !inTag { out = append(out, r) }
+        }
+    }
+    return strings.TrimSpace(string(out))
 }

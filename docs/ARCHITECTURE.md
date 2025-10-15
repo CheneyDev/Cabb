@@ -22,6 +22,8 @@ This repository hosts a Go service that bridges Plane with CNB (internal code ho
 - `POST /webhooks/plane` – HMAC verification stub (`X-Plane-Signature`)
 - `POST /ingest/cnb/issue|pr|branch` – `.cnb.yml` callbacks with Bearer auth (`INTEGRATION_TOKEN`)
 - `POST /webhooks/lark/events|interactivity|commands` – Feishu endpoints (challenge handled)
+  - 群聊绑定：在群内 @ 机器人执行 `/bind <Plane Issue 链接>`（或 `绑定 <链接>`）后，记录 `thread_links(lark_thread_id↔plane_issue_id)`，Plane 侧的“更新/评论”通过线程回复推送到该话题（M1 文本，卡片待后续）。
+  - 线程评论：在已绑定话题中回复 `/comment <文本>`（或 `评论 <文本>`）将把文本追加为 Plane Issue 评论（需要能解析出 `workspace_slug` 与 `project_id`）。
 - `POST /admin/mappings/repo-project|pr-states|users|channel-project` – stubs
 - `POST /jobs/issue-summary/daily` – stub (202 Accepted)
 

@@ -259,6 +259,59 @@ func (d *DB) DeactivateBranchIssueLink(ctx context.Context, cnbRepoID, branch st
     return err
 }
 
+// ===== Lark (Feishu) mappings =====
+
+// UpsertLarkThreadLink binds a Lark thread/root message to a Plane issue.
+// Optional: planeProjectID/workspaceSlug stored when provided (non-empty).
+func (d *DB) UpsertLarkThreadLink(ctx context.Context, larkThreadID, planeIssueID, planeProjectID, workspaceSlug string, syncEnabled bool) error {
+    if d == nil || d.SQL == nil { return sql.ErrConnDone }
+    const upd = `UPDATE thread_links SET plane_issue_id=$2::uuid, sync_enabled=$5, workspace_slug=COALESCE($4, workspace_slug), plane_project_id=COALESCE($3::uuid, plane_project_id), updated_at=now() WHERE lark_thread_id=$1`
+    res, err := d.SQL.ExecContext(ctx, upd, larkThreadID, planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug), syncEnabled)
+    if err != nil { return err }
+    if n, _ := res.RowsAffected(); n > 0 { return nil }
+    const ins = `INSERT INTO thread_links (lark_thread_id, plane_issue_id, plane_project_id, workspace_slug, sync_enabled, linked_at, created_at, updated_at) VALUES ($1,$2::uuid, $3::uuid, $4, $5, now(),now(),now())`
+    _, err = d.SQL.ExecContext(ctx, ins, larkThreadID, planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug), syncEnabled)
+    return err
+}
+
+// FindLarkThreadByPlaneIssue returns a Lark thread id bound to the Plane issue.
+func (d *DB) FindLarkThreadByPlaneIssue(ctx context.Context, planeIssueID string) (string, error) {
+    if d == nil || d.SQL == nil { return "", sql.ErrConnDone }
+    const q = `SELECT lark_thread_id FROM thread_links WHERE plane_issue_id=$1::uuid LIMIT 1`
+    var tid sql.NullString
+    if err := d.SQL.QueryRowContext(ctx, q, planeIssueID).Scan(&tid); err != nil {
+        return "", err
+    }
+    if tid.Valid { return tid.String, nil }
+    return "", sql.ErrNoRows
+}
+
+// LarkThreadLink holds thread↔issue link with optional metadata
+type LarkThreadLink struct {
+    LarkThreadID   string
+    PlaneIssueID   string
+    PlaneProjectID sql.NullString
+    WorkspaceSlug  sql.NullString
+    SyncEnabled    bool
+}
+
+func (d *DB) GetLarkThreadLink(ctx context.Context, larkThreadID string) (*LarkThreadLink, error) {
+    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
+    const q = `SELECT lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug, sync_enabled FROM thread_links WHERE lark_thread_id=$1 LIMIT 1`
+    var tl LarkThreadLink
+    err := d.SQL.QueryRowContext(ctx, q, larkThreadID).Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.SyncEnabled)
+    if err != nil { return nil, err }
+    return &tl, nil
+}
+
+// Find bot token by workspace slug
+func (d *DB) FindBotTokenByWorkspaceSlug(ctx context.Context, workspaceSlug string) (accessToken string, err error) {
+    if d == nil || d.SQL == nil { return "", sql.ErrConnDone }
+    const q = `SELECT access_token FROM workspaces WHERE workspace_slug=$1 AND token_type='bot' ORDER BY updated_at DESC LIMIT 1`
+    err = d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&accessToken)
+    return
+}
+
 // PR links
 func (d *DB) UpsertPRLink(ctx context.Context, planeIssueID, cnbRepoID, prIID string) error {
     if d == nil || d.SQL == nil { return sql.ErrConnDone }

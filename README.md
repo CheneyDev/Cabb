@@ -285,6 +285,8 @@ docker run --rm -p 8080:8080 \
   - `POST /webhooks/lark/events`（支持 challenge 握手）
   - `POST /webhooks/lark/interactivity`
   - `POST /webhooks/lark/commands`
+  - 绑定命令（群聊内）：在群里 @ 机器人，输入 `/bind <Plane Issue 链接>` 或 `绑定 <Plane Issue 链接>`，服务会解析链接中的 Issue UUID 并将该群话题（root message）与该 Issue 绑定。后续 Plane 的“更新/评论”将以线程回复方式推送到该话题（M1 文本通知，卡片交互待后续）。
+  - 评论命令（群聊内）：在已绑定的话题中回复 `/comment 这是一条评论` 或 `评论 这是一条评论`，服务会将该文本作为评论追加到对应的 Plane Issue（需要在绑定时能解析到 `workspace_slug` 与 `project_id`）。
 - 管理映射
   - `POST /admin/mappings/repo-project`
   - `POST /admin/mappings/pr-states`
