@@ -1,5 +1,8 @@
 # Next.js rules
 
+- 在 COSS 组件库已覆盖的场景下（详见 `docs/coss-ui`），必须优先使用 COSS 提供的 React 组件，不得引入或回退到其他 UI 库的组件实现。
+- 如果需要的组件暂未由 COSS 提供，请在代码与 PR 说明中注明原因，并在可行时补充回 COSS 方案。
+
 - Use the App Router structure with `page.tsx` files in route directories.
 - Client components must be explicitly marked with `'use client'` at the top of the file.
 - Use kebab-case for directory names (e.g., `components/auth-form`) and PascalCase for component files.
