@@ -423,6 +423,14 @@ type planeWebhookEnvelope struct {
 func (h *Handler) processPlaneWebhook(event string, body []byte, deliveryID string) {
     var env planeWebhookEnvelope
     if err := json.Unmarshal(body, &env); err != nil { return }
+    // Trace inbound webhook envelope (decision log, no sensitive data)
+    LogStructured("info", map[string]any{
+        "event":        "plane.webhook",
+        "delivery_id":  deliveryID,
+        "x_event":      strings.ToLower(event),
+        "action":       strings.ToLower(env.Action),
+        "workspace_id": env.WorkspaceID,
+    })
     switch strings.ToLower(event) {
     case "issue":
         h.handlePlaneIssueEvent(env, deliveryID)
@@ -450,6 +458,18 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
     // Load all mappings for project
     mappings, err := h.db.ListRepoProjectMappingsByPlaneProject(ctx, planeProjectID)
 
+    // Decision log: summary for routing
+    LogStructured("info", map[string]any{
+        "event":              "plane.issue",
+        "delivery_id":        deliveryID,
+        "action":             action,
+        "plane_issue_id":     planeIssueID,
+        "plane_project_id":   planeProjectID,
+        "labels":             labels,
+        "mappings_count":     len(mappings),
+        "outbound_enabled":   h.cfg.CNBOutboundEnabled,
+    })
+
     // CNB outbound fan-out only when enabled and mappings exist
     if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
         cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
@@ -457,22 +477,91 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
         case "create":
             // Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
             for _, m := range mappings {
-                if !m.SyncDirection.Valid || strings.ToLower(m.SyncDirection.String) != "bidirectional" { continue }
-                if !labelSelectorMatch(m.LabelSelector.String, labels) { continue }
-                // Skip if already linked for this repo
+                dir := strings.ToLower(m.SyncDirection.String)
+                if !m.SyncDirection.Valid { dir = "" }
+                hit := labelSelectorMatch(m.LabelSelector.String, labels)
+                // Existing link check (per repo)
                 links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID)
                 exists := false
                 for _, lk := range links { if lk.Repo == m.CNBRepoID { exists = true; break } }
-                if exists { continue }
+
+                decision := "create"
+                skip := ""
+                if dir != "bidirectional" { decision = "skip"; skip = "direction" }
+                if decision != "skip" && !hit { decision = "skip"; skip = "label_miss" }
+                if decision != "skip" && exists { decision = "skip"; skip = "already_linked" }
+
+                LogStructured("info", map[string]any{
+                    "event":            "plane.issue.route",
+                    "delivery_id":      deliveryID,
+                    "action":           action,
+                    "plane_issue_id":   planeIssueID,
+                    "repo":             m.CNBRepoID,
+                    "direction":        dir,
+                    "label_selector":   m.LabelSelector.String,
+                    "label_hit":        hit,
+                    "already_linked":   exists,
+                    "decision":         decision,
+                    "skip_reason":      skip,
+                })
+
+                if decision == "skip" { continue }
                 iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
-                if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
+                if err != nil || iid == "" {
+                    LogStructured("error", map[string]any{
+                        "event":          "plane.issue.cnbrpc",
+                        "delivery_id":    deliveryID,
+                        "action":         action,
+                        "plane_issue_id": planeIssueID,
+                        "repo":           m.CNBRepoID,
+                        "op":             "create_issue",
+                        "error": map[string]any{
+                            "code":    "cnb_create_failed",
+                            "message": truncate(fmt.Sprintf("%v", err), 200),
+                        },
+                    })
+                    continue
+                }
+                _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
+                LogStructured("info", map[string]any{
+                    "event":          "plane.issue.cnbrpc",
+                    "delivery_id":    deliveryID,
+                    "action":         action,
+                    "plane_issue_id": planeIssueID,
+                    "repo":           m.CNBRepoID,
+                    "op":             "create_issue",
+                    "result":         "created",
+                    "cnb_issue_iid":  iid,
+                })
             }
         case "update":
             if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
                 fields := map[string]any{}
                 if name != "" { fields["title"] = name }
                 if descHTML != "" { fields["body"] = descHTML }
-                for _, lk := range links { _ = cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields) }
+                for _, lk := range links {
+                    if err := cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields); err != nil {
+                        LogStructured("error", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           lk.Repo,
+                            "op":             "update_issue",
+                            "error": map[string]any{"code":"cnb_update_failed","message": truncate(fmt.Sprintf("%v", err), 200)},
+                        })
+                    } else {
+                        LogStructured("info", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           lk.Repo,
+                            "op":             "update_issue",
+                            "result":         "updated",
+                        })
+                    }
+                }
             }
             // If new labels now match additional mappings, create missing CNB issues
             for _, m := range mappings {
@@ -483,12 +572,56 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                 for _, lk := range existing { if lk.Repo == m.CNBRepoID { found = true; break } }
                 if !found {
                     iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
-                    if err == nil && iid != "" { _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid) }
+                    if err != nil || iid == "" {
+                        LogStructured("error", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           m.CNBRepoID,
+                            "op":             "create_issue",
+                            "error": map[string]any{"code":"cnb_create_failed","message": truncate(fmt.Sprintf("%v", err), 200)},
+                        })
+                    } else {
+                        _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
+                        LogStructured("info", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           m.CNBRepoID,
+                            "op":             "create_issue",
+                            "result":         "created",
+                            "cnb_issue_iid":  iid,
+                        })
+                    }
                 }
             }
         case "delete", "close":
             if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
-                for _, lk := range links { _ = cn.CloseIssue(ctx, lk.Repo, lk.Number) }
+                for _, lk := range links {
+                    if err := cn.CloseIssue(ctx, lk.Repo, lk.Number); err != nil {
+                        LogStructured("error", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           lk.Repo,
+                            "op":             "close_issue",
+                            "error": map[string]any{"code":"cnb_close_failed","message": truncate(fmt.Sprintf("%v", err), 200)},
+                        })
+                    } else {
+                        LogStructured("info", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           lk.Repo,
+                            "op":             "close_issue",
+                            "result":         "closed",
+                        })
+                    }
+                }
             }
         }
     }
@@ -517,7 +650,27 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
     if h.cfg.CNBOutboundEnabled {
         if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
             cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
-            for _, lk := range links { _ = cn.AddComment(ctx, lk.Repo, lk.Number, commentHTML) }
+            for _, lk := range links {
+                if err := cn.AddComment(ctx, lk.Repo, lk.Number, commentHTML); err != nil {
+                    LogStructured("error", map[string]any{
+                        "event":          "plane.issue_comment.cnbrpc",
+                        "delivery_id":    deliveryID,
+                        "plane_issue_id": planeIssueID,
+                        "repo":           lk.Repo,
+                        "op":             "add_comment",
+                        "error": map[string]any{"code":"cnb_comment_failed","message": truncate(fmt.Sprintf("%v", err), 200)},
+                    })
+                } else {
+                    LogStructured("info", map[string]any{
+                        "event":          "plane.issue_comment.cnbrpc",
+                        "delivery_id":    deliveryID,
+                        "plane_issue_id": planeIssueID,
+                        "repo":           lk.Repo,
+                        "op":             "add_comment",
+                        "result":         "commented",
+                    })
+                }
+            }
         }
     }
     // Notify Feishu thread if bound (strip tags, keep short)

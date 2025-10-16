@@ -134,3 +134,23 @@ func Recover() echo.MiddlewareFunc {
         }
     }
 }
+
+// LogStructured prints a single structured JSON log entry with given level and fields.
+// It adds RFC3339 UTC time and level if not present.
+func LogStructured(level string, fields map[string]any) {
+    if fields == nil {
+        fields = map[string]any{}
+    }
+    if _, ok := fields["time"]; !ok {
+        fields["time"] = time.Now().UTC().Format(time.RFC3339)
+    }
+    if _, ok := fields["level"]; !ok {
+        fields["level"] = level
+    }
+    b, err := json.Marshal(fields)
+    if err != nil {
+        log.Printf("{\"level\":\"%s\",\"message\":\"log marshal failed\"}", level)
+        return
+    }
+    log.Println(string(b))
+}
