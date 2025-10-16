@@ -6,6 +6,7 @@ import (
     "encoding/json"
     "errors"
     "fmt"
+    "io"
     "net/http"
     "net/url"
     "strings"
@@ -91,11 +92,45 @@ func (c *Client) CreateIssue(ctx context.Context, repo string, title, descriptio
     if err != nil { return "", err }
     req.Header.Set("Authorization", "Bearer "+c.Token)
     req.Header.Set("Content-Type", "application/json")
+    // Some CNB gateways return 406 when Accept lists multiple types; use a single type
+    req.Header.Set("Accept", "application/json")
     resp, err := c.httpClient().Do(req)
     if err != nil { return "", err }
     defer resp.Body.Close()
+    if resp.StatusCode == http.StatusNotAcceptable {
+        // Retry with vendor-specific Accept as some gateways require an exact single media type
+        _ = resp.Body.Close()
+        req2, err2 := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+        if err2 != nil { return "", err2 }
+        req2.Header.Set("Authorization", "Bearer "+c.Token)
+        req2.Header.Set("Content-Type", "application/json")
+        req2.Header.Set("Accept", "application/vnd.cnb.api+json")
+        resp2, err2 := c.httpClient().Do(req2)
+        if err2 != nil { return "", err2 }
+        defer resp2.Body.Close()
+        if resp2.StatusCode == http.StatusCreated || (resp2.StatusCode >= 200 && resp2.StatusCode < 300) {
+            var out2 struct{ Number string `json:"number"` }
+            if err := json.NewDecoder(resp2.Body).Decode(&out2); err != nil { return "", err }
+            if out2.Number == "" { return "", errors.New("empty issue number") }
+            return out2.Number, nil
+        }
+        var msg2 string
+        if d, _ := io.ReadAll(resp2.Body); len(d) > 0 {
+            if len(d) > 300 { d = d[:300] }
+            msg2 = string(d)
+        }
+        u2, _ := url.Parse(ep)
+        return "", fmt.Errorf("cnb create issue status=%d path=%s body=%s", resp2.StatusCode, u2.EscapedPath(), msg2)
+    }
     if resp.StatusCode != http.StatusCreated && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
-        return "", fmt.Errorf("cnb create issue status=%d", resp.StatusCode)
+        // read small error body for diagnostics (truncate)
+        var msg string
+        if d, _ := io.ReadAll(resp.Body); len(d) > 0 {
+            if len(d) > 300 { d = d[:300] }
+            msg = string(d)
+        }
+        u, _ := url.Parse(ep)
+        return "", fmt.Errorf("cnb create issue status=%d path=%s body=%s", resp.StatusCode, u.EscapedPath(), msg)
     }
     var out struct{ Number string `json:"number"` }
     if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return "", err }
@@ -118,10 +153,38 @@ func (c *Client) UpdateIssue(ctx context.Context, repo, number string, fields ma
     if err != nil { return err }
     req.Header.Set("Authorization", "Bearer "+c.Token)
     req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
     resp, err := c.httpClient().Do(req)
     if err != nil { return err }
     defer resp.Body.Close()
-    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("cnb update issue status=%d", resp.StatusCode) }
+    if resp.StatusCode == http.StatusNotAcceptable {
+        _ = resp.Body.Close()
+        req2, err2 := http.NewRequestWithContext(ctx, http.MethodPatch, ep, bytes.NewReader(b))
+        if err2 != nil { return err2 }
+        req2.Header.Set("Authorization", "Bearer "+c.Token)
+        req2.Header.Set("Content-Type", "application/json")
+        req2.Header.Set("Accept", "application/vnd.cnb.api+json")
+        resp2, err2 := c.httpClient().Do(req2)
+        if err2 != nil { return err2 }
+        defer resp2.Body.Close()
+        if resp2.StatusCode >= 200 && resp2.StatusCode < 300 { return nil }
+        var msg2 string
+        if d, _ := io.ReadAll(resp2.Body); len(d) > 0 {
+            if len(d) > 300 { d = d[:300] }
+            msg2 = string(d)
+        }
+        u2, _ := url.Parse(ep)
+        return fmt.Errorf("cnb update issue status=%d path=%s body=%s", resp2.StatusCode, u2.EscapedPath(), msg2)
+    }
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        var msg string
+        if d, _ := io.ReadAll(resp.Body); len(d) > 0 {
+            if len(d) > 300 { d = d[:300] }
+            msg = string(d)
+        }
+        u, _ := url.Parse(ep)
+        return fmt.Errorf("cnb update issue status=%d path=%s body=%s", resp.StatusCode, u.EscapedPath(), msg)
+    }
     return nil
 }
 
@@ -140,11 +203,37 @@ func (c *Client) AddComment(ctx context.Context, repo, number, commentHTML strin
     if err != nil { return err }
     req.Header.Set("Authorization", "Bearer "+c.Token)
     req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
     resp, err := c.httpClient().Do(req)
     if err != nil { return err }
     defer resp.Body.Close()
+    if resp.StatusCode == http.StatusNotAcceptable {
+        _ = resp.Body.Close()
+        req2, err2 := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+        if err2 != nil { return err2 }
+        req2.Header.Set("Authorization", "Bearer "+c.Token)
+        req2.Header.Set("Content-Type", "application/json")
+        req2.Header.Set("Accept", "application/vnd.cnb.api+json")
+        resp2, err2 := c.httpClient().Do(req2)
+        if err2 != nil { return err2 }
+        defer resp2.Body.Close()
+        if resp2.StatusCode == http.StatusCreated || (resp2.StatusCode >= 200 && resp2.StatusCode < 300) { return nil }
+        var msg2 string
+        if d, _ := io.ReadAll(resp2.Body); len(d) > 0 {
+            if len(d) > 300 { d = d[:300] }
+            msg2 = string(d)
+        }
+        u2, _ := url.Parse(ep)
+        return fmt.Errorf("cnb add comment status=%d path=%s body=%s", resp2.StatusCode, u2.EscapedPath(), msg2)
+    }
     if resp.StatusCode != http.StatusCreated && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
-        return fmt.Errorf("cnb add comment status=%d", resp.StatusCode)
+        var msg string
+        if d, _ := io.ReadAll(resp.Body); len(d) > 0 {
+            if len(d) > 300 { d = d[:300] }
+            msg = string(d)
+        }
+        u, _ := url.Parse(ep)
+        return fmt.Errorf("cnb add comment status=%d path=%s body=%s", resp.StatusCode, u.EscapedPath(), msg)
     }
     return nil
 }
