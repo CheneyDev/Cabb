@@ -177,7 +177,7 @@ export default function UsersPage() {
                       onChange={event => updateRow(index, 'display_name', event.target.value)}
                     />
                   </div>
-                  <div className="md:col-span-3 flex items-center justify-end gap-2 text-sm text-muted-foreground">
+                  <div className="flex flex-col gap-2 text-sm text-muted-foreground md:col-span-3 md:flex-row md:items-center md:justify-end">
                     {rows.length > 1 && (
                       <Button type="button" variant="ghost" onClick={() => removeRow(index)}>
                         移除此行
@@ -241,7 +241,7 @@ export default function UsersPage() {
                 onChange={event => setLimit(Number(event.target.value) || 50)}
               />
             </div>
-            <div className="flex gap-2 md:col-span-4 md:justify-end">
+            <div className="flex flex-wrap gap-2 md:col-span-4 md:justify-end">
               <Button type="button" variant="outline" onClick={() => load()} disabled={loading}>
                 {loading ? '加载中…' : '刷新'}
               </Button>
@@ -261,7 +261,7 @@ export default function UsersPage() {
           </div>
           {fetchError && <Alert variant="destructive">{fetchError}</Alert>}
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow className="bg-transparent">
                   <TableHead>Plane 用户</TableHead>

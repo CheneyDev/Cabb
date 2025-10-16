@@ -1,4 +1,3 @@
-import type { Route } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -7,10 +6,11 @@ import { buttonVariants } from '@/components/ui/button'
 import type { AdminUser } from '@/lib/server/admin-session'
 import { fetchAdminSession } from '@/lib/server/admin-session'
 
-import { DashboardNav } from './_components/nav-links'
+import { DashboardNav, type NavItem } from './_components/nav-links'
 import { LogoutButton } from './_components/logout-button'
+import { MobileNav } from './_components/MobileNav'
 
-const navItems: Array<{ href: Route; label: string }> = [
+const navItems: NavItem[] = [
   { href: '/', label: '概览' },
   { href: '/mappings', label: 'Repo↔Project 同步' },
   { href: '/users', label: '用户映射管理' },
@@ -47,24 +47,27 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <div className="min-h-dvh">
       <header className="header-surface sticky top-0 z-40">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-4 md:flex-row md:items-center md:justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--primary)_25%,transparent)] text-sm font-semibold uppercase tracking-wide text-primary-foreground shadow-[0_12px_32px_-22px_rgba(79,70,229,0.8)]">
-              PI
-            </span>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-wide text-foreground">Plane Integration</span>
-              <span className="text-xs text-muted-foreground">后台配置中心 · COSS UI</span>
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center justify-between gap-3 md:justify-start">
+            <Link href="/" className="flex items-center gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--primary)_25%,transparent)] text-sm font-semibold uppercase tracking-wide text-primary-foreground shadow-[0_12px_32px_-22px_rgba(79,70,229,0.8)]">
+                PI
+              </span>
+              <div className="flex flex-col text-left">
+                <span className="text-sm font-semibold tracking-wide text-foreground">Plane Integration</span>
+                <span className="text-xs text-muted-foreground">后台配置中心 · COSS UI</span>
+              </div>
+            </Link>
+            <div className="flex items-center gap-2 md:hidden">
+              <MobileNav items={navItems} user={user} />
+              <LogoutButton />
             </div>
-          </Link>
-          <nav className="hidden items-center gap-2 md:flex">
+          </div>
+          <nav className="hidden w-full md:flex md:flex-1 md:justify-center">
             <DashboardNav items={navItems} />
           </nav>
-          <nav className="flex flex-wrap items-center gap-2 md:hidden">
-            <DashboardNav items={navItems} />
-          </nav>
-          <div className="flex flex-1 items-center justify-end gap-3 md:justify-end">
-            <div className="hidden flex-col text-right sm:flex">
+          <div className="hidden w-full flex-1 items-center justify-end gap-3 md:flex">
+            <div className="flex flex-col text-right">
               <span className="text-sm font-semibold text-foreground">{user.display_name || user.email}</span>
               <span className="text-xs text-muted-foreground">{user.email}</span>
             </div>
@@ -72,7 +75,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pb-10 pt-8 sm:px-6">{children}</main>
     </div>
   )
 }
