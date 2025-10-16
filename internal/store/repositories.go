@@ -4,6 +4,7 @@ import (
     "context"
     "database/sql"
     "errors"
+    "fmt"
     "time"
 )
 
@@ -112,6 +113,48 @@ func (d *DB) UpsertRepoProjectMapping(ctx context.Context, m RepoProjectMapping)
     _, err = d.SQL.ExecContext(ctx, ins, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
     return err
 }
+
+// ListRepoProjectMappings lists mappings with optional filters.
+// If planeProjectID or cnbRepoID are empty strings, they are ignored.
+// activeParam supports: "true" | "false" | "" (ignored).
+func (d *DB) ListRepoProjectMappings(ctx context.Context, planeProjectID, cnbRepoID, activeParam string) ([]RepoProjectMapping, error) {
+    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
+    // Build dynamic WHERE conditions modestly without introducing heavy dependencies
+    where := "WHERE 1=1"
+    args := []any{}
+    idx := 1
+    if planeProjectID != "" {
+        where += " AND plane_project_id=$" + itoa(idx) + "::uuid"
+        args = append(args, planeProjectID)
+        idx++
+    }
+    if cnbRepoID != "" {
+        where += " AND cnb_repo_id=$" + itoa(idx)
+        args = append(args, cnbRepoID)
+        idx++
+    }
+    if activeParam == "true" || activeParam == "false" {
+        where += " AND active=$" + itoa(idx)
+        args = append(args, activeParam == "true")
+        idx++
+    }
+    q := "SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector FROM repo_project_mappings " + where
+    rows, err := d.SQL.QueryContext(ctx, q, args...)
+    if err != nil { return nil, err }
+    defer rows.Close()
+    var out []RepoProjectMapping
+    for rows.Next() {
+        var m RepoProjectMapping
+        if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
+            return nil, err
+        }
+        out = append(out, m)
+    }
+    return out, rows.Err()
+}
+
+// tiny helper to avoid strconv import bloat here
+func itoa(i int) string { return fmt.Sprintf("%d", i) }
 
 // PR state mapping
 type PRStateMapping struct {

@@ -34,6 +34,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 
     // Admin mappings
     e.POST("/admin/mappings/repo-project", h.AdminRepoProject)
+    e.GET("/admin/mappings/repo-project", h.AdminRepoProjectList)
     e.POST("/admin/mappings/pr-states", h.AdminPRStates)
     e.POST("/admin/mappings/users", h.AdminUsers)
     e.POST("/admin/mappings/labels", h.AdminLabels)

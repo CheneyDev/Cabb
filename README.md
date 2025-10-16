@@ -4,6 +4,7 @@
 
 - 设计文档：`docs/design/cnb-integration.md`、`docs/design/feishu-integration.md`、`docs/design/integration-feature-spec.md`
 - 操作指南：`docs/cnb-integration-steps.md`（CNB 集成与项目↔仓库关联）
+- 管理前端：`web/`（Next.js 15 + Tailwind，COSS 风格）
 - 架构说明：`docs/ARCHITECTURE.md`
 
 ## 重要提醒（必须）
@@ -159,7 +160,8 @@ make ci-verify
   - 本仓库已包含 `render.yaml` 与 `Dockerfile`。
   - 在 Render 仪表盘选择“Blueprint”→ 连接你的 GitHub 仓库 → 部署。
   - Blueprint 会创建：
-    - Web 服务：基于 `Dockerfile` 构建，健康检查路径 `/healthz`。
+    - Web 服务（后端）：基于 `Dockerfile` 构建，健康检查路径 `/healthz`。
+    - Web 服务（前端）：`web/`（Next.js 15）。
     - Postgres 数据库：`plane-integration-db`，连接串注入为 `DATABASE_URL`。
   - 首次部署会自动执行迁移：容器入口脚本 `scripts/entrypoint.sh` 会在启动时运行 `psql "$DATABASE_URL" -f /app/db/migrations/0001_init.sql`。
   - 在服务的环境变量中补齐：
@@ -169,6 +171,10 @@ make ci-verify
   - 验证：
     - 健康检查：`https://<your-service>.onrender.com/healthz`
     - OAuth 起始：`https://<your-service>.onrender.com/plane/oauth/start`
+
+  - 前端服务 `plane-integration-ui` 环境变量：
+    - `API_BASE`（服务端代理）：通常设置为你的后端外网地址，例如 `https://plane-integration.onrender.com`。
+    - `NEXT_PUBLIC_API_BASE`（浏览器直连，若需要）：同上；默认通过前端内置的 Route Handler 代理至后端，无需额外 CORS 配置。
 
 - 方式二：原生 Go（非 Docker）
   - 在 Render 创建 Web Service（Go），设置 `Build Command: go build -o server ./cmd/server`、`Start Command: ./server`。
@@ -340,6 +346,7 @@ docker run --rm -p 8080:8080 \
   - 评论命令（群聊内）：在已绑定的话题中回复 `/comment 这是一条评论` 或 `评论 这是一条评论`，服务会将该文本作为评论追加到对应的 Plane Issue（需要在绑定时能解析到 `workspace_slug` 与 `project_id`）。
 - 管理映射
   - `POST /admin/mappings/repo-project`（支持 label_selector：如 “后端,backend”）
+  - `GET /admin/mappings/repo-project`（查询映射；可选 query：`plane_project_id`/`cnb_repo_id`/`active=true|false`）
     - 多仓库场景：为同一个 `plane_project_id` 配置多条映射（不同 `cnb_repo_id`），并分别设置 `label_selector`。当 Plane 中创建 Issue 时，若其标签命中某条映射的 selector，则在对应 CNB 仓库下创建 Issue（支持一对多 fan-out）。后续 Plane 的更新/评论会同步到所有已建立链接的 CNB Issue。
     - label_selector 语义：
       - 分隔符支持逗号/空格/分号/竖线；不区分大小写。

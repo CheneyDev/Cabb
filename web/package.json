@@ -1,0 +1,26 @@
+{
+  "name": "plane-integration-ui",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev -p ${PORT:-3000}",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "lint": "echo 'lint disabled'"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.12",
+    "typescript": "^5.5.4"
+  }
+}
+

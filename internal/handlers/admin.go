@@ -45,6 +45,43 @@ func (h *Handler) AdminRepoProject(c echo.Context) error {
     return c.JSON(http.StatusOK, map[string]any{"result":"ok"})
 }
 
+// GET /admin/mappings/repo-project
+// Query params (optional): plane_project_id=uuid, cnb_repo_id=org/repo, active=true|false
+// Response: { "items": [ { "plane_project_id": "...", "plane_workspace_id": "...", "cnb_repo_id": "...", "issue_open_state_id": "...", "issue_closed_state_id": "...", "active": true, "sync_direction": "...", "label_selector": "..." } ] }
+func (h *Handler) AdminRepoProjectList(c echo.Context) error {
+    if !hHasDB(h) {
+        return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+    }
+    planeProjectID := c.QueryParam("plane_project_id")
+    cnbRepoID := c.QueryParam("cnb_repo_id")
+    activeParam := c.QueryParam("active")
+
+    items, err := h.db.ListRepoProjectMappings(c.Request().Context(), planeProjectID, cnbRepoID, activeParam)
+    if err != nil {
+        return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+    }
+    // Normalize to JSON-friendly map with snake_case keys
+    out := make([]map[string]any, 0, len(items))
+    for _, m := range items {
+        out = append(out, map[string]any{
+            "plane_project_id":     m.PlaneProjectID,
+            "plane_workspace_id":   m.PlaneWorkspaceID,
+            "cnb_repo_id":          m.CNBRepoID,
+            "issue_open_state_id":  nullString(m.IssueOpenStateID),
+            "issue_closed_state_id": nullString(m.IssueClosedStateID),
+            "active":               m.Active,
+            "sync_direction":       nullString(m.SyncDirection),
+            "label_selector":       nullString(m.LabelSelector),
+        })
+    }
+    return c.JSON(http.StatusOK, map[string]any{"items": out})
+}
+
+func nullString(s sql.NullString) any {
+    if s.Valid && s.String != "" { return s.String }
+    return nil
+}
+
 // POST /admin/mappings/pr-states
 // Body: { "cnb_repo_id":"group/repo", "plane_project_id":"uuid", ...state ids... }
 func (h *Handler) AdminPRStates(c echo.Context) error {

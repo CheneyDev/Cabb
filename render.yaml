@@ -23,6 +23,24 @@ services:
           property: connectionString
     # Migrations are applied in Docker entrypoint (scripts/entrypoint.sh) across all db/migrations/*.sql
 
+  - type: web
+    name: plane-integration-ui
+    env: node
+    plan: free
+    autoDeploy: true
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      # Server-side proxy base for route handlers
+      - key: API_BASE
+        value: https://plane-integration.onrender.com
+      # Client-side direct calls (only used when not hitting the proxy)
+      - key: NEXT_PUBLIC_API_BASE
+        value: https://plane-integration.onrender.com
+
 databases:
   - name: plane-integration-db
     plan: free
