@@ -39,6 +39,9 @@ type Config struct {
 
     // Crypto
     EncryptionKey     string
+
+    // Optional: redirect backend root to frontend
+    FrontendBaseURL  string
 }
 
 func FromEnv() Config {
@@ -69,6 +72,8 @@ func FromEnv() Config {
         CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
 
         EncryptionKey:      os.Getenv("ENCRYPTION_KEY"),
+
+        FrontendBaseURL:    os.Getenv("FRONTEND_BASE_URL"),
     }
     return cfg
 }

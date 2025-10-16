@@ -16,6 +16,8 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 
     // Health
     e.GET("/healthz", h.Healthz)
+    // Root redirect to frontend (optional)
+    e.GET("/", h.Root)
 
     // Plane OAuth + Webhook
     e.GET("/plane/oauth/start", h.PlaneOAuthStart)

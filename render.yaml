@@ -29,7 +29,7 @@ services:
     plan: free
     autoDeploy: true
     rootDir: web
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install --no-audit --prefer-offline && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_VERSION
