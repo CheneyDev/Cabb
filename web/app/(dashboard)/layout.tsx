@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 
-import { buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import type { AdminUser } from '@/lib/server/admin-session'
 import { fetchAdminSession } from '@/lib/server/admin-session'
 
