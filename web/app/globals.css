@@ -113,6 +113,11 @@
     opacity: 1;
   }
 
+  .nav-link--vertical {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .nav-link:hover {
     color: var(--foreground);
   }

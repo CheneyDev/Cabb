@@ -250,7 +250,7 @@ export default function MappingsPage() {
               <CardTitle>现有映射概览</CardTitle>
               <CardDescription>支持按 Plane 项目或 CNB 仓库筛选，并快速查看同步状态。</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="success">启用 {activeCount}</Badge>
               <Badge variant="muted">停用 {inactiveCount}</Badge>
               <Badge variant="outline">总计 {items.length}</Badge>
@@ -269,7 +269,7 @@ export default function MappingsPage() {
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-muted-foreground">显示状态</span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {(['all', 'active', 'inactive'] as ActiveFilter[]).map(value => (
                   <Button
                     key={value}
@@ -281,7 +281,7 @@ export default function MappingsPage() {
                 ))}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 md:justify-end">
               <Button type="button" variant="outline" onClick={() => load()} disabled={loading}>
                 {loading ? '加载中…' : '刷新'}
               </Button>
@@ -300,7 +300,7 @@ export default function MappingsPage() {
           </div>
           {fetchError && <Alert variant="destructive">{fetchError}</Alert>}
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow className="bg-transparent">
                   <TableHead>CNB 仓库</TableHead>

@@ -249,7 +249,7 @@ export default function AdminUsersPage() {
                   minLength={8}
                 />
               </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                 <span>账号创建后可在下方列表中查看并调整状态。</span>
                 <Button type="submit" disabled={createPending}>
                   {createPending ? '创建中…' : '创建用户'}
@@ -302,7 +302,7 @@ export default function AdminUsersPage() {
                   <option value="admin">admin</option>
                 </Select>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-dashed border-border px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-col text-sm">
                   <span className="font-medium text-foreground">账号启用状态</span>
                   <span className="text-xs text-muted-foreground">停用后不可登录，已登录会立即失效。</span>
@@ -375,12 +375,12 @@ export default function AdminUsersPage() {
           <CardDescription>查看管理员账号的启用状态、登录记录与创建时间。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>共 {users.length} 个系统用户，{users.filter(user => user.active).length} 个处于启用状态。</span>
             <Badge variant="info">实时数据</Badge>
           </div>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>显示名</TableHead>
