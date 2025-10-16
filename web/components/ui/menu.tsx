@@ -66,6 +66,26 @@ export const MenuPopup = React.forwardRef<MenuPopupElement, MenuPopupProps>(func
 
 MenuPopup.displayName = 'MenuPopup'
 
+type MenuPositionerElement = React.ElementRef<typeof MenuPrimitive.Positioner>
+type MenuPositionerProps = React.ComponentPropsWithoutRef<typeof MenuPrimitive.Positioner>
+
+type MenuPositionerState = ExtractState<NonNullable<MenuPositionerProps['className']>>
+
+export const MenuPositioner = React.forwardRef<MenuPositionerElement, MenuPositionerProps>(function MenuPositioner(
+  { className, ...props },
+  ref,
+) {
+  return (
+    <MenuPrimitive.Positioner
+      ref={ref}
+      className={mergeClassNames<MenuPositionerState>('relative z-50 flex justify-center', className)}
+      {...props}
+    />
+  )
+})
+
+MenuPositioner.displayName = 'MenuPositioner'
+
 type MenuItemElement = React.ElementRef<typeof MenuPrimitive.Item>
 type MenuItemProps = React.ComponentPropsWithoutRef<typeof MenuPrimitive.Item>
 
@@ -234,3 +254,4 @@ MenuSubPopup.displayName = 'MenuSubPopup'
 export const Menu = MenuPrimitive.Root
 export const MenuRadioGroup = MenuPrimitive.RadioGroup
 export const MenuSub = MenuPrimitive.SubmenuRoot
+export const MenuPortal = MenuPrimitive.Portal

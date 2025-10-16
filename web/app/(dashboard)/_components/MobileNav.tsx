@@ -9,6 +9,8 @@ import {
   Menu,
   MenuGroup,
   MenuItem,
+  MenuPortal,
+  MenuPositioner,
   MenuPopup,
   MenuSeparator,
   MenuTrigger,
@@ -47,29 +49,33 @@ export function MobileNav({ items, user }: MobileNavProps) {
           </svg>
           <span>{open ? '收起' : '菜单'}</span>
         </MenuTrigger>
-        <MenuPopup className="w-[min(18rem,92vw)] space-y-3 p-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-semibold text-foreground">{user.display_name || user.email}</span>
-            <span className="break-all text-xs text-muted-foreground">{user.email}</span>
-          </div>
-          <MenuSeparator className="my-2" />
-          <MenuGroup>
-            {items.map(item => {
-              const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))
-              return (
-                <MenuItem
-                  key={item.href}
-                  data-active={active}
-                  render={<Link href={item.href} />}
-                  onClick={() => setOpen(false)}
-                  className={cn('justify-start text-sm font-medium text-foreground/80', active && 'text-primary')}
-                >
-                  {item.label}
-                </MenuItem>
-              )
-            })}
-          </MenuGroup>
-        </MenuPopup>
+        <MenuPortal>
+          <MenuPositioner>
+            <MenuPopup className="w-[min(18rem,92vw)] space-y-3 p-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-semibold text-foreground">{user.display_name || user.email}</span>
+                <span className="break-all text-xs text-muted-foreground">{user.email}</span>
+              </div>
+              <MenuSeparator className="my-2" />
+              <MenuGroup>
+                {items.map(item => {
+                  const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`))
+                  return (
+                    <MenuItem
+                      key={item.href}
+                      data-active={active}
+                      render={<Link href={item.href} />}
+                      onClick={() => setOpen(false)}
+                      className={cn('justify-start text-sm font-medium text-foreground/80', active && 'text-primary')}
+                    >
+                      {item.label}
+                    </MenuItem>
+                  )
+                })}
+              </MenuGroup>
+            </MenuPopup>
+          </MenuPositioner>
+        </MenuPortal>
       </Menu>
     </div>
   )
