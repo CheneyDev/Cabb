@@ -55,12 +55,34 @@ export async function proxyAPI(
     headers.set('User-Agent', userAgent)
   }
 
-  const res = await fetch(url, {
-    method: init.method ?? req.method,
-    headers,
-    body: init.body ?? undefined,
-    cache: 'no-store',
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: init.method ?? req.method,
+      headers,
+      body: init.body ?? undefined,
+      cache: 'no-store',
+    })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown error'
+    const message = '无法连接后端服务，请稍后再试'
+    return Response.json(
+      {
+        error: {
+          code: 'upstream_unreachable',
+          message,
+          details: { reason },
+        },
+      },
+      {
+        status: 502,
+        headers: {
+          'x-proxy-error': message,
+        },
+      },
+    )
+  }
+
   const text = await res.text()
   const proxyRes = new Response(text, {
     status: res.status,

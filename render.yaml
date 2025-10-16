@@ -12,6 +12,12 @@ services:
         value: 8080
       - key: ENCRYPTION_KEY
         generateValue: true
+      - key: ADMIN_BOOTSTRAP_EMAIL
+        value: admin@example.com
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        value: ChangeMe123!
+      - key: ADMIN_BOOTSTRAP_NAME
+        value: Plane Admin
       - key: PLANE_BASE_URL
         value: https://api.plane.so
       # Update after the service URL is known

@@ -142,6 +142,7 @@ go build -o bin/plane-integration ./cmd/server
 - 会话策略：成功登录后服务端签发 `ADMIN_SESSION_COOKIE`（默认 `pi_admin_session`）并保留 12 小时，可通过 `ADMIN_SESSION_TTL_HOURS` 自定义；`ADMIN_SESSION_SECURE=true` 时 Cookie 将带上 `Secure` 标记。
 - 首次使用：可在部署环境设置 `ADMIN_BOOTSTRAP_EMAIL` 与 `ADMIN_BOOTSTRAP_PASSWORD`，启动时自动创建/激活首个管理员账号，随后请及时修改密码。
 - 测试账号：`.env.example` 预填了示例变量 `ADMIN_BOOTSTRAP_EMAIL=admin@example.com`、`ADMIN_BOOTSTRAP_PASSWORD=ChangeMe123!`。加载这组变量后首次启动会生成对应管理员，可直接使用 `admin@example.com / ChangeMe123!` 登录；生产环境请务必替换为自定义强密码。
+- 登录排查：若登录表单仍提示 `登录失败（5xx）`，请确认后端容器日志是否出现 `bootstrapped admin user` 或 `reactivated bootstrap admin`（表示默认账号已创建），并检查 `API_BASE` 是否指向正在运行的后端；代理无法连通时前端会显示“无法连接后端服务，请稍后再试”。
 - 系统用户管理：后台导航新增“系统用户管理”，可创建/禁用管理员账号、重置密码，表单操作对应后端接口：
   - `GET /admin/access/users`
   - `POST /admin/access/users`
@@ -180,6 +181,7 @@ make ci-verify
     - 必填：`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`
     - 可选：`PLANE_WEBHOOK_SECRET`、`INTEGRATION_TOKEN`、`LARK_*`
     - `PLANE_REDIRECT_URI`：部署后改为 `https://<your-service>.onrender.com/plane/oauth/callback`
+    - Blueprint 默认注入 `ADMIN_BOOTSTRAP_EMAIL=admin@example.com`、`ADMIN_BOOTSTRAP_PASSWORD=ChangeMe123!`、`ADMIN_BOOTSTRAP_NAME=Plane Admin`，首个部署完成后无需登录服务器即可直接使用测试账号；上线前请及时更换为强密码。
   - 验证：
     - 健康检查：`https://<your-service>.onrender.com/healthz`
     - OAuth 起始：`https://<your-service>.onrender.com/plane/oauth/start`
