@@ -474,7 +474,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
     if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
         cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
         switch action {
-        case "create":
+        case "create", "created":
             // Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
             for _, m := range mappings {
                 dir := strings.ToLower(m.SyncDirection.String)
@@ -534,7 +534,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                     "cnb_issue_iid":  iid,
                 })
             }
-        case "update":
+        case "update", "updated":
             if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
                 fields := map[string]any{}
                 if name != "" { fields["title"] = name }
@@ -597,7 +597,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                     }
                 }
             }
-        case "delete", "close":
+        case "delete", "deleted", "close", "closed":
             if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
                 for _, lk := range links {
                     if err := cn.CloseIssue(ctx, lk.Repo, lk.Number); err != nil {
