@@ -9,22 +9,56 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // COSS-inspired neutrals and accents
-        background: '#0A0A0A',
-        foreground: '#171717',
-        border: '#262626',
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        border: 'var(--border)',
+        ring: 'var(--ring)',
+        card: {
+          DEFAULT: 'var(--card)',
+          foreground: 'var(--card-foreground)',
+        },
         primary: {
-          DEFAULT: '#4F46E5',
-          foreground: '#ffffff',
+          DEFAULT: 'var(--primary)',
+          foreground: 'var(--primary-foreground)',
+        },
+        secondary: {
+          DEFAULT: 'var(--secondary)',
+          foreground: 'var(--secondary-foreground)',
         },
         accent: {
-          DEFAULT: '#06B6D4',
-          foreground: '#0A0A0A',
+          DEFAULT: 'var(--accent)',
+          foreground: 'var(--accent-foreground)',
         },
-        muted: '#525252',
+        muted: {
+          DEFAULT: 'var(--muted)',
+          foreground: 'var(--muted-foreground)',
+        },
+        destructive: {
+          DEFAULT: 'var(--destructive)',
+          foreground: 'var(--destructive-foreground)',
+        },
+        info: {
+          DEFAULT: 'var(--info)',
+          foreground: 'var(--info-foreground)',
+        },
+        success: {
+          DEFAULT: 'var(--success)',
+          foreground: 'var(--success-foreground)',
+        },
+        warning: {
+          DEFAULT: 'var(--warning)',
+          foreground: 'var(--warning-foreground)',
+        },
       },
       borderRadius: {
         xl: '1rem',
+        '3xl': '1.75rem',
+      },
+      boxShadow: {
+        coss: '0 1px 0 rgba(255,255,255,0.04), 0 22px 50px -28px rgba(15,23,42,0.7)',
+      },
+      fontFamily: {
+        sans: ['Inter', 'HarmonyOS Sans', 'SF Pro Display', 'Segoe UI', 'sans-serif'],
       },
     },
   },
