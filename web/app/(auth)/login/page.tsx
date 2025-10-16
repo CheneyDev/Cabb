@@ -118,6 +118,10 @@ export default function LoginPage() {
 }
 
 async function resolveError(res: Response, fallback: string) {
+  const proxyMessage = res.headers.get('x-proxy-error')
+  if (proxyMessage) {
+    return proxyMessage
+  }
   const text = await res.text()
   if (!text) return fallback
   try {
