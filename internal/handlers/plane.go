@@ -539,6 +539,16 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                     "result":         "created",
                     "cnb_issue_iid":  iid,
                 })
+                // Set labels to CNB (ensure labels exist first)
+                if len(labels) > 0 {
+                    if err := cn.EnsureRepoLabels(ctx, m.CNBRepoID, labels); err != nil {
+                        LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"ensure_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_labels_ensure_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
+                    } else if err := cn.SetIssueLabels(ctx, m.CNBRepoID, iid, labels); err != nil {
+                        LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"set_issue_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_set_labels_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
+                    } else {
+                        LogStructured("info", map[string]any{"event":"plane.issue.cnbrpc","op":"set_issue_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"result":"set"})
+                    }
+                }
             }
         case "update", "updated":
             if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
@@ -566,6 +576,21 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                             "op":             "update_issue",
                             "result":         "updated",
                         })
+                    }
+                }
+                // Sync labels if provided in webhook
+                if len(labels) > 0 {
+                    // Ensure labels exist in repo
+                    if err := cn.EnsureRepoLabels(ctx, links[0].Repo, labels); err != nil {
+                        LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"ensure_labels","repo":links[0].Repo,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_labels_ensure_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
+                    } else {
+                        for _, lk := range links {
+                            if err := cn.SetIssueLabels(ctx, lk.Repo, lk.Number, labels); err != nil {
+                                LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"set_issue_labels","repo":lk.Repo,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_set_labels_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
+                            } else {
+                                LogStructured("info", map[string]any{"event":"plane.issue.cnbrpc","op":"set_issue_labels","repo":lk.Repo,"delivery_id":deliveryID,"result":"set"})
+                            }
+                        }
                     }
                 }
             }

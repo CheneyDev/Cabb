@@ -75,6 +75,142 @@ func expand(tpl string, repo, number string) (string, error) {
     return s, nil
 }
 
+// Label represents a minimal label entity from CNB.
+type Label struct {
+    Name  string `json:"name"`
+    Color string `json:"color"`
+}
+
+// EnsureRepoLabels makes sure the given label names exist in the repository.
+// It creates missing labels with a default color.
+func (c *Client) EnsureRepoLabels(ctx context.Context, repo string, names []string) error {
+    if len(names) == 0 { return nil }
+    // Build a quick lookup of existing labels by name (case-insensitive match by exact name)
+    existing := map[string]struct{}{}
+    // Query by keyword per name to reduce payload; fallback to empty keyword list if needed.
+    for _, n := range names {
+        n = strings.TrimSpace(n)
+        if n == "" { continue }
+        ls, _ := c.ListRepoLabels(ctx, repo, n)
+        for _, l := range ls {
+            if strings.EqualFold(l.Name, n) { existing[strings.ToLower(n)] = struct{}{}; break }
+        }
+    }
+    // Create missing labels
+    for _, n := range names {
+        n = strings.TrimSpace(n)
+        if n == "" { continue }
+        if _, ok := existing[strings.ToLower(n)]; ok { continue }
+        if err := c.CreateRepoLabel(ctx, repo, n, defaultLabelColor(n)); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+
+// ListRepoLabels lists labels for a repo, optionally filtered by keyword (name contains).
+func (c *Client) ListRepoLabels(ctx context.Context, repo, keyword string) ([]Label, error) {
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" { return nil, errors.New("missing CNB base URL or token") }
+    p, err := expand("/{repo}/-/labels", repo, "")
+    if err != nil { return nil, err }
+    ep, err := c.join(p)
+    if err != nil { return nil, err }
+    if keyword != "" {
+        u, _ := url.Parse(ep)
+        q := u.Query()
+        q.Set("keyword", keyword)
+        u.RawQuery = q.Encode()
+        ep = u.String()
+    }
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+    if err != nil { return nil, err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return nil, err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return nil, fmt.Errorf("cnb list labels status=%d", resp.StatusCode) }
+    var out []Label
+    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return nil, err }
+    return out, nil
+}
+
+// CreateRepoLabel creates a label in the repository.
+func (c *Client) CreateRepoLabel(ctx context.Context, repo, name, color string) error {
+    if strings.TrimSpace(name) == "" { return errors.New("label name required") }
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" { return errors.New("missing CNB base URL or token") }
+    p, err := expand("/{repo}/-/labels", repo, "")
+    if err != nil { return err }
+    ep, err := c.join(p)
+    if err != nil { return err }
+    payload := map[string]any{"name": name}
+    if strings.TrimSpace(color) != "" { payload["color"] = strings.TrimPrefix(color, "#") }
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil { return err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode == http.StatusNotAcceptable {
+        _ = resp.Body.Close()
+        req2, err2 := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+        if err2 != nil { return err2 }
+        req2.Header.Set("Authorization", "Bearer "+c.Token)
+        req2.Header.Set("Content-Type", "application/json")
+        req2.Header.Set("Accept", "application/vnd.cnb.api+json")
+        resp2, err2 := c.httpClient().Do(req2)
+        if err2 != nil { return err2 }
+        defer resp2.Body.Close()
+        if resp2.StatusCode >= 200 && resp2.StatusCode < 300 { return nil }
+        return fmt.Errorf("cnb create label status=%d", resp2.StatusCode)
+    }
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("cnb create label status=%d", resp.StatusCode) }
+    return nil
+}
+
+// SetIssueLabels sets the full labels list for an issue (replaces existing).
+func (c *Client) SetIssueLabels(ctx context.Context, repo, number string, names []string) error {
+    if len(names) == 0 { return nil }
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" { return errors.New("missing CNB base URL or token") }
+    p, err := expand("/{repo}/-/issues/{number}/labels", repo, number)
+    if err != nil { return err }
+    ep, err := c.join(p)
+    if err != nil { return err }
+    payload := map[string]any{"labels": names}
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPut, ep, bytes.NewReader(b))
+    if err != nil { return err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode == http.StatusNotAcceptable {
+        _ = resp.Body.Close()
+        req2, err2 := http.NewRequestWithContext(ctx, http.MethodPut, ep, bytes.NewReader(b))
+        if err2 != nil { return err2 }
+        req2.Header.Set("Authorization", "Bearer "+c.Token)
+        req2.Header.Set("Content-Type", "application/json")
+        req2.Header.Set("Accept", "application/vnd.cnb.api+json")
+        resp2, err2 := c.httpClient().Do(req2)
+        if err2 != nil { return err2 }
+        defer resp2.Body.Close()
+        if resp2.StatusCode >= 200 && resp2.StatusCode < 300 { return nil }
+        return fmt.Errorf("cnb set issue labels status=%d", resp2.StatusCode)
+    }
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("cnb set issue labels status=%d", resp.StatusCode) }
+    return nil
+}
+
+func defaultLabelColor(name string) string {
+    // A neutral default color without '#'; platforms usually accept 6-hex RGB
+    return "ededed"
+}
+
 // CreateIssue creates an issue and returns its number (string).
 func (c *Client) CreateIssue(ctx context.Context, repo string, title, descriptionHTML string) (string, error) {
     if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
