@@ -539,11 +539,25 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                     "result":         "created",
                     "cnb_issue_iid":  iid,
                 })
-                // Set labels to CNB (ensure labels exist first)
+                // Set labels to CNB (ensure labels exist first, with colors if available)
                 if len(labels) > 0 {
-                    if err := cn.EnsureRepoLabels(ctx, m.CNBRepoID, labels); err != nil {
+                    // Build label items with colors from webhook
+                    items := dataGetLabelItems(data)
+                    // Convert to CNB label format (color without '#')
+                    toCreate := make([]cnb.Label, 0, len(items))
+                    if len(items) > 0 {
+                        for _, it := range items {
+                            toCreate = append(toCreate, cnb.Label{Name: it.Name, Color: strings.TrimPrefix(it.Color, "#")})
+                        }
+                    }
+                    if len(toCreate) > 0 {
+                        if err := cn.EnsureRepoLabelsWithColors(ctx, m.CNBRepoID, toCreate); err != nil {
+                            LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"ensure_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_labels_ensure_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
+                        }
+                    } else if err := cn.EnsureRepoLabels(ctx, m.CNBRepoID, labels); err != nil {
                         LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"ensure_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_labels_ensure_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
-                    } else if err := cn.SetIssueLabels(ctx, m.CNBRepoID, iid, labels); err != nil {
+                    }
+                    if err := cn.SetIssueLabels(ctx, m.CNBRepoID, iid, labels); err != nil {
                         LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"set_issue_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_set_labels_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
                     } else {
                         LogStructured("info", map[string]any{"event":"plane.issue.cnbrpc","op":"set_issue_labels","repo":m.CNBRepoID,"delivery_id":deliveryID,"result":"set"})
@@ -580,8 +594,19 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                 }
                 // Sync labels if provided in webhook
                 if len(labels) > 0 {
-                    // Ensure labels exist in repo
-                    if err := cn.EnsureRepoLabels(ctx, links[0].Repo, labels); err != nil {
+                    // Ensure labels exist in repo (with colors when available)
+                    items := dataGetLabelItems(data)
+                    toCreate := make([]cnb.Label, 0, len(items))
+                    if len(items) > 0 {
+                        for _, it := range items {
+                            toCreate = append(toCreate, cnb.Label{Name: it.Name, Color: strings.TrimPrefix(it.Color, "#")})
+                        }
+                    }
+                    if len(toCreate) > 0 {
+                        if err := cn.EnsureRepoLabelsWithColors(ctx, links[0].Repo, toCreate); err != nil {
+                            LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"ensure_labels","repo":links[0].Repo,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_labels_ensure_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
+                        }
+                    } else if err := cn.EnsureRepoLabels(ctx, links[0].Repo, labels); err != nil {
                         LogStructured("error", map[string]any{"event":"plane.issue.cnbrpc","op":"ensure_labels","repo":links[0].Repo,"delivery_id":deliveryID,"error":map[string]any{"code":"cnb_labels_ensure_failed","message": truncate(fmt.Sprintf("%v", err), 200)}})
                     } else {
                         for _, lk := range links {
@@ -757,6 +782,32 @@ func dataGetLabels(m map[string]any) []string {
         }
     }
     return names
+}
+
+// planeLabel holds name + color parsed from Plane webhook payload
+type planeLabel struct {
+    Name  string
+    Color string
+}
+
+// dataGetLabelItems extracts label name and color (if available: 'color' without enforcing '#').
+func dataGetLabelItems(m map[string]any) []planeLabel {
+    out := make([]planeLabel, 0, 8)
+    if m == nil { return out }
+    if v, ok := m["labels"]; ok {
+        if arr, ok := v.([]any); ok {
+            for _, it := range arr {
+                if mp, ok := it.(map[string]any); ok {
+                    name, _ := mp["name"].(string)
+                    color, _ := mp["color"].(string)
+                    if strings.TrimSpace(name) != "" {
+                        out = append(out, planeLabel{Name: name, Color: color})
+                    }
+                }
+            }
+        }
+    }
+    return out
 }
 
 // labelSelectorMatch returns true if selector contains any token present in labels (case-insensitive)

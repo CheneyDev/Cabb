@@ -108,6 +108,31 @@ func (c *Client) EnsureRepoLabels(ctx context.Context, repo string, names []stri
     return nil
 }
 
+// EnsureRepoLabelsWithColors ensures labels exist with optional colors.
+// If a color is provided (non-empty, may include leading '#'), it will be set when creating the label.
+func (c *Client) EnsureRepoLabelsWithColors(ctx context.Context, repo string, want []Label) error {
+    if len(want) == 0 { return nil }
+    // Build existing set
+    existing := map[string]struct{}{}
+    for _, l := range want {
+        n := strings.TrimSpace(l.Name)
+        if n == "" { continue }
+        ls, _ := c.ListRepoLabels(ctx, repo, n)
+        for _, e := range ls {
+            if strings.EqualFold(e.Name, n) { existing[strings.ToLower(n)] = struct{}{}; break }
+        }
+    }
+    for _, l := range want {
+        n := strings.TrimSpace(l.Name)
+        if n == "" { continue }
+        if _, ok := existing[strings.ToLower(n)]; ok { continue }
+        color := strings.TrimPrefix(strings.TrimSpace(l.Color), "#")
+        if color == "" { color = defaultLabelColor(n) }
+        if err := c.CreateRepoLabel(ctx, repo, n, color); err != nil { return err }
+    }
+    return nil
+}
+
 // ListRepoLabels lists labels for a repo, optionally filtered by keyword (name contains).
 func (c *Client) ListRepoLabels(ctx context.Context, repo, keyword string) ([]Label, error) {
     if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" { return nil, errors.New("missing CNB base URL or token") }
