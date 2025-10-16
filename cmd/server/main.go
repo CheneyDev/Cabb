@@ -21,6 +21,12 @@ func main() {
     e.HideBanner = true
     e.HidePort = true
 
+    // Standard middlewares: recover from panics and attach request id (custom, dependency-free)
+    e.Use(handlers.Recover())
+    e.Use(handlers.RequestID())
+    // Structured JSON request logging (per AGENTS.md)
+    e.Use(handlers.StructuredLogger())
+
     // Basic server-level timeouts via stdlib server
     srv := &http.Server{
         Addr:              cfg.Address(),

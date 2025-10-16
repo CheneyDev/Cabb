@@ -3,6 +3,7 @@
 将 Plane 作为统一的“工作项中枢”，无缝衔接 CNB 与飞书（Feishu）协作场景，打通需求、开发与沟通的全流程。本仓库提供一个可运行的 Go/Echo 脚手架、数据库迁移，以及后续功能实现的落地入口。
 
 - 设计文档：`docs/design/cnb-integration.md`、`docs/design/feishu-integration.md`、`docs/design/integration-feature-spec.md`
+- 操作指南：`docs/cnb-integration-steps.md`（CNB 集成与项目↔仓库关联）
 - 架构说明：`docs/ARCHITECTURE.md`
 
 ## 重要提醒（必须）

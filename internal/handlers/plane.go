@@ -10,6 +10,7 @@ import (
     "errors"
     "fmt"
     "io"
+    "log"
     "net/http"
     "net/url"
     "strings"
@@ -380,6 +381,26 @@ func writeError(c echo.Context, status int, code, message string, details map[st
     if reqID == "" {
         reqID = c.Request().Header.Get("X-Request-ID")
     }
+    // Structured error log (do not include sensitive info)
+    // Fields align with AGENTS.md: request_id/source/endpoint/latency_ms/result + error.code
+    ep := c.Path()
+    if ep == "" { ep = c.Request().URL.Path }
+    src := DetectSource(ep)
+    // Latency is not directly available here; omit or set -1
+    errLog := map[string]any{
+        "time":       time.Now().UTC().Format(time.RFC3339),
+        "level":      "error",
+        "request_id": reqID,
+        "endpoint":   ep,
+        "source":     src,
+        "status":     status,
+        "result":     "error",
+        "error": map[string]any{
+            "code":    code,
+            "message": message,
+        },
+    }
+    if b, e := json.Marshal(errLog); e == nil { log.Println(string(b)) }
     return c.JSON(status, map[string]any{
         "error": map[string]any{
             "code":       code,
