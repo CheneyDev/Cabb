@@ -472,7 +472,13 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 
     // CNB outbound fan-out only when enabled and mappings exist
     if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
-        cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+        cn := &cnb.Client{
+            BaseURL:          h.cfg.CNBBaseURL,
+            Token:            h.cfg.CNBAppToken,
+            IssueCreatePath:  h.cfg.CNBIssueCreatePath,
+            IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
+            IssueCommentPath: h.cfg.CNBIssueCommentPath,
+        }
         switch action {
         case "create", "created":
             // Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
@@ -649,7 +655,13 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
     // CNB outbound when enabled (fan-out to all linked issues)
     if h.cfg.CNBOutboundEnabled {
         if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
-            cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken}
+            cn := &cnb.Client{
+                BaseURL:          h.cfg.CNBBaseURL,
+                Token:            h.cfg.CNBAppToken,
+                IssueCreatePath:  h.cfg.CNBIssueCreatePath,
+                IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
+                IssueCommentPath: h.cfg.CNBIssueCommentPath,
+            }
             for _, lk := range links {
                 if err := cn.AddComment(ctx, lk.Repo, lk.Number, commentHTML); err != nil {
                     LogStructured("error", map[string]any{

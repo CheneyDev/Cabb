@@ -56,7 +56,15 @@ func (c *Client) defaultCommentPath() string {
 
 func expand(tpl string, repo, number string) (string, error) {
     if tpl == "" { return "", errors.New("empty path template") }
-    s := strings.ReplaceAll(tpl, "{repo}", url.PathEscape(repo))
+    // Encode repo path by segments so that slashes remain separators
+    // e.g., "org/repo" => "org/repo" but each segment escaped
+    repoEsc := repo
+    if repo != "" {
+        parts := strings.Split(repo, "/")
+        for i, p := range parts { parts[i] = url.PathEscape(p) }
+        repoEsc = strings.Join(parts, "/")
+    }
+    s := strings.ReplaceAll(tpl, "{repo}", repoEsc)
     // Backward-compat: support {issue_iid} placeholder name
     s = strings.ReplaceAll(s, "{issue_iid}", url.PathEscape(number))
     s = strings.ReplaceAll(s, "{number}", url.PathEscape(number))
