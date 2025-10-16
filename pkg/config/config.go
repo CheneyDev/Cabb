@@ -42,6 +42,14 @@ type Config struct {
 
     // Optional: redirect backend root to frontend
     FrontendBaseURL  string
+
+    // Admin console auth
+    AdminSessionCookie   string
+    AdminSessionTTLHours int
+    AdminSessionSecure   bool
+    AdminBootstrapEmail  string
+    AdminBootstrapPassword string
+    AdminBootstrapName   string
 }
 
 func FromEnv() Config {
@@ -74,6 +82,13 @@ func FromEnv() Config {
         EncryptionKey:      os.Getenv("ENCRYPTION_KEY"),
 
         FrontendBaseURL:    os.Getenv("FRONTEND_BASE_URL"),
+
+        AdminSessionCookie:   strFromEnv("ADMIN_SESSION_COOKIE", "pi_admin_session"),
+        AdminSessionTTLHours: intFromEnv("ADMIN_SESSION_TTL_HOURS", 12),
+        AdminSessionSecure:   boolFromEnv("ADMIN_SESSION_SECURE", false),
+        AdminBootstrapEmail:  os.Getenv("ADMIN_BOOTSTRAP_EMAIL"),
+        AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
+        AdminBootstrapName:   strFromEnv("ADMIN_BOOTSTRAP_NAME", "Plane Admin"),
     }
     return cfg
 }

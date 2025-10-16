@@ -47,6 +47,7 @@
 - Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`、`PLANE_APP_BASE_URL`
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
 - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
+- 管理后台：`ADMIN_SESSION_COOKIE`、`ADMIN_SESSION_TTL_HOURS`、`ADMIN_SESSION_SECURE`、`ADMIN_BOOTSTRAP_EMAIL`、`ADMIN_BOOTSTRAP_PASSWORD`
  - CNB（出站开启）：
    - `CNB_OUTBOUND_ENABLED=true`、`CNB_BASE_URL=https://api.cnb.cool`
    - 路径遵循官方 swagger，固定且无需通过环境变量配置：
@@ -135,6 +136,17 @@ go build -o bin/plane-integration ./cmd/server
 ```
 
 启动后访问健康检查：`GET http://localhost:8080/healthz`
+
+### 管理后台认证与用户管理
+- 登录入口：打开前端面板时未登录会跳转到 `/login`，使用管理员邮箱 + 密码获取后台会话。
+- 会话策略：成功登录后服务端签发 `ADMIN_SESSION_COOKIE`（默认 `pi_admin_session`）并保留 12 小时，可通过 `ADMIN_SESSION_TTL_HOURS` 自定义；`ADMIN_SESSION_SECURE=true` 时 Cookie 将带上 `Secure` 标记。
+- 首次使用：可在部署环境设置 `ADMIN_BOOTSTRAP_EMAIL` 与 `ADMIN_BOOTSTRAP_PASSWORD`，启动时自动创建/激活首个管理员账号，随后请及时修改密码。
+- 测试账号：`.env.example` 预填了示例变量 `ADMIN_BOOTSTRAP_EMAIL=admin@example.com`、`ADMIN_BOOTSTRAP_PASSWORD=ChangeMe123!`。加载这组变量后首次启动会生成对应管理员，可直接使用 `admin@example.com / ChangeMe123!` 登录；生产环境请务必替换为自定义强密码。
+- 系统用户管理：后台导航新增“系统用户管理”，可创建/禁用管理员账号、重置密码，表单操作对应后端接口：
+  - `GET /admin/access/users`
+  - `POST /admin/access/users`
+  - `PATCH /admin/access/users/{id}`
+  - `POST /admin/access/users/{id}/reset-password`
 
 ### Makefile（本地便捷命令）
 ```
