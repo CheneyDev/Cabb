@@ -479,6 +479,8 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	descHTML, _ := dataGetString(data, "description_html")
 	// Extract optional date fields (tolerant to Plane payload variants)
 	startDate, dueDate := dataGetDates(data)
+	// Extract priority and map to CNB (P0..P3/-1P/-2P/"")
+	cnbPriority, planePriority, hasPriority := dataGetPriority(data)
 	// Best-effort extract Plane assignee user IDs (UUID strings)
 	assigneePlaneIDs := dataGetAssigneeIDs(data)
 
@@ -497,6 +499,9 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 		"labels":           labels,
 		"start_date_set":   startDate != "",
 		"due_date_set":     dueDate != "",
+		"priority_set":     hasPriority,
+		"plane_priority":   planePriority,
+		"cnb_priority":     cnbPriority,
 		"assignees_plane":  len(assigneePlaneIDs),
 		"mappings_count":   len(mappings),
 		"outbound_enabled": h.cfg.CNBOutboundEnabled,
@@ -607,14 +612,17 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"cnb_issue_iid":  iid,
 				})
 				unlock()
-				// If dates present, patch them on CNB issue
-				if startDate != "" || dueDate != "" {
+				// If dates/priority present, patch them on CNB issue
+				if startDate != "" || dueDate != "" || hasPriority {
 					dfields := map[string]any{}
 					if startDate != "" {
 						dfields["start_date"] = startDate
 					}
 					if dueDate != "" {
 						dfields["end_date"] = dueDate
+					}
+					if hasPriority {
+						dfields["priority"] = cnbPriority
 					}
 					LogStructured("info", map[string]any{
 						"event":          "plane.issue.cnbrpc",
@@ -732,6 +740,9 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 				if dueDate != "" {
 					fields["end_date"] = dueDate
 				}
+				if hasPriority {
+					fields["priority"] = cnbPriority
+				}
 				// Map Plane assignees to CNB user IDs
 				var cnbAssignees []string
 				if len(assigneePlaneIDs) > 0 {
@@ -749,6 +760,9 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"title_set":             name != "",
 					"body_set":              descHTML != "",
 					"labels_in_payload":     len(labels),
+					"priority_set":          hasPriority,
+					"plane_priority":        planePriority,
+					"cnb_priority":          cnbPriority,
 					"start_date_set":        startDate != "",
 					"end_date_set":          dueDate != "",
 					"plane_assignees_count": len(assigneePlaneIDs),
@@ -1113,6 +1127,89 @@ func dataGetDates(m map[string]any) (start string, due string) {
 	start = readFirst("start_date", "start_on", "start", "start_at")
 	due = readFirst("due_date", "target_date", "due_on", "due", "target_on", "target_at")
 	return
+}
+
+// dataGetPriority extracts Plane priority and maps to CNB priority string.
+// Plane commonly uses: urgent, high, medium, low, none (case-insensitive).
+// Some payloads may carry numeric levels; we map as: 4→P0, 3→P1, 2→P2, 1→P3, 0→"".
+// Returns: cnbPriority, planePriorityLabel, hasPriorityFlag.
+func dataGetPriority(m map[string]any) (string, string, bool) {
+    if m == nil { return "", "", false }
+    // Try several keys
+    tryKeys := []string{"priority", "priority_name", "priority_label", "priority_value", "priority_level"}
+    var raw any
+    for _, k := range tryKeys {
+        if v, ok := m[k]; ok {
+            raw = v
+            break
+        }
+    }
+    if raw == nil { return "", "", false }
+    // Map helpers
+    strMap := func(s string) (string, string, bool) {
+        n := strings.ToLower(strings.TrimSpace(s))
+        if n == "" { return "", "", false }
+        switch n {
+        case "urgent", "critical", "blocker", "p0":
+            return "P0", "urgent", true
+        case "high", "p1":
+            return "P1", "high", true
+        case "medium", "normal", "p2":
+            return "P2", "medium", true
+        case "low", "minor", "p3":
+            return "P3", "low", true
+        case "none", "no", "null", "none_priority", "" :
+            return "", "none", true
+        case "-1p":
+            return "-1P", "-1p", true
+        case "-2p":
+            return "-2P", "-2p", true
+        }
+        // Unknown string: best-effort pass-through when it looks like CNB value
+        up := strings.ToUpper(n)
+        if up == "P0" || up == "P1" || up == "P2" || up == "P3" || up == "-1P" || up == "-2P" {
+            return up, n, true
+        }
+        return "", n, false
+    }
+    numMap := func(f float64) (string, string, bool) {
+        // Accept integers 0..4
+        switch int(f) {
+        case 4:
+            return "P0", "urgent", true
+        case 3:
+            return "P1", "high", true
+        case 2:
+            return "P2", "medium", true
+        case 1:
+            return "P3", "low", true
+        case 0:
+            return "", "none", true
+        }
+        return "", "", false
+    }
+    switch t := raw.(type) {
+    case string:
+        return strMap(t)
+    case float64:
+        return numMap(t)
+    case int:
+        return numMap(float64(t))
+    case map[string]any:
+        // try common nested keys
+        if v, ok := t["name"]; ok {
+            if s, ok := v.(string); ok { return strMap(s) }
+        }
+        if v, ok := t["value"]; ok {
+            switch vv := v.(type) {
+            case string:
+                return strMap(vv)
+            case float64:
+                return numMap(vv)
+            }
+        }
+    }
+    return "", "", false
 }
 
 // keysOf returns sorted keys of the given map for concise logging.
