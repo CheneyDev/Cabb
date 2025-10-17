@@ -11,64 +11,11 @@ import { LogoutButton } from './_components/logout-button'
 import { MobileNav } from './_components/MobileNav'
 import { ThemeToggle } from '@/components/theme-toggle'
 
-const iconProps = {
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 1.8,
-  strokeLinecap: 'round',
-  strokeLinejoin: 'round',
-} as const
-
 const navItems: NavItem[] = [
-  {
-    href: '/',
-    label: '概览',
-    icon: (
-      <svg aria-hidden="true" {...iconProps}>
-        <path d="M4 5.5h7v6H4z" />
-        <path d="M13 5.5h7v4H13z" />
-        <path d="M13 11.5h7v7.5H13z" />
-        <path d="M4 13.5h7v5.5H4z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/mappings',
-    label: 'Repo↔Project 同步',
-    icon: (
-      <svg aria-hidden="true" {...iconProps}>
-        <path d="M6 8h8" />
-        <path d="M11.5 5.5 14 8l-2.5 2.5" />
-        <path d="M18 16h-8" />
-        <path d="M12.5 18.5 10 16l2.5-2.5" />
-        <rect x="4" y="4" width="4" height="4" rx="1" />
-        <rect x="16" y="16" width="4" height="4" rx="1" />
-      </svg>
-    ),
-  },
-  {
-    href: '/users',
-    label: '用户映射管理',
-    icon: (
-      <svg aria-hidden="true" {...iconProps}>
-        <circle cx="12" cy="9" r="3.2" />
-        <path d="M6.5 19.5c.7-2.6 2.9-4.5 5.5-4.5s4.8 1.9 5.5 4.5" />
-        <path d="M4.5 19.5c.4-1.8 1.8-3.2 3.6-3.8" />
-        <path d="M19.5 19.5c-.4-1.8-1.8-3.2-3.6-3.8" />
-      </svg>
-    ),
-  },
-  {
-    href: '/admin-users',
-    label: '系统用户管理',
-    icon: (
-      <svg aria-hidden="true" {...iconProps}>
-        <path d="M12 4.5 5 8v4c0 4.1 2.9 7.8 7 8.8 4.1-1 7-4.7 7-8.8V8z" />
-        <circle cx="12" cy="11" r="2.7" />
-      </svg>
-    ),
-  },
+  { href: '/', label: '概览' },
+  { href: '/mappings', label: 'Repo↔Project 同步' },
+  { href: '/users', label: '用户映射管理' },
+  { href: '/admin-users', label: '系统用户管理' },
 ]
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
