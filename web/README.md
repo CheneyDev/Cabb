@@ -18,6 +18,12 @@ API_BASE=http://localhost:8080 npm run dev
 
 Open http://localhost:3000
 
+## Theme
+
+- Supports light and dark themes.
+- Toggle in the header; preference is saved in `localStorage` (`theme=light|dark`).
+- Default is dark for backward compatibility; if no preference is saved, the UI follows system preference on first load.
+
 ## Env
 
 - `API_BASE` (server): The backend base URL used by route handlers (no CORS needed).
@@ -27,4 +33,3 @@ Open http://localhost:3000
 
 - `/` Overview
 - `/mappings` List + create Repo↔Project mappings
-

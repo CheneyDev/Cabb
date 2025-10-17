@@ -9,6 +9,7 @@ import { fetchAdminSession } from '@/lib/server/admin-session'
 import { DashboardNav, type NavItem } from './_components/nav-links'
 import { LogoutButton } from './_components/logout-button'
 import { MobileNav } from './_components/MobileNav'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const navItems: NavItem[] = [
   { href: '/', label: '概览' },
@@ -60,6 +61,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             </Link>
             <div className="flex items-center gap-2 md:hidden">
               <MobileNav items={navItems} user={user} />
+              <ThemeToggle />
               <LogoutButton />
             </div>
           </div>
@@ -71,6 +73,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               <span className="truncate text-sm font-semibold text-foreground">{user.display_name || user.email}</span>
               <span className="truncate text-xs text-muted-foreground">{user.email}</span>
             </div>
+            <ThemeToggle />
             <LogoutButton />
           </div>
         </div>
