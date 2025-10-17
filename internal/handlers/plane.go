@@ -571,29 +571,27 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"result":         "created",
 					"cnb_issue_iid":  iid,
 				})
-				// If we have assignees from Plane and a mapping to CNB users, set them after creation (CNB supports PATCH with assignees)
+				// If we have assignees from Plane and a mapping to CNB users, set them after creation via dedicated assignees endpoint
 				if len(assigneePlaneIDs) > 0 {
 					if cnbUserIDs, _ := h.db.FindCNBUserIDsByPlaneUsers(ctx, assigneePlaneIDs); len(cnbUserIDs) > 0 {
-						pre := map[string]any{
+						LogStructured("info", map[string]any{
 							"event":           "plane.issue.cnbrpc",
 							"delivery_id":     deliveryID,
 							"action":          action,
 							"plane_issue_id":  planeIssueID,
 							"repo":            m.CNBRepoID,
-							"op":              "update_issue",
-							"fields_keys":     []string{"assignees"},
+							"op":              "update_assignees",
 							"assignees_count": len(cnbUserIDs),
-						}
-						LogStructured("info", pre)
-						if err := cn.UpdateIssue(ctx, m.CNBRepoID, iid, map[string]any{"assignees": cnbUserIDs}); err != nil {
+						})
+						if err := cn.UpdateIssueAssignees(ctx, m.CNBRepoID, iid, cnbUserIDs); err != nil {
 							LogStructured("error", map[string]any{
 								"event":          "plane.issue.cnbrpc",
 								"delivery_id":    deliveryID,
 								"action":         action,
 								"plane_issue_id": planeIssueID,
 								"repo":           m.CNBRepoID,
-								"op":             "update_issue",
-								"error":          map[string]any{"code": "cnb_update_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
+								"op":             "update_assignees",
+								"error":          map[string]any{"code": "cnb_update_assignees_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
 							})
 						} else {
 							LogStructured("info", map[string]any{
@@ -602,10 +600,20 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 								"action":         action,
 								"plane_issue_id": planeIssueID,
 								"repo":           m.CNBRepoID,
-								"op":             "update_issue",
+								"op":             "update_assignees",
 								"result":         "updated",
 							})
 						}
+					} else {
+						LogStructured("info", map[string]any{
+							"event":           "plane.issue.assignees.skip",
+							"delivery_id":     deliveryID,
+							"action":          action,
+							"plane_issue_id":  planeIssueID,
+							"repo":            m.CNBRepoID,
+							"reason":          "no_user_mapping",
+							"plane_assignees": assigneePlaneIDs,
+						})
 					}
 				}
 				// Set labels to CNB (ensure labels exist first, with colors if available)
@@ -647,7 +655,6 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 				if len(assigneePlaneIDs) > 0 {
 					if ids, _ := h.db.FindCNBUserIDsByPlaneUsers(ctx, assigneePlaneIDs); len(ids) > 0 {
 						cnbAssignees = ids
-						fields["assignees"] = cnbAssignees
 					}
 				}
 				// Decision log for outbound update fields
@@ -711,6 +718,49 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 							"repo":           lk.Repo,
 							"op":             "update_issue",
 							"result":         "updated",
+						})
+					}
+					// Then, if we have assignee mapping, update via dedicated endpoint
+					if len(cnbAssignees) > 0 {
+						LogStructured("info", map[string]any{
+							"event":           "plane.issue.cnbrpc",
+							"delivery_id":     deliveryID,
+							"action":          action,
+							"plane_issue_id":  planeIssueID,
+							"repo":            lk.Repo,
+							"op":              "update_assignees",
+							"assignees_count": len(cnbAssignees),
+						})
+						if err := cn.UpdateIssueAssignees(ctx, lk.Repo, lk.Number, cnbAssignees); err != nil {
+							LogStructured("error", map[string]any{
+								"event":          "plane.issue.cnbrpc",
+								"delivery_id":    deliveryID,
+								"action":         action,
+								"plane_issue_id": planeIssueID,
+								"repo":           lk.Repo,
+								"op":             "update_assignees",
+								"error":          map[string]any{"code": "cnb_update_assignees_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
+							})
+						} else {
+							LogStructured("info", map[string]any{
+								"event":          "plane.issue.cnbrpc",
+								"delivery_id":    deliveryID,
+								"action":         action,
+								"plane_issue_id": planeIssueID,
+								"repo":           lk.Repo,
+								"op":             "update_assignees",
+								"result":         "updated",
+							})
+						}
+					} else if len(assigneePlaneIDs) > 0 {
+						LogStructured("info", map[string]any{
+							"event":           "plane.issue.assignees.skip",
+							"delivery_id":     deliveryID,
+							"action":          action,
+							"plane_issue_id":  planeIssueID,
+							"repo":            lk.Repo,
+							"reason":          "no_user_mapping",
+							"plane_assignees": assigneePlaneIDs,
 						})
 					}
 				}
