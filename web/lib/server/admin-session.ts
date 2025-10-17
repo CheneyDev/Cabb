@@ -43,16 +43,30 @@ async function buildHeadersFromRequest() {
   return headerInit
 }
 
-function parseErrorMessage(text: string | null) {
+function looksLikeHTML(text: string) {
+  const t = text.trim().slice(0, 200).toLowerCase()
+  return t.startsWith('<!doctype html') || t.startsWith('<html') || t.includes('<head') || t.includes('<body')
+}
+
+function parseErrorMessage(text: string | null, contentType?: string | null) {
   if (!text) return undefined
-  try {
-    const json = JSON.parse(text)
-    if (json?.error?.message) return String(json.error.message)
-    if (json?.message) return String(json.message)
-  } catch (err) {
-    return text
+  // If the server said it's JSON, try to parse in a guarded way
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      const json = JSON.parse(text)
+      if (json?.error?.message) return String(json.error.message)
+      if (json?.message) return String(json.message)
+    } catch {
+      // fall through to generic handling below
+    }
   }
-  return undefined
+  // Avoid dumping entire HTML error pages to users
+  if (looksLikeHTML(text)) {
+    return undefined
+  }
+  // Return a trimmed plain-text snippet at most
+  const snippet = text.trim().replace(/\s+/g, ' ')
+  return snippet.length > 200 ? snippet.slice(0, 200) + '…' : snippet
 }
 
 export async function fetchAdminSession(): Promise<AdminSessionResult> {
@@ -63,9 +77,12 @@ export async function fetchAdminSession(): Promise<AdminSessionResult> {
       headers: headersInit,
       cache: 'no-store',
     })
+    const contentType = res.headers.get('content-type')
     const text = await res.text()
     if (!res.ok) {
-      const message = parseErrorMessage(text) ?? `加载管理员信息失败（${res.status}）`
+      const message =
+        parseErrorMessage(text, contentType) ??
+        (res.statusText || '服务暂时不可用，请稍后重试')
       return { user: null, status: res.status, message }
     }
     let data: unknown

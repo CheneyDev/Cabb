@@ -17,7 +17,19 @@ export function LogoutButton() {
         const res = await fetch('/api/admin/auth/logout', { method: 'POST' })
         if (!res.ok) {
           const text = await res.text()
-          throw new Error(text || `退出失败（${res.status}）`)
+          const ct = res.headers.get('content-type') || ''
+          let msg = res.statusText || ''
+          if (ct.includes('application/json')) {
+            try {
+              const json = JSON.parse(text)
+              msg = json?.error?.message || json?.message || msg
+            } catch {}
+          }
+          if (!msg) {
+            const snippet = text.trim().replace(/\s+/g, ' ')
+            msg = snippet.startsWith('<') ? '' : snippet.slice(0, 200)
+          }
+          throw new Error(msg || `退出失败（${res.status}）`)
         }
         router.push('/login')
         router.refresh()

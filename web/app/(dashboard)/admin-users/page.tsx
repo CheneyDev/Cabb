@@ -430,16 +430,21 @@ export default function AdminUsersPage() {
 }
 
 async function resolveError(res: Response, fallback: string) {
+  const proxyMessage = res.headers.get('x-proxy-error')
+  if (proxyMessage) return proxyMessage
+  const ct = res.headers.get('content-type') || ''
   const text = await res.text()
   if (!text) return fallback
-  try {
-    const json = JSON.parse(text)
-    if (json?.error?.message) return String(json.error.message)
-    if (json?.message) return String(json.message)
-    return fallback
-  } catch (err) {
-    return text
+  if (ct.includes('application/json')) {
+    try {
+      const json = JSON.parse(text)
+      if (json?.error?.message) return String(json.error.message)
+      if (json?.message) return String(json.message)
+    } catch {}
   }
+  const snippet = text.trim().replace(/\s+/g, ' ')
+  if (snippet.startsWith('<')) return fallback
+  return snippet.length > 200 ? snippet.slice(0, 200) + '…' : snippet
 }
 
 function formatDate(value?: string | null) {

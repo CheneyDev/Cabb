@@ -10,6 +10,11 @@ function buildURL(path: string, search?: URLSearchParams | string) {
   return `${normalizedPath}?${suffix}`
 }
 
+function looksLikeHTML(text: string) {
+  const t = text.trim().slice(0, 200).toLowerCase()
+  return t.startsWith('<!doctype html') || t.startsWith('<html') || t.includes('<head') || t.includes('<body')
+}
+
 function parseErrorBody(text: string) {
   if (!text) return undefined
   try {
@@ -17,7 +22,10 @@ function parseErrorBody(text: string) {
     if (json?.error?.message) return String(json.error.message)
     if (json?.message) return String(json.message)
   } catch (err) {
-    return text
+    // Avoid forwarding entire HTML error pages
+    if (looksLikeHTML(text)) return undefined
+    const snippet = text.trim().replace(/\s+/g, ' ')
+    return snippet.length > 200 ? snippet.slice(0, 200) + '…' : snippet
   }
   return undefined
 }

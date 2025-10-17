@@ -66,7 +66,19 @@ export default function UsersPage() {
       const res = await fetch(`/api/admin/mappings/users${querySuffix}`, { cache: 'no-store' })
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || `查询失败（${res.status}）`)
+        const ct = res.headers.get('content-type') || ''
+        let msg = res.statusText || ''
+        if (ct.includes('application/json')) {
+          try {
+            const json = JSON.parse(text)
+            msg = json?.error?.message || json?.message || msg
+          } catch {}
+        }
+        if (!msg) {
+          const snippet = text.trim().replace(/\s+/g, ' ')
+          msg = snippet.startsWith('<') ? '' : snippet.slice(0, 200)
+        }
+        throw new Error(msg || `查询失败（${res.status}）`)
       }
       const json = await res.json()
       setMappings(Array.isArray(json.items) ? json.items : [])
@@ -117,7 +129,19 @@ export default function UsersPage() {
       })
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || `保存失败（${res.status}）`)
+        const ct = res.headers.get('content-type') || ''
+        let msg = res.statusText || ''
+        if (ct.includes('application/json')) {
+          try {
+            const json = JSON.parse(text)
+            msg = json?.error?.message || json?.message || msg
+          } catch {}
+        }
+        if (!msg) {
+          const snippet = text.trim().replace(/\s+/g, ' ')
+          msg = snippet.startsWith('<') ? '' : snippet.slice(0, 200)
+        }
+        throw new Error(msg || `保存失败（${res.status}）`)
       }
       setFeedback({ kind: 'success', message: `已成功保存 ${payloadRows.length} 条映射。` })
       setRows([initialRow])
