@@ -744,12 +744,12 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					}
 				}
 			}
-		case "update", "updated":
-			if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
-				fields := map[string]any{}
-				if name != "" {
-					fields["title"] = name
-				}
+        case "update", "updated":
+            if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
+                fields := map[string]any{}
+                if name != "" {
+                    fields["title"] = name
+                }
 				if descHTML != "" {
 					fields["body"] = descHTML
 				}
@@ -759,9 +759,12 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 				if dueDate != "" {
 					fields["end_date"] = dueDate
 				}
-				if hasPriority {
-					fields["priority"] = cnbPriority
-				}
+                // Track desired priority for verification
+                wantPriority := ""
+                if hasPriority {
+                    fields["priority"] = cnbPriority
+                    wantPriority = cnbPriority
+                }
 				// Map Plane assignees to CNB user IDs
 				var cnbAssignees []string
 				if len(assigneePlaneIDs) > 0 {
@@ -788,8 +791,8 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"cnb_assignees_count":   len(cnbAssignees),
 					"update_fields_count":   len(fields),
 				})
-				for _, lk := range links {
-					if len(fields) == 0 {
+                for _, lk := range links {
+                    if len(fields) == 0 {
 						LogStructured("info", map[string]any{
 							"event":          "plane.issue.cnbrpc",
 							"delivery_id":    deliveryID,
@@ -816,8 +819,8 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 						"op":             "update_issue",
 						"fields_keys":    keys,
 					})
-					if err := cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields); err != nil {
-						LogStructured("error", map[string]any{
+                    if err := cn.UpdateIssue(ctx, lk.Repo, lk.Number, fields); err != nil {
+                        LogStructured("error", map[string]any{
 							"event":          "plane.issue.cnbrpc",
 							"delivery_id":    deliveryID,
 							"action":         action,
@@ -826,17 +829,66 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 							"op":             "update_issue",
 							"error":          map[string]any{"code": "cnb_update_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
 						})
-					} else {
-						LogStructured("info", map[string]any{
-							"event":          "plane.issue.cnbrpc",
-							"delivery_id":    deliveryID,
-							"action":         action,
-							"plane_issue_id": planeIssueID,
-							"repo":           lk.Repo,
-							"op":             "update_issue",
-							"result":         "updated",
-						})
-					}
+                    } else {
+                        LogStructured("info", map[string]any{
+                            "event":          "plane.issue.cnbrpc",
+                            "delivery_id":    deliveryID,
+                            "action":         action,
+                            "plane_issue_id": planeIssueID,
+                            "repo":           lk.Repo,
+                            "op":             "update_issue",
+                            "result":         "updated",
+                        })
+                        // Verify priority took effect when requested
+                        if wantPriority != "" {
+                            if det, err := cn.GetIssue(ctx, lk.Repo, lk.Number); err == nil {
+                                if !strings.EqualFold(strings.TrimSpace(det.Priority), strings.TrimSpace(wantPriority)) {
+                                    LogStructured("error", map[string]any{
+                                        "event":          "plane.issue.cnbrpc",
+                                        "delivery_id":    deliveryID,
+                                        "action":         action,
+                                        "plane_issue_id": planeIssueID,
+                                        "repo":           lk.Repo,
+                                        "op":             "verify_priority",
+                                        "error":          map[string]any{"code": "cnb_priority_not_applied", "message": "priority mismatch after patch", "want": wantPriority, "got": det.Priority},
+                                    })
+                                    // Fallback: try patching priority only
+                                    if err := cn.UpdateIssue(ctx, lk.Repo, lk.Number, map[string]any{"priority": wantPriority}); err != nil {
+                                        LogStructured("error", map[string]any{
+                                            "event":          "plane.issue.cnbrpc",
+                                            "delivery_id":    deliveryID,
+                                            "action":         action,
+                                            "plane_issue_id": planeIssueID,
+                                            "repo":           lk.Repo,
+                                            "op":             "update_issue",
+                                            "error":          map[string]any{"code": "cnb_priority_patch_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
+                                        })
+                                    } else if det2, err2 := cn.GetIssue(ctx, lk.Repo, lk.Number); err2 == nil {
+                                        LogStructured("info", map[string]any{
+                                            "event":          "plane.issue.cnbrpc",
+                                            "delivery_id":    deliveryID,
+                                            "action":         action,
+                                            "plane_issue_id": planeIssueID,
+                                            "repo":           lk.Repo,
+                                            "op":             "verify_priority",
+                                            "result":         map[string]any{"want": wantPriority, "got": det2.Priority},
+                                        })
+                                    }
+                                } else {
+                                    LogStructured("info", map[string]any{
+                                        "event":          "plane.issue.cnbrpc",
+                                        "delivery_id":    deliveryID,
+                                        "action":         action,
+                                        "plane_issue_id": planeIssueID,
+                                        "repo":           lk.Repo,
+                                        "op":             "verify_priority",
+                                        "result":         "ok",
+                                        "priority":       det.Priority,
+                                    })
+                                }
+                            }
+                        }
+                    }
 					// Then, if we have assignee mapping, update via dedicated endpoint
 					if len(cnbAssignees) > 0 {
 						LogStructured("info", map[string]any{
