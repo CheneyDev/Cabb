@@ -283,12 +283,29 @@ func (h *Handler) processCNBIssue(p cnbIssuePayload, deliveryID, sum string) {
 		if mapping.IssueOpenStateID.Valid {
 			payload["state"] = mapping.IssueOpenStateID.String
 		}
+		LogStructured("info", map[string]any{
+			"event":         "cnb.issue.planerpc",
+			"delivery_id":   deliveryID,
+			"repo":          p.Repo,
+			"cnb_issue_iid": p.IssueIID,
+			"op":            "create_issue",
+			"fields_keys":   keysOf(payload),
+		})
 		issueID, err := cl.CreateIssue(ctx, token, slug, mapping.PlaneProjectID, payload)
 		if err != nil {
 			return
 		}
 		_ = h.db.CreateIssueLink(ctx, issueID, p.Repo, p.IssueIID)
 		_ = cl.AddComment(ctx, token, slug, mapping.PlaneProjectID, issueID, fmt.Sprintf("<p>Linked from CNB issue <code>%s#%s</code></p>", p.Repo, p.IssueIID))
+		LogStructured("info", map[string]any{
+			"event":          "cnb.issue.planerpc",
+			"delivery_id":    deliveryID,
+			"repo":           p.Repo,
+			"cnb_issue_iid":  p.IssueIID,
+			"plane_issue_id": issueID,
+			"op":             "create_issue",
+			"result":         "created",
+		})
 		if deliveryID != "" {
 			_ = h.db.UpdateEventDeliveryStatus(ctx, "cnb.issue", deliveryID, "succeeded", nil)
 		}
@@ -345,8 +362,35 @@ func (h *Handler) processCNBIssue(p cnbIssuePayload, deliveryID, sum string) {
 					patch["priority"] = planePri
 				}
 			}
-			if len(patch) > 0 {
-				_ = cl.PatchIssue(ctx, token, slug, mapping.PlaneProjectID, id, patch)
+			if len(patch) == 0 {
+				LogStructured("info", map[string]any{
+					"event":          "cnb.issue.planerpc",
+					"delivery_id":    deliveryID,
+					"repo":           p.Repo,
+					"plane_issue_id": id,
+					"op":             "update_issue",
+					"decision":       "skip",
+					"skip_reason":    "no_supported_fields",
+				})
+			} else {
+				LogStructured("info", map[string]any{
+					"event":          "cnb.issue.planerpc",
+					"delivery_id":    deliveryID,
+					"repo":           p.Repo,
+					"plane_issue_id": id,
+					"op":             "update_issue",
+					"fields_keys":    keysOf(patch),
+				})
+				if err := cl.PatchIssue(ctx, token, slug, mapping.PlaneProjectID, id, patch); err == nil {
+					LogStructured("info", map[string]any{
+						"event":          "cnb.issue.planerpc",
+						"delivery_id":    deliveryID,
+						"repo":           p.Repo,
+						"plane_issue_id": id,
+						"op":             "update_issue",
+						"result":         "updated",
+					})
+				}
 			}
 			if deliveryID != "" {
 				_ = h.db.UpdateEventDeliveryStatus(ctx, "cnb.issue", deliveryID, "succeeded", nil)
