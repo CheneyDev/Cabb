@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"sync"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"plane-integration/internal/store"
 	"plane-integration/pkg/config"
+
+	"github.com/labstack/echo/v4"
 )
 
 func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
@@ -83,4 +85,5 @@ type Handler struct {
 	sessionCookieName   string
 	sessionTTL          time.Duration
 	sessionCookieSecure bool
+	createLocks         sync.Map // key: repo|planeIssueID -> *sync.Mutex
 }

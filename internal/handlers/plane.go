@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"plane-integration/internal/cnb"
@@ -451,6 +452,18 @@ func (h *Handler) processPlaneWebhook(event string, body []byte, deliveryID stri
 	}
 }
 
+// acquireCreateLock locks on a (repo|planeIssueID) key to serialize CNB issue creation in-process
+func (h *Handler) acquireCreateLock(repo, planeIssueID string) func() {
+	if h == nil {
+		return func() {}
+	}
+	key := repo + "|" + planeIssueID
+	v, _ := h.createLocks.LoadOrStore(key, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return func() { mu.Unlock() }
+}
+
 func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID string) {
 	if !hHasDB(h) {
 		return
@@ -549,6 +562,22 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 				if decision == "skip" {
 					continue
 				}
+				unlock := h.acquireCreateLock(m.CNBRepoID, planeIssueID)
+				// Re-check existing link inside lock to avoid races with concurrent events
+				existsLocked := false
+				if links2, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links2) > 0 {
+					for _, lk := range links2 {
+						if lk.Repo == m.CNBRepoID {
+							existsLocked = true
+							break
+						}
+					}
+				}
+				if existsLocked {
+					unlock()
+					LogStructured("info", map[string]any{"event": "plane.issue.cnbrpc", "op": "create_issue", "delivery_id": deliveryID, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "decision": "skip", "skip_reason": "already_linked"})
+					continue
+				}
 				iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
 				if err != nil || iid == "" {
 					LogStructured("error", map[string]any{
@@ -563,6 +592,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 							"message": truncate(fmt.Sprintf("%v", err), 200),
 						},
 					})
+					unlock()
 					continue
 				}
 				_ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
@@ -576,6 +606,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"result":         "created",
 					"cnb_issue_iid":  iid,
 				})
+				unlock()
 				// If dates present, patch them on CNB issue
 				if startDate != "" || dueDate != "" {
 					dfields := map[string]any{}
@@ -861,6 +892,23 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					}
 				}
 				if !found {
+					// Serialize creation by (repo|planeIssueID) to avoid races with concurrent events
+					unlock := h.acquireCreateLock(m.CNBRepoID, planeIssueID)
+					// Re-check inside lock
+					found2 := false
+					if existing2, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(existing2) > 0 {
+						for _, lk := range existing2 {
+							if lk.Repo == m.CNBRepoID {
+								found2 = true
+								break
+							}
+						}
+					}
+					if found2 {
+						unlock()
+						LogStructured("info", map[string]any{"event": "plane.issue.cnbrpc", "op": "create_issue", "delivery_id": deliveryID, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "decision": "skip", "skip_reason": "already_linked"})
+						continue
+					}
 					iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
 					if err != nil || iid == "" {
 						LogStructured("error", map[string]any{
@@ -872,6 +920,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 							"op":             "create_issue",
 							"error":          map[string]any{"code": "cnb_create_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
 						})
+						unlock()
 					} else {
 						_ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
 						LogStructured("info", map[string]any{
@@ -884,6 +933,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 							"result":         "created",
 							"cnb_issue_iid":  iid,
 						})
+						unlock()
 					}
 				}
 			}
@@ -1174,12 +1224,12 @@ func labelSelectorMatch(selector string, labels []string) bool {
 	if len(tokens) == 0 {
 		return false
 	}
-    // wildcard support: '*' or 'all' matches any label set (including empty)
-    for _, t := range tokens {
-        if t == "*" || t == "all" {
-            return true
-        }
-    }
+	// wildcard support: '*' or 'all' matches any label set (including empty)
+	for _, t := range tokens {
+		if t == "*" || t == "all" {
+			return true
+		}
+	}
 	set := make(map[string]struct{}, len(labels))
 	for _, l := range labels {
 		if l != "" {
