@@ -1174,12 +1174,12 @@ func labelSelectorMatch(selector string, labels []string) bool {
 	if len(tokens) == 0 {
 		return false
 	}
-	// wildcard support: '*' or 'all' matches any non-empty label set
-	for _, t := range tokens {
-		if t == "*" || t == "all" {
-			return len(labels) > 0
-		}
-	}
+    // wildcard support: '*' or 'all' matches any label set (including empty)
+    for _, t := range tokens {
+        if t == "*" || t == "all" {
+            return true
+        }
+    }
 	set := make(map[string]struct{}, len(labels))
 	for _, l := range labels {
 		if l != "" {
