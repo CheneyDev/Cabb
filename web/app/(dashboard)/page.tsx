@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 export default function Page() {
   return (
     <div className="grid gap-8">
-      <section className="grid gap-4 md:grid-cols-2">
-        <Card>
+      <section className="grid items-stretch gap-4 md:grid-cols-2">
+        <Card className="flex h-full flex-col">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
               <CardTitle>Plane ↔ CNB 集成配置</CardTitle>
@@ -16,7 +16,7 @@ export default function Page() {
             </div>
             <Badge variant="info">Mappings</Badge>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <CardContent className="flex-1 space-y-3 text-sm text-muted-foreground">
             <p>确保 Plane 项目准确接收来自 CNB 的 Issue / PR 信号，并反向回写状态。</p>
             <ul className="space-y-1">
               <li>• 维护仓库 ↔ 项目与状态映射，避免错误同步。</li>
@@ -32,7 +32,7 @@ export default function Page() {
           </CardFooter>
         </Card>
 
-        <Card>
+        <Card className="flex h-full flex-col">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
               <CardTitle>用户身份映射管理</CardTitle>
@@ -40,7 +40,7 @@ export default function Page() {
             </div>
             <Badge variant="success">Users</Badge>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <CardContent className="flex-1 space-y-3 text-sm text-muted-foreground">
             <p>映射缺失时，评论会以机器人身份写入。通过后台面板可以：</p>
             <ul className="space-y-1">
               <li>• 按 Plane 或 CNB 用户 ID 检索现有映射。</li>

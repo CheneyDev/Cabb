@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -208,14 +208,14 @@ export default function AdminUsersPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <Card className="flex h-full flex-col">
           <CardHeader>
             <CardTitle>创建系统用户</CardTitle>
             <CardDescription>用于访问 Plane 集成后台的管理员账号，默认角色为 admin。</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form className="grid gap-4" onSubmit={submitCreate}>
+          <CardContent className="flex-1">
+            <form id="form-create-admin" className="grid gap-4" onSubmit={submitCreate}>
               <div className="grid gap-2">
                 <Label htmlFor="admin_email">邮箱</Label>
                 <Input
@@ -249,23 +249,24 @@ export default function AdminUsersPage() {
                   minLength={8}
                 />
               </div>
-              <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                <span>账号创建后可在下方列表中查看并调整状态。</span>
-                <Button type="submit" disabled={createPending}>
-                  {createPending ? '创建中…' : '创建用户'}
-                </Button>
-              </div>
+              
             </form>
           </CardContent>
+          <CardFooter className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>账号创建后可在下方列表中查看并调整状态。</span>
+            <Button type="submit" form="form-create-admin" disabled={createPending}>
+              {createPending ? '创建中…' : '创建用户'}
+            </Button>
+          </CardFooter>
         </Card>
 
-        <Card>
+        <Card className="flex h-full flex-col">
           <CardHeader>
             <CardTitle>更新显示名 / 角色 / 状态</CardTitle>
             <CardDescription>选择已存在的系统用户并调整资料，角色当前仅支持 admin。</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form className="grid gap-4" onSubmit={submitUpdate}>
+          <CardContent className="flex-1">
+            <form id="form-update-admin" className="grid gap-4" onSubmit={submitUpdate}>
               <div className="grid gap-2">
                 <Label htmlFor="update_user">选择用户</Label>
                 <Select
@@ -313,13 +314,14 @@ export default function AdminUsersPage() {
                   disabled={!updateForm.id}
                 />
               </div>
-              <div className="flex items-center justify-end">
-                <Button type="submit" disabled={updatePending || !updateForm.id}>
-                  {updatePending ? '更新中…' : '保存更新'}
-                </Button>
-              </div>
+              
             </form>
           </CardContent>
+          <CardFooter className="flex items-center justify-end">
+            <Button type="submit" form="form-update-admin" disabled={updatePending || !updateForm.id}>
+              {updatePending ? '更新中…' : '保存更新'}
+            </Button>
+          </CardFooter>
         </Card>
       </div>
 

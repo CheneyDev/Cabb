@@ -21,8 +21,8 @@ Open http://localhost:3000
 ## Theme
 
 - Supports light and dark themes.
-- Toggle in the header; preference is saved in `localStorage` (`theme=light|dark`).
-- Default is dark for backward compatibility; if no preference is saved, the UI follows system preference on first load.
+- Icon button in the header toggles theme; preference saved in `localStorage` (`theme=light|dark`).
+- Default is dark for backward compatibility; if no saved preference, follows system preference on first load.
 
 ## Env
 
