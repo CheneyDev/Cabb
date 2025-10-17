@@ -66,10 +66,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <nav className="hidden w-full md:flex md:flex-1 md:justify-center">
             <DashboardNav items={navItems} />
           </nav>
-          <div className="hidden w-full flex-1 items-center justify-end gap-3 md:flex">
-            <div className="flex flex-col text-right">
-              <span className="text-sm font-semibold text-foreground">{user.display_name || user.email}</span>
-              <span className="text-xs text-muted-foreground">{user.email}</span>
+          <div className="hidden w-full min-w-0 flex-1 items-center justify-end gap-3 md:flex">
+            <div className="flex min-w-0 max-w-full flex-col text-right">
+              <span className="truncate text-sm font-semibold text-foreground">{user.display_name || user.email}</span>
+              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
             </div>
             <LogoutButton />
           </div>
