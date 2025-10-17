@@ -14,6 +14,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 const navItems: NavItem[] = [
   { href: '/', label: '概览' },
   { href: '/mappings', label: 'Repo↔Project 同步' },
+  { href: '/priorities', label: '优先级映射' },
   { href: '/users', label: '用户映射管理' },
   { href: '/admin-users', label: '系统用户管理' },
 ]
