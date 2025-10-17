@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Card({ className, ...props }: CardProps) {
-  return <div className={cn('card-surface overflow-hidden rounded-3xl border border-border shadow-[0_1px_0_rgba(255,255,255,0.05),0_25px_60px_-40px_rgba(15,23,42,0.8)] backdrop-blur-xl transition-colors', className)} {...props} />
+  return <div className={cn('card-surface overflow-hidden rounded-3xl border border-border transition-colors', className)} {...props} />
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -26,4 +26,8 @@ export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDi
 
 export function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('border-t border-border px-6 py-4', className)} {...props} />
+}
+
+export function CardPanel({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('px-6 py-5', className)} {...props} />
 }
