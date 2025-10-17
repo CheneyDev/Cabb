@@ -478,13 +478,23 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	// Extract
-	action := strings.ToLower(env.Action)
-	data := env.Data
-	planeIssueID, _ := dataGetString(data, "id")
-	planeProjectID, _ := dataGetString(data, "project")
-	name, _ := dataGetString(data, "name")
-	descHTML, _ := dataGetString(data, "description_html")
+    // Extract
+    action := strings.ToLower(env.Action)
+    data := env.Data
+    planeIssueID, _ := dataGetString(data, "id")
+    planeProjectID, _ := dataGetString(data, "project")
+    name, _ := dataGetString(data, "name")
+    descHTML, _ := dataGetString(data, "description_html")
+    // Extract state name/id if present (for close decision)
+    stateName, _ := dataGetStateNameAndID(data)
+    // Fallback via activity for state changes
+    if stateName == "" {
+        if strings.EqualFold(strings.TrimSpace(env.Activity.Field), "state") {
+            if s, ok := anyToStateName(env.Activity.NewValue); ok {
+                stateName = s
+            }
+        }
+    }
 	// Extract optional date fields (tolerant to Plane payload variants)
 	startDate, dueDate := dataGetDates(data)
     // Extract priority and map to CNB (P0..P3/-1P/-2P/"")
@@ -526,16 +536,16 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 		"outbound_enabled": h.cfg.CNBOutboundEnabled,
 	})
 
-	// CNB outbound fan-out only when enabled and mappings exist
-	if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
-		cn := &cnb.Client{
-			BaseURL:          h.cfg.CNBBaseURL,
-			Token:            h.cfg.CNBAppToken,
-			IssueCreatePath:  h.cfg.CNBIssueCreatePath,
-			IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
-			IssueCommentPath: h.cfg.CNBIssueCommentPath,
-		}
-		switch action {
+    // CNB outbound fan-out only when enabled and mappings exist
+    if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
+        cn := &cnb.Client{
+            BaseURL:          h.cfg.CNBBaseURL,
+            Token:            h.cfg.CNBAppToken,
+            IssueCreatePath:  h.cfg.CNBIssueCreatePath,
+            IssueUpdatePath:  h.cfg.CNBIssueUpdatePath,
+            IssueCommentPath: h.cfg.CNBIssueCommentPath,
+        }
+        switch action {
 		case "create", "created":
 			// Fan-out create to repos whose mapping requires bidirectional and label match (selector set)
 			for _, m := range mappings {
@@ -750,47 +760,54 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                 if name != "" {
                     fields["title"] = name
                 }
-				if descHTML != "" {
-					fields["body"] = descHTML
-				}
-				if startDate != "" {
-					fields["start_date"] = startDate
-				}
-				if dueDate != "" {
-					fields["end_date"] = dueDate
-				}
+                if descHTML != "" {
+                    fields["body"] = descHTML
+                }
+                if startDate != "" {
+                    fields["start_date"] = startDate
+                }
+                if dueDate != "" {
+                    fields["end_date"] = dueDate
+                }
+                // Close decision: if Plane state indicates done/completed/canceled, close CNB issue
+                shouldClose := isTerminalPlaneState(stateName)
+                if shouldClose {
+                    fields["state"] = "closed"
+                }
                 // Track desired priority for verification
                 wantPriority := ""
                 if hasPriority {
                     fields["priority"] = cnbPriority
                     wantPriority = cnbPriority
                 }
-				// Map Plane assignees to CNB user IDs
-				var cnbAssignees []string
+                // Map Plane assignees to CNB user IDs
+                var cnbAssignees []string
 				if len(assigneePlaneIDs) > 0 {
 					if ids, _ := h.db.FindCNBUserIDsByPlaneUsers(ctx, assigneePlaneIDs); len(ids) > 0 {
 						cnbAssignees = ids
 					}
 				}
-				// Decision log for outbound update fields
-				LogStructured("info", map[string]any{
-					"event":                 "plane.issue.update.decision",
-					"delivery_id":           deliveryID,
-					"action":                action,
-					"plane_issue_id":        planeIssueID,
-					"links_count":           len(links),
-					"title_set":             name != "",
-					"body_set":              descHTML != "",
-					"labels_in_payload":     len(labels),
-					"priority_set":          hasPriority,
-					"plane_priority":        planePriority,
-					"cnb_priority":          cnbPriority,
-					"start_date_set":        startDate != "",
-					"end_date_set":          dueDate != "",
-					"plane_assignees_count": len(assigneePlaneIDs),
-					"cnb_assignees_count":   len(cnbAssignees),
-					"update_fields_count":   len(fields),
-				})
+                // Decision log for outbound update fields
+                LogStructured("info", map[string]any{
+                    "event":                 "plane.issue.update.decision",
+                    "delivery_id":           deliveryID,
+                    "action":                action,
+                    "plane_issue_id":        planeIssueID,
+                    "links_count":           len(links),
+                    "title_set":             name != "",
+                    "body_set":              descHTML != "",
+                    "labels_in_payload":     len(labels),
+                    "priority_set":          hasPriority,
+                    "plane_priority":        planePriority,
+                    "cnb_priority":          cnbPriority,
+                    "start_date_set":        startDate != "",
+                    "end_date_set":          dueDate != "",
+                    "plane_state_name":      strings.ToLower(stateName),
+                    "close_cnb":             shouldClose,
+                    "plane_assignees_count": len(assigneePlaneIDs),
+                    "cnb_assignees_count":   len(cnbAssignees),
+                    "update_fields_count":   len(fields),
+                })
                 for _, lk := range links {
                     if len(fields) == 0 {
 						LogStructured("info", map[string]any{
@@ -1139,6 +1156,58 @@ func dataGetString(m map[string]any, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// dataGetStateNameAndID extracts state name or id from Plane webhook payload data
+func dataGetStateNameAndID(m map[string]any) (name string, id string) {
+    if m == nil {
+        return "", ""
+    }
+    if v, ok := m["state"]; ok {
+        switch t := v.(type) {
+        case map[string]any:
+            if s, ok := t["name"].(string); ok {
+                name = s
+            }
+            if s, ok := t["id"].(string); ok {
+                id = s
+            }
+        case string:
+            // Some payloads might provide state id directly
+            id = t
+        }
+    }
+    return strings.TrimSpace(name), strings.TrimSpace(id)
+}
+
+// anyToStateName best-effort converts activity.new_value to a state name
+func anyToStateName(v any) (string, bool) {
+    switch t := v.(type) {
+    case string:
+        s := strings.TrimSpace(t)
+        if s == "" {
+            return "", false
+        }
+        return s, true
+    case map[string]any:
+        if s, ok := t["name"].(string); ok && strings.TrimSpace(s) != "" {
+            return s, true
+        }
+    }
+    return "", false
+}
+
+// isTerminalPlaneState returns true when a Plane state name implies completion/cancellation
+func isTerminalPlaneState(name string) bool {
+    n := strings.ToLower(strings.TrimSpace(name))
+    if n == "" {
+        return false
+    }
+    switch n {
+    case "done", "completed", "complete", "cancelled", "canceled":
+        return true
+    }
+    return false
 }
 
 // dataGetLabels tries to extract label names from Plane webhook payload
