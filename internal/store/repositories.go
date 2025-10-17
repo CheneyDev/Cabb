@@ -386,6 +386,29 @@ func (d *DB) FindPlaneUserIDsByCNBUsers(ctx context.Context, cnbUserIDs []string
 	return out, nil
 }
 
+// FindCNBUserIDsByPlaneUsers maps Plane user IDs (UUID strings) to CNB user IDs via user_mappings.
+// Returns a de-duplicated list of non-empty CNB user IDs.
+func (d *DB) FindCNBUserIDsByPlaneUsers(ctx context.Context, planeUserIDs []string) ([]string, error) {
+	if d == nil || d.SQL == nil || len(planeUserIDs) == 0 {
+		return nil, nil
+	}
+	out := make([]string, 0, len(planeUserIDs))
+	seen := make(map[string]struct{}, len(planeUserIDs))
+	const q = `SELECT cnb_user_id FROM user_mappings WHERE plane_user_id=$1::uuid LIMIT 1`
+	for _, u := range planeUserIDs {
+		var id sql.NullString
+		if err := d.SQL.QueryRowContext(ctx, q, u).Scan(&id); err == nil {
+			if id.Valid && id.String != "" {
+				if _, ok := seen[id.String]; !ok {
+					out = append(out, id.String)
+					seen[id.String] = struct{}{}
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 // ListUserMappings returns paginated user mapping rows for admin screens.
 // limit defaults to 50 and is capped at 200 to avoid overwhelming the UI.
 func (d *DB) ListUserMappings(ctx context.Context, planeUserID, cnbUserID, search string, limit int) ([]UserMapping, error) {
