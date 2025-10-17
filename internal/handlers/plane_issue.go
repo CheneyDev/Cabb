@@ -174,7 +174,10 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                 if dueDate != "" { fields["end_date"] = dueDate }
                 // close if terminal state
                 shouldClose := isTerminalPlaneState(stateName)
-                if shouldClose { fields["state"] = "closed" }
+                if shouldClose {
+                    fields["state"] = "closed"
+                    fields["state_reason"] = cnbStateReasonForPlane(stateName)
+                }
                 // priority
                 wantPriority := ""
                 if hasPriority { fields["priority"] = cnbPriority; wantPriority = cnbPriority }
@@ -549,4 +552,14 @@ func isTerminalPlaneState(name string) bool {
         return true
     }
     return false
+}
+
+// cnbStateReasonForPlane maps Plane terminal state name to CNB state_reason.
+// CNB allowed: completed, not_planned, reopened.
+func cnbStateReasonForPlane(name string) string {
+    n := strings.ToLower(strings.TrimSpace(name))
+    if strings.Contains(n, "cancel") {
+        return "not_planned"
+    }
+    return "completed"
 }

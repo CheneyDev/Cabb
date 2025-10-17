@@ -637,7 +637,9 @@ func (c *Client) AddComment(ctx context.Context, repo, number, commentHTML strin
 
 // CloseIssue transitions an issue to closed via UpdateIssue.
 func (c *Client) CloseIssue(ctx context.Context, repo, number string) error {
-	return c.UpdateIssue(ctx, repo, number, map[string]any{"state": "closed"})
+    // CNB requires state and state_reason to both be set or both absent.
+    // Default close reason to "completed".
+    return c.UpdateIssue(ctx, repo, number, map[string]any{"state": "closed", "state_reason": "completed"})
 }
 
 // UpdateIssueAssignees replaces the assignees list of an issue via PATCH.
