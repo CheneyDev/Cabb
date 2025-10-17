@@ -3,7 +3,6 @@ package handlers
 import (
     "encoding/json"
     "log"
-    "net/http"
     "strings"
     "time"
 
@@ -76,4 +75,3 @@ func stripTags(s string) string {
     }
     return strings.TrimSpace(string(out))
 }
-
