@@ -422,11 +422,19 @@ func writeError(c echo.Context, status int, code, message string, details map[st
 
 // ==== Plane webhook processing ====
 type planeWebhookEnvelope struct {
-	Event       string         `json:"event"`
-	Action      string         `json:"action"`
-	WebhookID   string         `json:"webhook_id"`
-	WorkspaceID string         `json:"workspace_id"`
-	Data        map[string]any `json:"data"`
+    Event       string         `json:"event"`
+    Action      string         `json:"action"`
+    WebhookID   string         `json:"webhook_id"`
+    WorkspaceID string         `json:"workspace_id"`
+    Data        map[string]any `json:"data"`
+    // Activity describes the specific field change context on updates.
+    // Plane webhook examples include: { field: "priority", new_value: "high", old_value: "medium" }
+    Activity    struct {
+        Field    string      `json:"field"`
+        NewValue any         `json:"new_value"`
+        OldValue any         `json:"old_value"`
+        // Actor and other fields may exist; ignored for now
+    } `json:"activity"`
 }
 
 func (h *Handler) processPlaneWebhook(event string, body []byte, deliveryID string) {
@@ -479,8 +487,19 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	descHTML, _ := dataGetString(data, "description_html")
 	// Extract optional date fields (tolerant to Plane payload variants)
 	startDate, dueDate := dataGetDates(data)
-	// Extract priority and map to CNB (P0..P3/-1P/-2P/"")
-	cnbPriority, planePriority, hasPriority := dataGetPriority(data)
+    // Extract priority and map to CNB (P0..P3/-1P/-2P/"")
+    cnbPriority, planePriority, hasPriority := dataGetPriority(data)
+    // Fallback: some Plane versions include only activity.field/new_value for updates
+    if !hasPriority {
+        f := strings.ToLower(strings.TrimSpace(env.Activity.Field))
+        if f == "priority" || f == "priority_name" || f == "priority_level" || f == "priority_value" {
+            // Reuse mapper by synthesizing a minimal map
+            alt := map[string]any{"priority": env.Activity.NewValue}
+            if cp, pp, ok := dataGetPriority(alt); ok {
+                cnbPriority, planePriority, hasPriority = cp, pp, ok
+            }
+        }
+    }
 	// Best-effort extract Plane assignee user IDs (UUID strings)
 	assigneePlaneIDs := dataGetAssigneeIDs(data)
 
