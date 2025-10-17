@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -463,6 +464,8 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	planeProjectID, _ := dataGetString(data, "project")
 	name, _ := dataGetString(data, "name")
 	descHTML, _ := dataGetString(data, "description_html")
+	// Extract optional date fields (tolerant to Plane payload variants)
+	startDate, dueDate := dataGetDates(data)
 	// Best-effort extract Plane assignee user IDs (UUID strings)
 	assigneePlaneIDs := dataGetAssigneeIDs(data)
 
@@ -479,6 +482,8 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 		"plane_issue_id":   planeIssueID,
 		"plane_project_id": planeProjectID,
 		"labels":           labels,
+		"start_date_set":   startDate != "",
+		"due_date_set":     dueDate != "",
 		"assignees_plane":  len(assigneePlaneIDs),
 		"mappings_count":   len(mappings),
 		"outbound_enabled": h.cfg.CNBOutboundEnabled,
@@ -571,6 +576,46 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"result":         "created",
 					"cnb_issue_iid":  iid,
 				})
+				// If dates present, patch them on CNB issue
+				if startDate != "" || dueDate != "" {
+					dfields := map[string]any{}
+					if startDate != "" {
+						dfields["start_date"] = startDate
+					}
+					if dueDate != "" {
+						dfields["end_date"] = dueDate
+					}
+					LogStructured("info", map[string]any{
+						"event":          "plane.issue.cnbrpc",
+						"delivery_id":    deliveryID,
+						"action":         action,
+						"plane_issue_id": planeIssueID,
+						"repo":           m.CNBRepoID,
+						"op":             "update_issue",
+						"fields_keys":    keysOf(dfields),
+					})
+					if err := cn.UpdateIssue(ctx, m.CNBRepoID, iid, dfields); err != nil {
+						LogStructured("error", map[string]any{
+							"event":          "plane.issue.cnbrpc",
+							"delivery_id":    deliveryID,
+							"action":         action,
+							"plane_issue_id": planeIssueID,
+							"repo":           m.CNBRepoID,
+							"op":             "update_issue",
+							"error":          map[string]any{"code": "cnb_update_failed", "message": truncate(fmt.Sprintf("%v", err), 200)},
+						})
+					} else {
+						LogStructured("info", map[string]any{
+							"event":          "plane.issue.cnbrpc",
+							"delivery_id":    deliveryID,
+							"action":         action,
+							"plane_issue_id": planeIssueID,
+							"repo":           m.CNBRepoID,
+							"op":             "update_issue",
+							"result":         "updated",
+						})
+					}
+				}
 				// If we have assignees from Plane and a mapping to CNB users, set them after creation via dedicated assignees endpoint
 				if len(assigneePlaneIDs) > 0 {
 					if cnbUserIDs, _ := h.db.FindCNBUserIDsByPlaneUsers(ctx, assigneePlaneIDs); len(cnbUserIDs) > 0 {
@@ -650,6 +695,12 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 				if descHTML != "" {
 					fields["body"] = descHTML
 				}
+				if startDate != "" {
+					fields["start_date"] = startDate
+				}
+				if dueDate != "" {
+					fields["end_date"] = dueDate
+				}
 				// Map Plane assignees to CNB user IDs
 				var cnbAssignees []string
 				if len(assigneePlaneIDs) > 0 {
@@ -667,6 +718,8 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					"title_set":             name != "",
 					"body_set":              descHTML != "",
 					"labels_in_payload":     len(labels),
+					"start_date_set":        startDate != "",
+					"end_date_set":          dueDate != "",
 					"plane_assignees_count": len(assigneePlaneIDs),
 					"cnb_assignees_count":   len(cnbAssignees),
 					"update_fields_count":   len(fields),
@@ -987,6 +1040,39 @@ func dataGetLabels(m map[string]any) []string {
 		}
 	}
 	return names
+}
+
+// dataGetDates tries to extract start and due/target dates from Plane webhook payload.
+// Tolerates keys: start_date|start_on|start; due_date|target_date|due_on|due
+// Returns raw strings; upstream CNB expects string for start_date/end_date.
+func dataGetDates(m map[string]any) (start string, due string) {
+	if m == nil {
+		return "", ""
+	}
+	// helper to read first string among keys
+	readFirst := func(keys ...string) string {
+		for _, k := range keys {
+			if v, ok := m[k]; ok {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					return s
+				}
+			}
+		}
+		return ""
+	}
+	start = readFirst("start_date", "start_on", "start", "start_at")
+	due = readFirst("due_date", "target_date", "due_on", "due", "target_on", "target_at")
+	return
+}
+
+// keysOf returns sorted keys of the given map for concise logging.
+func keysOf(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // dataGetAssigneeIDs extracts Plane user IDs from webhook payload.
