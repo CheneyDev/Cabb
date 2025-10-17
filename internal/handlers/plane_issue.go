@@ -45,8 +45,13 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
     }
     // Dates
     startDate, dueDate := dataGetDates(data)
-    // Priority
+    // Priority (with DB mapping override when available)
     cnbPriority, planePriority, hasPriority := dataGetPriority(data)
+    if hasPriority && planePriority != "" && planeProjectID != "" && hHasDB(h) {
+        if mapped, ok, err := h.db.MapPlanePriorityToCNB(ctx, planeProjectID, planePriority); err == nil && ok {
+            cnbPriority = mapped
+        }
+    }
     if !hasPriority {
         f := strings.ToLower(strings.TrimSpace(env.Activity.Field))
         if f == "priority" || f == "priority_name" || f == "priority_level" || f == "priority_value" {

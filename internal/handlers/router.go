@@ -65,7 +65,9 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.POST("/mappings/pr-states", h.AdminPRStates)
 	admin.GET("/mappings/users", h.AdminUsersList)
 	admin.POST("/mappings/users", h.AdminUsers)
-	admin.POST("/mappings/labels", h.AdminLabels)
+    admin.POST("/mappings/labels", h.AdminLabels)
+    admin.POST("/mappings", h.AdminMappings)
+    admin.GET("/mappings", h.AdminMappingsList)
 	admin.POST("/mappings/channel-project", h.AdminChannelProject)
 
 	access := admin.Group("/access")

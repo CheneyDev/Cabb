@@ -1,13 +1,15 @@
 package handlers
 
 import (
-	"database/sql"
-	"net/http"
-	"strconv"
-	"time"
+    "database/sql"
+    "encoding/json"
+    "net/http"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/labstack/echo/v4"
-	"plane-integration/internal/store"
+    "github.com/labstack/echo/v4"
+    "plane-integration/internal/store"
 )
 
 // POST /admin/mappings/repo-project
@@ -225,4 +227,111 @@ func (h *Handler) AdminLabels(c echo.Context) error {
 		}
 	}
 	return c.JSON(http.StatusOK, map[string]any{"result": "ok", "count": len(req.Items)})
+}
+
+// POST /admin/mappings
+// Body: {
+//   "scope_kind":"plane_project","scope_id":"<uuid>","mapping_type":"priority",
+//   "items":[{"left":{"system":"plane","type":"priority","key":"urgent"},"right":{"system":"cnb","type":"priority","key":"P0"},"bidirectional":true,"extras":{},"active":true}]
+// }
+func (h *Handler) AdminMappings(c echo.Context) error {
+    if !hHasDB(h) {
+        return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+    }
+    var req struct {
+        ScopeKind   string `json:"scope_kind"`
+        ScopeID     string `json:"scope_id"`
+        MappingType string `json:"mapping_type"`
+        Items []struct {
+            Left struct {
+                System string `json:"system"`
+                Type   string `json:"type"`
+                Key    string `json:"key"`
+            } `json:"left"`
+            Right struct {
+                System string `json:"system"`
+                Type   string `json:"type"`
+                Key    string `json:"key"`
+            } `json:"right"`
+            Bidirectional bool            `json:"bidirectional"`
+            Extras        json.RawMessage `json:"extras"`
+            Active        *bool           `json:"active"`
+        } `json:"items"`
+    }
+    if err := c.Bind(&req); err != nil {
+        return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+    }
+    if strings.TrimSpace(req.ScopeKind) == "" || strings.TrimSpace(req.MappingType) == "" {
+        return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 scope_kind/mapping_type", nil)
+    }
+    for _, it := range req.Items {
+        if strings.TrimSpace(it.Left.System) == "" || strings.TrimSpace(it.Left.Type) == "" || strings.TrimSpace(it.Left.Key) == "" {
+            return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 left.system/type/key", nil)
+        }
+        if strings.TrimSpace(it.Right.System) == "" || strings.TrimSpace(it.Right.Type) == "" || strings.TrimSpace(it.Right.Key) == "" {
+            return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 right.system/type/key", nil)
+        }
+        // Parse extras JSON if provided
+        var extras map[string]any
+        if len(it.Extras) > 0 {
+            _ = json.Unmarshal(it.Extras, &extras)
+        }
+        active := true
+        if it.Active != nil {
+            active = *it.Active
+        }
+        m := store.IntegrationMappingRec{
+            ScopeKind:     req.ScopeKind,
+            ScopeID:       req.ScopeID,
+            MappingType:   req.MappingType,
+            LeftSystem:    it.Left.System,
+            LeftType:      it.Left.Type,
+            LeftKey:       it.Left.Key,
+            RightSystem:   it.Right.System,
+            RightType:     it.Right.Type,
+            RightKey:      it.Right.Key,
+            Bidirectional: it.Bidirectional,
+            Extras:        extras,
+            Active:        active,
+        }
+        if err := h.db.UpsertIntegrationMapping(c.Request().Context(), m); err != nil {
+            return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
+        }
+    }
+    return c.JSON(http.StatusOK, map[string]any{"result": "ok", "count": len(req.Items)})
+}
+
+// GET /admin/mappings?scope_kind=plane_project&scope_id=<id>&mapping_type=priority
+func (h *Handler) AdminMappingsList(c echo.Context) error {
+    if !hHasDB(h) {
+        return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+    }
+    scopeKind := c.QueryParam("scope_kind")
+    scopeID := c.QueryParam("scope_id")
+    mappingType := c.QueryParam("mapping_type")
+    items, err := h.db.ListIntegrationMappings(c.Request().Context(), scopeKind, scopeID, mappingType)
+    if err != nil {
+        return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+    }
+    out := make([]map[string]any, 0, len(items))
+    for _, m := range items {
+        var extras any
+        if m.Extras.Valid && m.Extras.String != "" {
+            _ = json.Unmarshal([]byte(m.Extras.String), &extras)
+        }
+        out = append(out, map[string]any{
+            "id":            m.ID,
+            "scope_kind":    m.ScopeKind,
+            "scope_id":      nullString(m.ScopeID),
+            "mapping_type":  m.MappingType,
+            "left":          map[string]any{"system": m.LeftSystem, "type": m.LeftType, "key": m.LeftKey},
+            "right":         map[string]any{"system": m.RightSystem, "type": m.RightType, "key": m.RightKey},
+            "bidirectional": m.Bidirectional,
+            "extras":        extras,
+            "active":        m.Active,
+            "created_at":    m.CreatedAt.UTC().Format(time.RFC3339),
+            "updated_at":    m.UpdatedAt.UTC().Format(time.RFC3339),
+        })
+    }
+    return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
 }

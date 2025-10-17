@@ -1,11 +1,13 @@
 package store
 
 import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"time"
+    "context"
+    "database/sql"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "strings"
+    "time"
 )
 
 // EventDeliveries repo
@@ -202,6 +204,158 @@ type PRStateMapping struct {
 	ApprovedStateID        sql.NullString
 	MergedStateID          sql.NullString
 	ClosedStateID          sql.NullString
+}
+
+// ===== Unified Integration Mappings =====
+
+type IntegrationMappingRec struct {
+    ScopeKind     string
+    ScopeID       string
+    MappingType   string
+    LeftSystem    string
+    LeftType      string
+    LeftKey       string
+    RightSystem   string
+    RightType     string
+    RightKey      string
+    Bidirectional bool
+    Extras        map[string]any
+    Active        bool
+}
+
+// UpsertIntegrationMapping inserts or updates a single mapping row.
+func (d *DB) UpsertIntegrationMapping(ctx context.Context, m IntegrationMappingRec) error {
+    if d == nil || d.SQL == nil {
+        return sql.ErrConnDone
+    }
+    // Normalize strings
+    norm := func(s string) string { return strings.TrimSpace(s) }
+    m.ScopeKind = norm(m.ScopeKind)
+    m.ScopeID = norm(m.ScopeID)
+    m.MappingType = norm(m.MappingType)
+    m.LeftSystem = norm(m.LeftSystem)
+    m.LeftType = norm(m.LeftType)
+    m.LeftKey = norm(m.LeftKey)
+    m.RightSystem = norm(m.RightSystem)
+    m.RightType = norm(m.RightType)
+    m.RightKey = norm(m.RightKey)
+    if strings.EqualFold(m.MappingType, "priority") {
+        // Priorities: standardize plane priority key to lowercase label
+        m.LeftKey = strings.ToLower(m.LeftKey)
+    }
+    extrasJSON := "{}"
+    if m.Extras != nil {
+        if b, err := json.Marshal(m.Extras); err == nil {
+            extrasJSON = string(b)
+        }
+    }
+    const upd = `UPDATE integration_mappings SET bidirectional=$11, extras=$12::jsonb, active=$13, updated_at=now()
+                 WHERE scope_kind=$1 AND scope_id=COALESCE($2, scope_id) AND mapping_type=$3 AND left_system=$4 AND left_type=$5 AND left_key=$6 AND right_system=$7 AND right_type=$8 AND right_key=$9`
+    res, err := d.SQL.ExecContext(ctx, upd, m.ScopeKind, nullIfEmpty(m.ScopeID), m.MappingType, m.LeftSystem, m.LeftType, m.LeftKey, m.RightSystem, m.RightType, m.RightKey, m.Bidirectional, extrasJSON, m.Active)
+    if err != nil {
+        return err
+    }
+    if n, _ := res.RowsAffected(); n > 0 {
+        return nil
+    }
+    const ins = `INSERT INTO integration_mappings (scope_kind, scope_id, mapping_type, left_system, left_type, left_key, right_system, right_type, right_key, bidirectional, extras, active, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, now(), now())`
+    _, err = d.SQL.ExecContext(ctx, ins, m.ScopeKind, nullIfEmpty(m.ScopeID), m.MappingType, m.LeftSystem, m.LeftType, m.LeftKey, m.RightSystem, m.RightType, m.RightKey, m.Bidirectional, extrasJSON, m.Active)
+    return err
+}
+
+type IntegrationMappingRow struct {
+    ID           int64
+    ScopeKind    string
+    ScopeID      sql.NullString
+    MappingType  string
+    LeftSystem   string
+    LeftType     string
+    LeftKey      string
+    RightSystem  string
+    RightType    string
+    RightKey     string
+    Bidirectional bool
+    Extras       sql.NullString
+    Active       bool
+    CreatedAt    time.Time
+    UpdatedAt    time.Time
+}
+
+// ListIntegrationMappings lists mappings by scope and type (minimal filters for admin UI).
+func (d *DB) ListIntegrationMappings(ctx context.Context, scopeKind, scopeID, mappingType string) ([]IntegrationMappingRow, error) {
+    if d == nil || d.SQL == nil {
+        return nil, sql.ErrConnDone
+    }
+    where := "WHERE 1=1"
+    args := []any{}
+    idx := 1
+    if scopeKind != "" {
+        where += " AND scope_kind=$" + itoa(idx)
+        args = append(args, scopeKind)
+        idx++
+    }
+    if scopeID != "" {
+        where += " AND scope_id=$" + itoa(idx)
+        args = append(args, scopeID)
+        idx++
+    }
+    if mappingType != "" {
+        where += " AND mapping_type=$" + itoa(idx)
+        args = append(args, mappingType)
+        idx++
+    }
+    q := "SELECT id, scope_kind, scope_id, mapping_type, left_system, left_type, left_key, right_system, right_type, right_key, bidirectional, extras::text, active, created_at, updated_at FROM integration_mappings " + where + " ORDER BY mapping_type, left_system, left_type, left_key"
+    rows, err := d.SQL.QueryContext(ctx, q, args...)
+    if err != nil { return nil, err }
+    defer rows.Close()
+    var out []IntegrationMappingRow
+    for rows.Next() {
+        var r IntegrationMappingRow
+        if err := rows.Scan(&r.ID, &r.ScopeKind, &r.ScopeID, &r.MappingType, &r.LeftSystem, &r.LeftType, &r.LeftKey, &r.RightSystem, &r.RightType, &r.RightKey, &r.Bidirectional, &r.Extras, &r.Active, &r.CreatedAt, &r.UpdatedAt); err != nil {
+            return nil, err
+        }
+        returnErr := rows.Err()
+        _ = returnErr
+        out = append(out, r)
+    }
+    return out, rows.Err()
+}
+
+// MapPlanePriorityToCNB resolves Plane priority to CNB priority via integration_mappings with scope fallback.
+func (d *DB) MapPlanePriorityToCNB(ctx context.Context, planeProjectID, planePriority string) (string, bool, error) {
+    if d == nil || d.SQL == nil {
+        return "", false, sql.ErrConnDone
+    }
+    lp := strings.ToLower(strings.TrimSpace(planePriority))
+    // First try project scope
+    const q = `SELECT right_key FROM integration_mappings
+               WHERE active=true AND mapping_type='priority'
+                 AND left_system='plane' AND left_type='priority' AND left_key=$1
+                 AND right_system='cnb' AND right_type='priority'
+                 AND scope_kind='plane_project' AND scope_id=$2
+               LIMIT 1`
+    var out sql.NullString
+    if planeProjectID != "" {
+        if err := d.SQL.QueryRowContext(ctx, q, lp, planeProjectID).Scan(&out); err == nil && out.Valid {
+            return out.String, true, nil
+        } else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+            return "", false, err
+        }
+    }
+    // Fallback to global
+    const qg = `SELECT right_key FROM integration_mappings
+               WHERE active=true AND mapping_type='priority'
+                 AND left_system='plane' AND left_type='priority' AND left_key=$1
+                 AND right_system='cnb' AND right_type='priority'
+                 AND scope_kind='global'
+               LIMIT 1`
+    if err := d.SQL.QueryRowContext(ctx, qg, lp).Scan(&out); err == nil && out.Valid {
+        return out.String, true, nil
+    } else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+        return "", false, err
+    }
+    return "", false, nil
 }
 
 func (d *DB) UpsertPRStateMapping(ctx context.Context, m PRStateMapping) error {
