@@ -34,7 +34,7 @@ export function MobileNav({ items, user }: MobileNavProps) {
   return (
     <div className="relative md:hidden">
       <Menu open={open} onOpenChange={nextOpen => setOpen(nextOpen)}>
-        <MenuTrigger aria-label="切换菜单" data-open={open} className="min-w-0 px-3">
+        <MenuTrigger aria-label={open ? '收起菜单' : '展开菜单'} data-open={open} className="min-w-0 px-2">
           <svg
             aria-hidden="true"
             focusable="false"
@@ -47,7 +47,7 @@ export function MobileNav({ items, user }: MobileNavProps) {
           >
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
-          <span>{open ? '收起' : '菜单'}</span>
+          <span className="sr-only">{open ? '收起菜单' : '展开菜单'}</span>
         </MenuTrigger>
         <MenuPortal>
           <MenuPositioner>
@@ -66,9 +66,15 @@ export function MobileNav({ items, user }: MobileNavProps) {
                       data-active={active}
                       render={<Link href={item.href} />}
                       onClick={() => setOpen(false)}
-                      className={cn('justify-start text-sm font-medium text-foreground/80', active && 'text-primary')}
+                      className={cn(
+                        'justify-start gap-3 text-sm font-medium text-foreground/80',
+                        active && 'text-primary',
+                      )}
                     >
-                      {item.label}
+                      <span className="nav-link__icon text-muted-foreground" aria-hidden="true">
+                        {item.icon}
+                      </span>
+                      <span className="truncate">{item.label}</span>
                     </MenuItem>
                   )
                 })}

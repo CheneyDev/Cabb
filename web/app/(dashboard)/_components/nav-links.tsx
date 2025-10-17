@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { ReactNode } from 'react'
 import type { Route } from 'next'
 
 import { cn } from '@/lib/utils'
 
-export type NavItem = { href: Route; label: string }
+export type NavItem = { href: Route; label: string; icon: ReactNode }
 
 type DashboardNavProps = {
   items: NavItem[]
@@ -31,8 +32,19 @@ export function DashboardNav({ items, orientation = 'horizontal', onNavigate }: 
             href={item.href}
             onClick={() => onNavigate?.()}
             className={cn('nav-link', orientation === 'vertical' && 'nav-link--vertical', active && 'nav-link--active')}
+            aria-label={orientation === 'horizontal' ? item.label : undefined}
           >
-            {item.label}
+            <span className="nav-link__icon" aria-hidden="true">
+              {item.icon}
+            </span>
+            <span
+              className={cn(
+                orientation === 'vertical' ? 'not-sr-only' : 'sr-only md:not-sr-only',
+                'nav-link__label',
+              )}
+            >
+              {item.label}
+            </span>
           </Link>
         )
       })}
