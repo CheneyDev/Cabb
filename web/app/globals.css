@@ -93,6 +93,7 @@
     font-weight: 500;
     color: color-mix(in srgb, var(--foreground) 70%, transparent);
     transition: color 0.2s ease, background 0.2s ease;
+    white-space: nowrap; /* 强制单项不换行 */
   }
 
   .nav-link::after {
@@ -203,5 +204,16 @@
     border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
     background: color-mix(in srgb, var(--background) 96%, transparent);
     box-shadow: 0 42px 80px -48px rgba(79, 70, 229, 0.45);
+  }
+}
+
+@layer utilities {
+  /* 隐藏滚动条，但保留横向滚动能力 */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
   }
 }

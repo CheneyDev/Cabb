@@ -19,7 +19,7 @@ export function DashboardNav({ items, orientation = 'horizontal', onNavigate }: 
   const containerClass =
     orientation === 'vertical'
       ? 'flex flex-col gap-1'
-      : 'flex flex-nowrap items-center gap-2'
+      : 'flex flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap no-scrollbar'
 
   return (
     <div className={containerClass}>
