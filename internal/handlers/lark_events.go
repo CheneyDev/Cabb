@@ -120,10 +120,19 @@ func (h *Handler) LarkEvents(c echo.Context) error {
             return c.NoContent(http.StatusOK)
         }
         // Command parse: support "/bind <url>" or "绑定 <url>" or "bind <url>"
-        // Only trigger when @bot is present OR message starts with command
-        mentioned := len(ev.Message.Mentions) > 0
+        // Only trigger when消息文本自身是 bind 命令（允许前置 @bot），而不是“凡是 @ 都当作 bind”
         lower := strings.ToLower(text)
-        if mentioned || strings.HasPrefix(lower, "/bind") || strings.HasPrefix(lower, "bind ") || strings.HasPrefix(text, "绑定 ") {
+        isBind := strings.HasPrefix(lower, "/bind") || strings.HasPrefix(lower, "bind ") || strings.HasPrefix(text, "绑定 ")
+        if !isBind && len(ev.Message.Mentions) > 0 {
+            parts := strings.Fields(text)
+            if len(parts) >= 2 {
+                sec := strings.ToLower(parts[1])
+                if strings.HasPrefix(sec, "/bind") || strings.HasPrefix(sec, "bind") || strings.HasPrefix(sec, "绑定") {
+                    isBind = true
+                }
+            }
+        }
+        if isBind {
             // Determine thread target
             threadID := ev.Message.RootID
             if threadID == "" { threadID = ev.Message.MessageID }
