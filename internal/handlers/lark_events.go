@@ -124,30 +124,88 @@ func (h *Handler) LarkEvents(c echo.Context) error {
         mentioned := len(ev.Message.Mentions) > 0
         lower := strings.ToLower(text)
         if mentioned || strings.HasPrefix(lower, "/bind") || strings.HasPrefix(lower, "bind ") || strings.HasPrefix(text, "绑定 ") {
+            // Determine thread target
+            threadID := ev.Message.RootID
+            if threadID == "" { threadID = ev.Message.MessageID }
+
             issueID, slug, projectID := parsePlaneIssueLink(text)
-            if issueID != "" && hHasDB(h) {
-                // Thread id: prefer root_id, else message_id
-                threadID := ev.Message.RootID
-                if threadID == "" { threadID = ev.Message.MessageID }
-                // Save link (sync disabled by default; we enable minimal notifications only)
-                _ = h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, issueID, projectID, slug, false)
-                // Acknowledge (best-effort notify via Lark when outbound is wired)
-                go h.notifyLarkThreadBound(ev.Message.ChatID, threadID, issueID)
-                return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"bind","plane_issue_id":issueID})
+            // Fast-fail feedbacks according to Feishu "事件与回调"（3 秒内需响应；消息结果通过 IM 回复展示）
+            if issueID == "" {
+                go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：未检测到 Plane 工作项链接或 UUID。示例：/bind https://app.plane.so/{slug}/projects/{project}/issues/{issue}")
+                return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","error":"missing_issue_id"})
             }
+            if !hHasDB(h) {
+                go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：服务未连接数据库，请稍后重试或联系管理员。")
+                return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","plane_issue_id":issueID,"error":"db_unavailable"})
+            }
+            // Persist link
+            if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, issueID, projectID, slug, false); err != nil {
+                go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：内部错误，请稍后重试。")
+                return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","plane_issue_id":issueID,"error":"upsert_failed"})
+            }
+            // Success ack with details
+            url := h.planeIssueURL(slug, projectID, issueID)
+            msg := "绑定成功："
+            if url != "" { msg += url } else { msg += issueID }
+            if slug == "" || projectID == "" {
+                msg += "\n提示：未包含工作区/项目，暂不支持线程 /comment 同步；请使用完整链接重新绑定。"
+            } else {
+                msg += "\n提示：在该线程使用 /comment 添加评论可同步至 Plane。"
+            }
+            go h.sendLarkTextToThread(ev.Message.ChatID, threadID, msg)
+            return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"bind","plane_issue_id":issueID})
         }
-        // Comment command in a bound thread
+        // Comment/sync commands and auto-sync in a bound thread
         if ev.Message.RootID != "" && hHasDB(h) {
             threadID := ev.Message.RootID
             tl, err := h.db.GetLarkThreadLink(c.Request().Context(), threadID)
             if err == nil && tl != nil && tl.PlaneIssueID != "" {
-                // command prefix: /comment or 评论
+                // 1) comment command: /comment or 评论
                 arg := extractCommandArg(text, "/comment")
                 if arg == "" { arg = extractCommandArg(text, "评论") }
                 if arg != "" {
-                    // post to Plane
                     go h.postPlaneComment(tl, arg)
                     return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"comment","plane_issue_id":tl.PlaneIssueID})
+                }
+
+                // 2) sync toggle: /sync on|off, 开启同步|关闭同步
+                lct := strings.ToLower(strings.TrimSpace(text))
+                if strings.HasPrefix(lct, "/sync") || strings.HasPrefix(text, "开启同步") || strings.HasPrefix(text, "关闭同步") {
+                    enable := false
+                    // parse on/off
+                    if strings.HasPrefix(lct, "/sync on") || strings.HasPrefix(text, "开启同步") {
+                        enable = true
+                    } else if strings.HasPrefix(lct, "/sync off") || strings.HasPrefix(text, "关闭同步") {
+                        enable = false
+                    } else {
+                        // help text
+                        go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "用法：/sync on 开启线程自动同步；/sync off 关闭自动同步。也可发送‘开启同步’或‘关闭同步’。")
+                        return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"sync_help"})
+                    }
+                    // persist toggle via upsert
+                    slug := ""
+                    if tl.WorkspaceSlug.Valid { slug = tl.WorkspaceSlug.String }
+                    projectID := ""
+                    if tl.PlaneProjectID.Valid { projectID = tl.PlaneProjectID.String }
+                    if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, tl.PlaneIssueID, projectID, slug, enable); err != nil {
+                        go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "设置失败：内部错误，请稍后重试。")
+                        return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"sync_toggle","error":"upsert_failed"})
+                    }
+                    if enable {
+                        go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "已开启线程自动同步：该线程新消息将自动同步为 Plane 评论。")
+                    } else {
+                        go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "已关闭线程自动同步：该线程新消息将不再同步至 Plane。")
+                    }
+                    return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"sync_toggle","enabled": enable})
+                }
+
+                // 3) auto-sync: non-command text in a bound thread when enabled
+                if tl.SyncEnabled && ev.Message.MessageType == "text" {
+                    // skip slash-command messages
+                    if !strings.HasPrefix(lct, "/") && strings.TrimSpace(text) != "" {
+                        go h.postPlaneComment(tl, text)
+                        return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"sync_auto","plane_issue_id":tl.PlaneIssueID})
+                    }
                 }
             }
         }
@@ -166,9 +224,10 @@ func (h *Handler) LarkCommands(c echo.Context) error {
     return c.NoContent(http.StatusOK)
 }
 
-// verifyLarkSignature validates Feishu signatures when headers are present.
-// 当前实现遵循：signature = base64(hmac_sha256(encrypt_key, timestamp + body))（待确认）
-// 若缺少头或密钥未配置，则返回 true 以避免误拒绝（由 verification token 兜底）。
+// verifyLarkSignature validates Feishu request signatures when headers are present.
+// 按官方文档（docs/feishu/003-服务端API/事件与回调）：
+// signature = sha256(timestamp + nonce + encrypt_key + raw_body) 的十六进制字符串（大小写不敏感）。
+// 若缺少头或未配置 Encrypt Key，则返回 true（不拒绝），由 Verification Token 兜底校验。
 func (h *Handler) verifyLarkSignature(hdr http.Header, body []byte) bool {
     // Per docs: sha256(timestamp + nonce + encrypt_key + body), hex lower
     ts := strings.TrimSpace(hdr.Get("X-Lark-Request-Timestamp"))
@@ -285,4 +344,20 @@ func extractCommandArg(text, cmd string) string {
         }
     }
     return ""
+}
+
+// planeIssueURL builds an app URL for the issue when enough context is available.
+func (h *Handler) planeIssueURL(slug, projectID, issueID string) string {
+    if slug == "" || projectID == "" || issueID == "" { return "" }
+    base := strings.TrimRight(h.cfg.PlaneAppBaseURL, "/")
+    if base == "" { base = "https://app.plane.so" }
+    var b strings.Builder
+    b.WriteString(base)
+    b.WriteString("/")
+    b.WriteString(slug)
+    b.WriteString("/projects/")
+    b.WriteString(projectID)
+    b.WriteString("/issues/")
+    b.WriteString(issueID)
+    return b.String()
 }
