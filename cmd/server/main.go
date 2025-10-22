@@ -53,6 +53,9 @@ func main() {
 
 	handlers.RegisterRoutes(e, cfg, db)
 
+	// Start background schedulers
+	handlers.StartCleanupScheduler(cfg, db)
+
 	log.Printf("plane-integration %s listening on %s", version.Version, cfg.Address())
 	if err := e.StartServer(srv); err != nil {
 		log.Fatalf("server error: %v", err)

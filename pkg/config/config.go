@@ -50,6 +50,11 @@ type Config struct {
     AdminBootstrapEmail  string
     AdminBootstrapPassword string
     AdminBootstrapName   string
+
+    // Jobs / Cleanup
+    CleanupThreadLinksEnabled bool
+    CleanupThreadLinksDays    int
+    CleanupThreadLinksAt      string // HH:MM in cfg.Timezone
 }
 
 func FromEnv() Config {
@@ -89,6 +94,10 @@ func FromEnv() Config {
         AdminBootstrapEmail:  os.Getenv("ADMIN_BOOTSTRAP_EMAIL"),
         AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
         AdminBootstrapName:   strFromEnv("ADMIN_BOOTSTRAP_NAME", "Plane Admin"),
+
+        CleanupThreadLinksEnabled: boolFromEnv("CLEANUP_THREAD_LINKS_ENABLED", true),
+        CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
+        CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
     }
     return cfg
 }

@@ -78,6 +78,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 
 	// Jobs
 	e.POST("/jobs/issue-summary/daily", h.JobIssueSummaryDaily)
+	e.POST("/jobs/cleanup/thread-links", h.JobCleanupThreadLinks)
 }
 
 type Handler struct {

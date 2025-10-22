@@ -776,6 +776,16 @@ func (d *DB) FindBotTokenByWorkspaceSlug(ctx context.Context, workspaceSlug stri
 	return
 }
 
+// CleanupStaleThreadLinks deletes thread links that are not sync-enabled and not updated since before the cutoff.
+func (d *DB) CleanupStaleThreadLinks(ctx context.Context, cutoff time.Time) (int64, error) {
+    if d == nil || d.SQL == nil { return 0, sql.ErrConnDone }
+    const q = `DELETE FROM thread_links WHERE sync_enabled=false AND updated_at < $1`
+    res, err := d.SQL.ExecContext(ctx, q, cutoff)
+    if err != nil { return 0, err }
+    n, _ := res.RowsAffected()
+    return n, nil
+}
+
 // PR links
 func (d *DB) UpsertPRLink(ctx context.Context, planeIssueID, cnbRepoID, prIID string) error {
 	if d == nil || d.SQL == nil {
