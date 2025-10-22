@@ -163,16 +163,8 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                 go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：内部错误，请稍后重试。")
                 return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","plane_issue_id":issueID,"error":"upsert_failed"})
             }
-            // Success ack with details
-            url := h.planeIssueURL(slug, projectID, issueID)
-            msg := "绑定成功："
-            if url != "" { msg += url } else { msg += issueID }
-            if slug == "" || projectID == "" {
-                msg += "\n提示：未包含工作区/项目，暂不支持线程 /comment 同步；请使用完整链接重新绑定。"
-            } else {
-                msg += "\n提示：在该线程使用 /comment 添加评论可同步至 Plane。"
-            }
-            go h.sendLarkTextToThread(ev.Message.ChatID, threadID, msg)
+            // Success ack with details; prefer rich post with anchor title when possible
+            go h.postBindAck(ev.Message.ChatID, threadID, slug, projectID, issueID)
             return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"bind","plane_issue_id":issueID})
         }
         // Comment/sync commands and auto-sync in a bound thread
@@ -399,4 +391,67 @@ func extractBrowseSequence(s string) string {
     m := re.FindStringSubmatch(s)
     if len(m) == 2 { return m[1] }
     return ""
+}
+
+// postBindAck best-effort sends a rich anchor link with issue title; fallback to plain text
+func (h *Handler) postBindAck(chatID, threadID, slug, projectID, issueID string) {
+    url := h.planeIssueURL(slug, projectID, issueID)
+    // Try to fetch issue title when we can route
+    title := ""
+    if slug != "" && projectID != "" && issueID != "" && hHasDB(h) {
+        ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+        defer cancel()
+        if token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug); err == nil && token != "" {
+            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+            if name, err := pc.GetIssueName(ctx, token, slug, projectID, issueID); err == nil {
+                title = name
+            }
+        }
+    }
+    // If we have a title, send as post anchor; else plain text
+    if title != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
+        if err := h.sendLarkPostToThread(chatID, threadID, "绑定成功", title, url, "在该线程使用 /comment 添加评论可同步至 Plane。"); err == nil {
+            return
+        }
+        // fall through to text fallback on error
+    }
+    // Fallback text
+    msg := "绑定成功："
+    if url != "" { msg += url } else { msg += issueID }
+    if slug == "" || projectID == "" {
+        msg += "\n提示：未包含工作区/项目，暂不支持线程 /comment 同步；请使用完整链接重新绑定。"
+    } else {
+        msg += "\n提示：在该线程使用 /comment 添加评论可同步至 Plane。"
+    }
+    _ = h.sendLarkTextToThread(chatID, threadID, msg)
+}
+
+// sendLarkPostToThread composes a minimal zh_cn post with an anchor title and optional subtitle, and replies in thread
+func (h *Handler) sendLarkPostToThread(chatID, threadID, header, anchorText, href, subtitle string) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+    defer cancel()
+    cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+    token, _, err := cli.TenantAccessToken(ctx)
+    if err != nil { return err }
+    // build post content
+    line := []map[string]any{
+        {"tag": "a", "text": anchorText, "href": href},
+    }
+    if subtitle != "" {
+        line = append(line, map[string]any{"tag": "text", "text": "\n" + subtitle})
+    }
+    post := map[string]any{
+        "zh_cn": map[string]any{
+            "title":   header,
+            "content": []any{line},
+        },
+    }
+    // Prefer thread reply
+    if threadID != "" {
+        if err := cli.ReplyPostInThread(ctx, token, threadID, post); err == nil { return nil }
+    }
+    if chatID != "" {
+        return cli.SendPostToChat(ctx, token, chatID, post)
+    }
+    return nil
 }

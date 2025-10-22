@@ -125,3 +125,24 @@ func (c *Client) GetIssueBySequence(ctx context.Context, bearer, workspaceSlug, 
     if issueID == "" { return "", "", fmt.Errorf("empty issue id") }
     return issueID, projectID, nil
 }
+
+// GetIssueName fetches issue details and returns the issue name (title).
+// GET /api/v1/workspaces/{workspace-slug}/projects/{project_id}/issues/{issue_id}/
+func (c *Client) GetIssueName(ctx context.Context, bearer, workspaceSlug, projectID, issueID string) (string, error) {
+    path := fmt.Sprintf("/api/v1/workspaces/%s/projects/%s/issues/%s/", url.PathEscape(workspaceSlug), url.PathEscape(projectID), url.PathEscape(issueID))
+    ep, err := c.join(path)
+    if err != nil { return "", err }
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+    if err != nil { return "", err }
+    req.Header.Set("Authorization", "Bearer "+bearer)
+    hc := c.httpClient()
+    hc.Timeout = 10 * time.Second
+    resp, err := hc.Do(req)
+    if err != nil { return "", err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return "", fmt.Errorf("plane get issue status=%d", resp.StatusCode) }
+    var m map[string]any
+    if err := json.NewDecoder(resp.Body).Decode(&m); err != nil { return "", err }
+    if v, ok := m["name"].(string); ok && v != "" { return v, nil }
+    return "", fmt.Errorf("empty name")
+}

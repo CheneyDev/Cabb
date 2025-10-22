@@ -107,3 +107,46 @@ func (c *Client) ReplyTextInThread(ctx context.Context, tenantToken, rootMessage
     return nil
 }
 
+// SendPostToChat sends a post (rich text) message to a chat.
+// POST /open-apis/im/v1/messages?receive_id_type=chat_id with msg_type=post
+func (c *Client) SendPostToChat(ctx context.Context, tenantToken, chatID string, post map[string]any) error {
+    if tenantToken == "" { return errors.New("missing tenant token") }
+    ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages?receive_id_type=chat_id"
+    contentJSON, _ := json.Marshal(post)
+    payload := map[string]any{
+        "receive_id": chatID,
+        "msg_type":   "post",
+        "content":    string(contentJSON),
+    }
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil { return err }
+    req.Header.Set("Authorization", "Bearer "+tenantToken)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return errors.New("lark send post status!=2xx") }
+    return nil
+}
+
+// ReplyPostInThread replies to a thread with a post (rich text) message.
+// POST /open-apis/im/v1/messages/{message_id}/reply with msg_type=post
+func (c *Client) ReplyPostInThread(ctx context.Context, tenantToken, rootMessageID string, post map[string]any) error {
+    if tenantToken == "" { return errors.New("missing tenant token") }
+    if rootMessageID == "" { return errors.New("missing root message id") }
+    pathID := url.PathEscape(rootMessageID)
+    ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages/" + pathID + "/reply"
+    contentJSON, _ := json.Marshal(post)
+    payload := map[string]any{"msg_type": "post", "content": string(contentJSON)}
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil { return err }
+    req.Header.Set("Authorization", "Bearer "+tenantToken)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return errors.New("lark reply post status!=2xx") }
+    return nil
+}
