@@ -131,7 +131,27 @@ func (h *Handler) LarkEvents(c echo.Context) error {
             issueID, slug, projectID := parsePlaneIssueLink(text)
             // Fast-fail feedbacks according to Feishu "事件与回调"（3 秒内需响应；消息结果通过 IM 回复展示）
             if issueID == "" {
-                go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：未检测到 Plane 工作项链接或 UUID。示例：/bind https://app.plane.so/{slug}/projects/{project}/issues/{issue}")
+                // Try resolving via workspace browse short link: /{slug}/browse/{KEY-N}
+                if slug != "" {
+                    if seq := extractBrowseSequence(text); seq != "" && hHasDB(h) {
+                        rctx, cancel := context.WithTimeout(c.Request().Context(), 8*time.Second)
+                        defer cancel()
+                        token, err := h.db.FindBotTokenByWorkspaceSlug(rctx, slug)
+                        if err == nil && token != "" {
+                            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+                            if iid, pid, err := pc.GetIssueBySequence(rctx, token, slug, seq); err == nil {
+                                issueID, projectID = iid, pid
+                            }
+                        }
+                    }
+                }
+            }
+            if issueID == "" {
+                if seq := extractBrowseSequence(text); seq != "" {
+                    go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：无法解析短链接 "+seq+"。请先在本服务完成 Plane 应用安装（获取 bot token），或改用完整链接：/bind https://app.plane.so/{slug}/projects/{project}/issues/{issue}")
+                } else {
+                    go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：未检测到 Plane 工作项链接或 UUID。示例：/bind https://app.plane.so/{slug}/projects/{project}/issues/{issue}")
+                }
                 return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","error":"missing_issue_id"})
             }
             if !hHasDB(h) {
@@ -276,7 +296,18 @@ func parsePlaneIssueLink(s string) (issueID, workspaceSlug, projectID string) {
     if len(m) == 4 {
         return strings.ToLower(m[3]), m[1], strings.ToLower(m[2])
     }
-    return strings.ToLower(uuidRe.FindString(s)), "", ""
+    // fallback UUID only
+    if u := strings.ToLower(uuidRe.FindString(s)); u != "" {
+        return u, "", ""
+    }
+    // support browse short links: /{slug}/browse/{KEY-N}
+    reb := regexp.MustCompile(`https?://[^\s]+/([\w-]+)/browse/([A-Za-z0-9]+-[0-9]+)`) // #nosec G101
+    mb := reb.FindStringSubmatch(s)
+    if len(mb) == 3 {
+        // we only return slug here; the caller may resolve sequence -> (issueID, projectID)
+        return "", mb[1], ""
+    }
+    return "", "", ""
 }
 
 // notifyLarkThreadBound posts a confirmation message to the bound thread (best-effort; 待确认 API 路径)
@@ -360,4 +391,12 @@ func (h *Handler) planeIssueURL(slug, projectID, issueID string) string {
     b.WriteString("/issues/")
     b.WriteString(issueID)
     return b.String()
+}
+
+// extractBrowseSequence extracts KEY-N from a /{slug}/browse/KEY-N style link
+func extractBrowseSequence(s string) string {
+    re := regexp.MustCompile(`https?://[^\s]+/[\w-]+/browse/([A-Za-z0-9]+-[0-9]+)`) // #nosec G101
+    m := re.FindStringSubmatch(s)
+    if len(m) == 2 { return m[1] }
+    return ""
 }

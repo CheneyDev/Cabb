@@ -99,3 +99,29 @@ func (c *Client) AddComment(ctx context.Context, bearer, workspaceSlug, projectI
     return nil
 }
 
+// GetIssueBySequence fetches an issue by workspace-level sequence id (e.g., KEY-123).
+// GET /api/v1/workspaces/{workspace-slug}/issues/{sequence_id}/
+// Returns the canonical issue id and project id when available.
+func (c *Client) GetIssueBySequence(ctx context.Context, bearer, workspaceSlug, sequenceID string) (issueID, projectID string, err error) {
+    path := fmt.Sprintf("/api/v1/workspaces/%s/issues/%s/", url.PathEscape(workspaceSlug), url.PathEscape(sequenceID))
+    ep, err := c.join(path)
+    if err != nil { return "", "", err }
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+    if err != nil { return "", "", err }
+    req.Header.Set("Authorization", "Bearer "+bearer)
+    hc := c.httpClient()
+    hc.Timeout = 10 * time.Second
+    resp, err := hc.Do(req)
+    if err != nil { return "", "", err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 { return "", "", fmt.Errorf("plane get issue by sequence status=%d", resp.StatusCode) }
+    // Try decode with flexible fields
+    var m map[string]any
+    if err := json.NewDecoder(resp.Body).Decode(&m); err != nil { return "", "", err }
+    getStr := func(key string) string { if v, ok := m[key]; ok { if s, ok := v.(string); ok { return s } }; return "" }
+    issueID = getStr("id")
+    projectID = getStr("project")
+    if projectID == "" { projectID = getStr("project_id") }
+    if issueID == "" { return "", "", fmt.Errorf("empty issue id") }
+    return issueID, projectID, nil
+}
