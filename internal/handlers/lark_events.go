@@ -433,16 +433,15 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, header, anchorText, hre
     cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
     token, _, err := cli.TenantAccessToken(ctx)
     if err != nil { return err }
-    // build post content
+    // build post content: ISSUE {anchor(title)} 绑定成功
     line := []map[string]any{
+        {"tag": "text", "text": "ISSUE "},
         {"tag": "a", "text": anchorText, "href": href},
-    }
-    if subtitle != "" {
-        line = append(line, map[string]any{"tag": "text", "text": "\n" + subtitle})
+        {"tag": "text", "text": " 绑定成功"},
     }
     post := map[string]any{
         "zh_cn": map[string]any{
-            "title":   header,
+            "title":   "",
             "content": []any{line},
         },
     }
