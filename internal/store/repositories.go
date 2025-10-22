@@ -441,6 +441,38 @@ LIMIT 1`
 	return
 }
 
+// ===== Lark (Feishu) chat-level binding =====
+
+type LarkChatIssueLink struct {
+    LarkChatID     string
+    LarkThreadID   sql.NullString
+    PlaneIssueID   string
+    PlaneProjectID sql.NullString
+    WorkspaceSlug  sql.NullString
+}
+
+// UpsertLarkChatIssueLink binds a Lark chat to a Plane issue (single active binding per chat)
+func (d *DB) UpsertLarkChatIssueLink(ctx context.Context, chatID, threadID, planeIssueID, planeProjectID, workspaceSlug string) error {
+    if d == nil || d.SQL == nil { return sql.ErrConnDone }
+    const upd = `UPDATE chat_issue_links SET lark_thread_id=$2, plane_issue_id=$3::uuid, plane_project_id=$4::uuid, workspace_slug=$5, updated_at=now() WHERE lark_chat_id=$1`
+    res, err := d.SQL.ExecContext(ctx, upd, chatID, nullIfEmpty(threadID), planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug))
+    if err != nil { return err }
+    if n, _ := res.RowsAffected(); n > 0 { return nil }
+    const ins = `INSERT INTO chat_issue_links (lark_chat_id, lark_thread_id, plane_issue_id, plane_project_id, workspace_slug, created_at, updated_at) VALUES ($1,$2,$3::uuid,$4::uuid,$5,now(),now())`
+    _, err = d.SQL.ExecContext(ctx, ins, chatID, nullIfEmpty(threadID), planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug))
+    return err
+}
+
+func (d *DB) GetLarkChatIssueLink(ctx context.Context, chatID string) (*LarkChatIssueLink, error) {
+    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
+    const q = `SELECT lark_chat_id, lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug FROM chat_issue_links WHERE lark_chat_id=$1 LIMIT 1`
+    var l LarkChatIssueLink
+    if err := d.SQL.QueryRowContext(ctx, q, chatID).Scan(&l.LarkChatID, &l.LarkThreadID, &l.PlaneIssueID, &l.PlaneProjectID, &l.WorkspaceSlug); err != nil {
+        return nil, err
+    }
+    return &l, nil
+}
+
 // IssueLinks repo
 func (d *DB) FindPlaneIssueByCNBIssue(ctx context.Context, cnbRepoID, cnbIssueID string) (planeIssueID string, err error) {
 	if d == nil || d.SQL == nil {

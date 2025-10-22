@@ -5,6 +5,7 @@ import (
     "crypto/sha256"
     "encoding/hex"
     "encoding/json"
+    "database/sql"
     "io"
     "net/http"
     "regexp"
@@ -172,6 +173,8 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                 go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：内部错误，请稍后重试。")
                 return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","plane_issue_id":issueID,"error":"upsert_failed"})
             }
+            // Also bind chat -> issue for out-of-thread commands
+            _ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID, threadID, issueID, projectID, slug)
             // Success ack with details; prefer rich post with anchor title when possible
             go h.postBindAck(ev.Message.ChatID, threadID, slug, projectID, issueID)
             return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"bind","plane_issue_id":issueID})
@@ -185,7 +188,10 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                 arg := extractCommandArg(text, "/comment")
                 if arg == "" { arg = extractCommandArg(text, "评论") }
                 if arg != "" {
-                    go h.postPlaneComment(tl, arg)
+                    trimmed := strings.TrimSpace(arg)
+                    go h.postPlaneComment(tl, trimmed)
+                    // Best-effort user feedback in thread
+                    go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "评论已同步至 Plane")
                     return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"comment","plane_issue_id":tl.PlaneIssueID})
                 }
 
@@ -229,6 +235,49 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                     }
                 }
             }
+        }
+        // Chat-level /sync toggle fallback when no thread context
+        if hHasDB(h) && ev.Message.RootID == "" && ev.Message.ChatID != "" {
+            lct := strings.ToLower(strings.TrimSpace(text))
+            if strings.HasPrefix(lct, "/sync") || strings.HasPrefix(text, "开启同步") || strings.HasPrefix(text, "关闭同步") {
+                cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID)
+                if err == nil && cl != nil && cl.PlaneIssueID != "" && cl.LarkThreadID.Valid {
+                    enable := false
+                    if strings.HasPrefix(lct, "/sync on") || strings.HasPrefix(text, "开启同步") { enable = true }
+                    if strings.HasPrefix(lct, "/sync off") || strings.HasPrefix(text, "关闭同步") { /* keep false */ }
+                    slug := ""; if cl.WorkspaceSlug.Valid { slug = cl.WorkspaceSlug.String }
+                    pid := ""; if cl.PlaneProjectID.Valid { pid = cl.PlaneProjectID.String }
+                    if err := h.db.UpsertLarkThreadLink(c.Request().Context(), cl.LarkThreadID.String, cl.PlaneIssueID, pid, slug, enable); err == nil {
+                        if enable { go h.sendLarkTextToThread(ev.Message.ChatID, cl.LarkThreadID.String, "已开启线程自动同步") } else { go h.sendLarkTextToThread(ev.Message.ChatID, cl.LarkThreadID.String, "已关闭线程自动同步") }
+                        return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"sync_toggle","enabled": enable, "scope":"chat_fallback"})
+                    }
+                }
+            }
+        }
+        // If user used /comment outside of a bound thread, try chat-level binding fallback
+        if arg := extractCommandArg(text, "/comment"); arg != "" {
+            if hHasDB(h) && ev.Message.ChatID != "" {
+                if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
+                    // synthesize a thread link for routing
+                    tl := &store.LarkThreadLink{
+                        LarkThreadID:   nsToString(cl.LarkThreadID),
+                        PlaneIssueID:   cl.PlaneIssueID,
+                        PlaneProjectID: cl.PlaneProjectID,
+                        WorkspaceSlug:  cl.WorkspaceSlug,
+                        SyncEnabled:    false,
+                    }
+                    go h.postPlaneComment(tl, strings.TrimSpace(arg))
+                    // Ack to chat or mapped thread
+                    t := nsToString(cl.LarkThreadID)
+                    go h.sendLarkTextToThread(ev.Message.ChatID, t, "评论已同步至 Plane")
+                    return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"comment","plane_issue_id":cl.PlaneIssueID, "scope":"chat_fallback"})
+                }
+            }
+            // fallback guidance
+            threadID := ev.Message.RootID
+            if threadID == "" { threadID = ev.Message.MessageID }
+            go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "未绑定目标工作项。请先使用 /bind 绑定，或在绑定的话题中回复 /comment。")
+            return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"comment","error":"no_binding"})
         }
         return c.NoContent(http.StatusOK)
     default:
@@ -399,6 +448,12 @@ func extractBrowseSequence(s string) string {
     re := regexp.MustCompile(`https?://[^\s]+/[\w-]+/browse/([A-Za-z0-9]+-[0-9]+)`) // #nosec G101
     m := re.FindStringSubmatch(s)
     if len(m) == 2 { return m[1] }
+    return ""
+}
+
+// nsToString returns the string value of a sql.NullString or empty when invalid
+func nsToString(ns sql.NullString) string {
+    if ns.Valid { return ns.String }
     return ""
 }
 
