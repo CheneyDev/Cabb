@@ -351,7 +351,7 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
         }
         if actorName == "" { actorName = strings.TrimSpace(env.Activity.Actor.DisplayName) }
         if actorName == "" { actorName = "Plane 用户" }
-        msg := actorName + " 评论: " + truncate(txt, 140)
+        msg := actorName + " 添加评论：" + truncate(txt, 140)
         go h.sendLarkTextToThread("", tid, msg)
     }
     if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil) }
