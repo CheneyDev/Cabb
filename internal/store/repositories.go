@@ -659,13 +659,89 @@ func (d *DB) ListUserMappings(ctx context.Context, planeUserID, cnbUserID, searc
 	return out, rows.Err()
 }
 
-func (d *DB) CreateIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) error {
-	if d == nil || d.SQL == nil {
-		return sql.ErrConnDone
-	}
-	const q = `INSERT INTO issue_links (plane_issue_id, cnb_issue_id, cnb_repo_id, linked_at, created_at, updated_at) VALUES ($1::uuid,$2,$3,now(),now(),now()) ON CONFLICT DO NOTHING`
-	_, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbIssueID, cnbRepoID)
-	return err
+func (d *DB) CreateIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) (bool, error) {
+        if d == nil || d.SQL == nil {
+                return false, sql.ErrConnDone
+        }
+        const q = `INSERT INTO issue_links (plane_issue_id, cnb_issue_id, cnb_repo_id, linked_at, created_at, updated_at) VALUES ($1::uuid,$2,$3,now(),now(),now()) ON CONFLICT DO NOTHING`
+        res, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbIssueID, cnbRepoID)
+        if err != nil {
+                return false, err
+        }
+        if n, _ := res.RowsAffected(); n > 0 {
+                return true, nil
+        }
+        return false, nil
+}
+
+type IssueLinkRow struct {
+        PlaneIssueID string
+        CNBRepoID    sql.NullString
+        CNBIssueID   sql.NullString
+        LinkedAt     time.Time
+        CreatedAt    time.Time
+        UpdatedAt    time.Time
+}
+
+func (d *DB) ListIssueLinks(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string, limit int) ([]IssueLinkRow, error) {
+        if d == nil || d.SQL == nil {
+                return nil, sql.ErrConnDone
+        }
+        if limit <= 0 {
+                limit = 50
+        } else if limit > 200 {
+                limit = 200
+        }
+        where := "WHERE 1=1"
+        args := []any{}
+        idx := 1
+        if strings.TrimSpace(planeIssueID) != "" {
+                where += " AND plane_issue_id=$" + itoa(idx) + "::uuid"
+                args = append(args, planeIssueID)
+                idx++
+        }
+        if strings.TrimSpace(cnbRepoID) != "" {
+                where += " AND cnb_repo_id=$" + itoa(idx)
+                args = append(args, cnbRepoID)
+                idx++
+        }
+        if strings.TrimSpace(cnbIssueID) != "" {
+                where += " AND cnb_issue_id=$" + itoa(idx)
+                args = append(args, cnbIssueID)
+                idx++
+        }
+        order := " ORDER BY updated_at DESC LIMIT $" + itoa(idx)
+        args = append(args, limit)
+        query := "SELECT plane_issue_id::text, cnb_repo_id, cnb_issue_id, linked_at, created_at, updated_at FROM issue_links " + where + order
+        rows, err := d.SQL.QueryContext(ctx, query, args...)
+        if err != nil {
+                return nil, err
+        }
+        defer rows.Close()
+        var out []IssueLinkRow
+        for rows.Next() {
+                var row IssueLinkRow
+                if err := rows.Scan(&row.PlaneIssueID, &row.CNBRepoID, &row.CNBIssueID, &row.LinkedAt, &row.CreatedAt, &row.UpdatedAt); err != nil {
+                        return nil, err
+                }
+                out = append(out, row)
+        }
+        return out, rows.Err()
+}
+
+func (d *DB) DeleteIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) (bool, error) {
+        if d == nil || d.SQL == nil {
+                return false, sql.ErrConnDone
+        }
+        const q = `DELETE FROM issue_links WHERE plane_issue_id=$1::uuid AND cnb_repo_id=$2 AND cnb_issue_id=$3`
+        res, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbRepoID, cnbIssueID)
+        if err != nil {
+                return false, err
+        }
+        if n, _ := res.RowsAffected(); n > 0 {
+                return true, nil
+        }
+        return false, nil
 }
 
 // ListCNBIssuesByPlaneIssue returns all CNB links for a Plane issue.
@@ -761,24 +837,88 @@ func (d *DB) FindLarkThreadByPlaneIssue(ctx context.Context, planeIssueID string
 
 // LarkThreadLink holds thread↔issue link with optional metadata
 type LarkThreadLink struct {
-	LarkThreadID   string
-	PlaneIssueID   string
-	PlaneProjectID sql.NullString
-	WorkspaceSlug  sql.NullString
-	SyncEnabled    bool
+        LarkThreadID   string
+        PlaneIssueID   string
+        PlaneProjectID sql.NullString
+        WorkspaceSlug  sql.NullString
+        SyncEnabled    bool
+        LinkedAt       time.Time
+        CreatedAt      time.Time
+        UpdatedAt      time.Time
 }
 
 func (d *DB) GetLarkThreadLink(ctx context.Context, larkThreadID string) (*LarkThreadLink, error) {
-	if d == nil || d.SQL == nil {
-		return nil, sql.ErrConnDone
-	}
-	const q = `SELECT lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug, sync_enabled FROM thread_links WHERE lark_thread_id=$1 LIMIT 1`
-	var tl LarkThreadLink
-	err := d.SQL.QueryRowContext(ctx, q, larkThreadID).Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.SyncEnabled)
-	if err != nil {
-		return nil, err
-	}
-	return &tl, nil
+        if d == nil || d.SQL == nil {
+                return nil, sql.ErrConnDone
+        }
+        const q = `SELECT lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug, sync_enabled, linked_at, created_at, updated_at FROM thread_links WHERE lark_thread_id=$1 LIMIT 1`
+        var tl LarkThreadLink
+        err := d.SQL.QueryRowContext(ctx, q, larkThreadID).Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.SyncEnabled, &tl.LinkedAt, &tl.CreatedAt, &tl.UpdatedAt)
+        if err != nil {
+                return nil, err
+        }
+        return &tl, nil
+}
+
+func (d *DB) ListLarkThreadLinks(ctx context.Context, planeIssueID, larkThreadID string, syncEnabled *bool, limit int) ([]LarkThreadLink, error) {
+        if d == nil || d.SQL == nil {
+                return nil, sql.ErrConnDone
+        }
+        if limit <= 0 {
+                limit = 50
+        } else if limit > 200 {
+                limit = 200
+        }
+        where := "WHERE 1=1"
+        args := []any{}
+        idx := 1
+        if strings.TrimSpace(planeIssueID) != "" {
+                where += " AND plane_issue_id=$" + itoa(idx) + "::uuid"
+                args = append(args, planeIssueID)
+                idx++
+        }
+        if strings.TrimSpace(larkThreadID) != "" {
+                where += " AND lark_thread_id=$" + itoa(idx)
+                args = append(args, larkThreadID)
+                idx++
+        }
+        if syncEnabled != nil {
+                where += " AND sync_enabled=$" + itoa(idx)
+                args = append(args, *syncEnabled)
+                idx++
+        }
+        order := " ORDER BY updated_at DESC LIMIT $" + itoa(idx)
+        args = append(args, limit)
+        query := "SELECT lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug, sync_enabled, linked_at, created_at, updated_at FROM thread_links " + where + order
+        rows, err := d.SQL.QueryContext(ctx, query, args...)
+        if err != nil {
+                return nil, err
+        }
+        defer rows.Close()
+        var out []LarkThreadLink
+        for rows.Next() {
+                var tl LarkThreadLink
+                if err := rows.Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.SyncEnabled, &tl.LinkedAt, &tl.CreatedAt, &tl.UpdatedAt); err != nil {
+                        return nil, err
+                }
+                out = append(out, tl)
+        }
+        return out, rows.Err()
+}
+
+func (d *DB) DeleteLarkThreadLink(ctx context.Context, larkThreadID string) (bool, error) {
+        if d == nil || d.SQL == nil {
+                return false, sql.ErrConnDone
+        }
+        const q = `DELETE FROM thread_links WHERE lark_thread_id=$1`
+        res, err := d.SQL.ExecContext(ctx, q, larkThreadID)
+        if err != nil {
+                return false, err
+        }
+        if n, _ := res.RowsAffected(); n > 0 {
+                return true, nil
+        }
+        return false, nil
 }
 
 // Find bot token by workspace slug

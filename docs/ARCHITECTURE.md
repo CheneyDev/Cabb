@@ -29,6 +29,8 @@ This repository hosts a Go service that bridges Plane with CNB (internal code ho
 - `GET|POST /admin/access/users`、`PATCH /admin/access/users/{id}`、`POST /admin/access/users/{id}/reset-password` – 系统管理员账号管理
 - `POST /admin/mappings/repo-project|pr-states|users|channel-project` – stubs
   - repo-project 支持 `label_selector`（逗号/空格分隔）；当 Plane Issue 创建时，若命中该项目下某映射的 selector，按映射的 CNB 仓库创建对应 Issue（支持一对多 fan-out）。
+- `GET|POST|DELETE /admin/links/issues` – 查询/创建/删除 `issue_links`（Plane Issue ↔ CNB Issue）。
+- `GET|POST|DELETE /admin/links/lark-threads` – 查询/创建/删除 `thread_links`（Lark Thread ↔ Plane Issue，同步开关）。
 - `POST /jobs/issue-summary/daily` – stub (202 Accepted)
 
 ## Configure

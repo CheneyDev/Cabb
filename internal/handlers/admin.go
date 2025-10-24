@@ -407,10 +407,10 @@ func (h *Handler) AdminMappings(c echo.Context) error {
 
 // GET /admin/mappings?scope_kind=plane_project&scope_id=<id>&mapping_type=priority
 func (h *Handler) AdminMappingsList(c echo.Context) error {
-	if !hHasDB(h) {
-		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-	}
-	scopeKind := c.QueryParam("scope_kind")
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        scopeKind := c.QueryParam("scope_kind")
 	scopeID := c.QueryParam("scope_id")
 	mappingType := c.QueryParam("mapping_type")
 	items, err := h.db.ListIntegrationMappings(c.Request().Context(), scopeKind, scopeID, mappingType)
@@ -436,6 +436,193 @@ func (h *Handler) AdminMappingsList(c echo.Context) error {
 			"created_at":    m.CreatedAt.UTC().Format(time.RFC3339),
 			"updated_at":    m.UpdatedAt.UTC().Format(time.RFC3339),
 		})
-	}
-	return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+        }
+        return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+}
+
+// GET /admin/links/issues
+func (h *Handler) AdminIssueLinksList(c echo.Context) error {
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        limit := 50
+        if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
+                if v, err := strconv.Atoi(l); err == nil {
+                        limit = v
+                }
+        }
+        planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
+        cnbRepoID := strings.TrimSpace(c.QueryParam("cnb_repo_id"))
+        cnbIssueID := strings.TrimSpace(c.QueryParam("cnb_issue_id"))
+        items, err := h.db.ListIssueLinks(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID, limit)
+        if err != nil {
+                return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+        }
+        out := make([]map[string]any, 0, len(items))
+        for _, it := range items {
+                out = append(out, map[string]any{
+                        "plane_issue_id": it.PlaneIssueID,
+                        "cnb_repo_id":    nullString(it.CNBRepoID),
+                        "cnb_issue_id":   nullString(it.CNBIssueID),
+                        "linked_at":      it.LinkedAt.UTC().Format(time.RFC3339),
+                        "created_at":     it.CreatedAt.UTC().Format(time.RFC3339),
+                        "updated_at":     it.UpdatedAt.UTC().Format(time.RFC3339),
+                })
+        }
+        return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+}
+
+// POST /admin/links/issues
+func (h *Handler) AdminIssueLinksUpsert(c echo.Context) error {
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        var req struct {
+                PlaneIssueID string `json:"plane_issue_id"`
+                CNBRepoID    string `json:"cnb_repo_id"`
+                CNBIssueID   string `json:"cnb_issue_id"`
+        }
+        if err := c.Bind(&req); err != nil {
+                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+        }
+        planeIssueID := strings.TrimSpace(req.PlaneIssueID)
+        cnbRepoID := strings.TrimSpace(req.CNBRepoID)
+        cnbIssueID := strings.TrimSpace(req.CNBIssueID)
+        if planeIssueID == "" || cnbRepoID == "" || cnbIssueID == "" {
+                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 plane_issue_id/cnb_repo_id/cnb_issue_id", nil)
+        }
+        inserted, err := h.db.CreateIssueLink(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID)
+        if err != nil {
+                return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
+        }
+        status := map[string]any{"result": "ok", "inserted": inserted}
+        if !inserted {
+                status["message"] = "记录已存在"
+        }
+        return c.JSON(http.StatusOK, status)
+}
+
+// DELETE /admin/links/issues
+func (h *Handler) AdminIssueLinksDelete(c echo.Context) error {
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        var req struct {
+                PlaneIssueID string `json:"plane_issue_id"`
+                CNBRepoID    string `json:"cnb_repo_id"`
+                CNBIssueID   string `json:"cnb_issue_id"`
+        }
+        if err := c.Bind(&req); err != nil {
+                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+        }
+        planeIssueID := strings.TrimSpace(req.PlaneIssueID)
+        cnbRepoID := strings.TrimSpace(req.CNBRepoID)
+        cnbIssueID := strings.TrimSpace(req.CNBIssueID)
+        if planeIssueID == "" || cnbRepoID == "" || cnbIssueID == "" {
+                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 plane_issue_id/cnb_repo_id/cnb_issue_id", nil)
+        }
+        deleted, err := h.db.DeleteIssueLink(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID)
+        if err != nil {
+                return writeError(c, http.StatusBadGateway, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
+        }
+        if !deleted {
+                return writeError(c, http.StatusNotFound, "not_found", "未找到对应映射", nil)
+        }
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
+}
+
+// GET /admin/links/lark-threads
+func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        limit := 50
+        if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
+                if v, err := strconv.Atoi(l); err == nil {
+                        limit = v
+                }
+        }
+        planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
+        larkThreadID := strings.TrimSpace(c.QueryParam("lark_thread_id"))
+        var syncEnabled *bool
+        if sv := strings.TrimSpace(c.QueryParam("sync_enabled")); sv != "" {
+                if b, err := strconv.ParseBool(sv); err == nil {
+                        syncEnabled = &b
+                }
+        }
+        items, err := h.db.ListLarkThreadLinks(c.Request().Context(), planeIssueID, larkThreadID, syncEnabled, limit)
+        if err != nil {
+                return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+        }
+        out := make([]map[string]any, 0, len(items))
+        for _, it := range items {
+                out = append(out, map[string]any{
+                        "lark_thread_id":   it.LarkThreadID,
+                        "plane_issue_id":   it.PlaneIssueID,
+                        "plane_project_id": nullString(it.PlaneProjectID),
+                        "workspace_slug":   nullString(it.WorkspaceSlug),
+                        "sync_enabled":     it.SyncEnabled,
+                        "linked_at":        it.LinkedAt.UTC().Format(time.RFC3339),
+                        "created_at":       it.CreatedAt.UTC().Format(time.RFC3339),
+                        "updated_at":       it.UpdatedAt.UTC().Format(time.RFC3339),
+                })
+        }
+        return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+}
+
+// POST /admin/links/lark-threads
+func (h *Handler) AdminLarkThreadLinksUpsert(c echo.Context) error {
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        var req struct {
+                LarkThreadID   string `json:"lark_thread_id"`
+                PlaneIssueID   string `json:"plane_issue_id"`
+                PlaneProjectID string `json:"plane_project_id"`
+                WorkspaceSlug  string `json:"workspace_slug"`
+                SyncEnabled    *bool  `json:"sync_enabled"`
+        }
+        if err := c.Bind(&req); err != nil {
+                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+        }
+        larkThreadID := strings.TrimSpace(req.LarkThreadID)
+        planeIssueID := strings.TrimSpace(req.PlaneIssueID)
+        if larkThreadID == "" || planeIssueID == "" {
+                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 lark_thread_id/plane_issue_id", nil)
+        }
+        planeProjectID := strings.TrimSpace(req.PlaneProjectID)
+        workspaceSlug := strings.TrimSpace(req.WorkspaceSlug)
+        syncEnabled := false
+        if req.SyncEnabled != nil {
+                syncEnabled = *req.SyncEnabled
+        }
+        if err := h.db.UpsertLarkThreadLink(c.Request().Context(), larkThreadID, planeIssueID, planeProjectID, workspaceSlug, syncEnabled); err != nil {
+                return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
+        }
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok"})
+}
+
+// DELETE /admin/links/lark-threads
+func (h *Handler) AdminLarkThreadLinksDelete(c echo.Context) error {
+        if !hHasDB(h) {
+                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+        }
+        var req struct {
+                LarkThreadID string `json:"lark_thread_id"`
+        }
+        if err := c.Bind(&req); err != nil {
+                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+        }
+        larkThreadID := strings.TrimSpace(req.LarkThreadID)
+        if larkThreadID == "" {
+                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 lark_thread_id", nil)
+        }
+        deleted, err := h.db.DeleteLarkThreadLink(c.Request().Context(), larkThreadID)
+        if err != nil {
+                return writeError(c, http.StatusBadGateway, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
+        }
+        if !deleted {
+                return writeError(c, http.StatusNotFound, "not_found", "未找到对应映射", nil)
+        }
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
 }
