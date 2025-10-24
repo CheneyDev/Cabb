@@ -32,6 +32,10 @@ type Feedback = { kind: 'success' | 'error'; message: string }
 
 type ActiveFilter = 'all' | 'active' | 'inactive'
 
+function makeKey(item: { cnb_repo_id: string; plane_project_id: string }) {
+  return `${item.cnb_repo_id}::${item.plane_project_id}`
+}
+
 const initialForm = {
   cnb_repo_id: '',
   plane_workspace_id: '',
@@ -55,6 +59,8 @@ export default function MappingsPage() {
   const [filterRepo, setFilterRepo] = useState('')
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all')
   const [form, setForm] = useState<FormState>(initialForm)
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [actionKey, setActionKey] = useState<string | null>(null)
 
   const querySuffix = useMemo(() => {
     const params = new URLSearchParams()
@@ -74,20 +80,8 @@ export default function MappingsPage() {
     try {
       const res = await fetch(`/api/admin/mappings/repo-project${querySuffix}`, { cache: 'no-store' })
       if (!res.ok) {
-        const text = await res.text()
-        const ct = res.headers.get('content-type') || ''
-        let msg = res.statusText || ''
-        if (ct.includes('application/json')) {
-          try {
-            const json = JSON.parse(text)
-            msg = json?.error?.message || json?.message || msg
-          } catch {}
-        }
-        if (!msg) {
-          const snippet = text.trim().replace(/\s+/g, ' ')
-          msg = snippet.startsWith('<') ? '' : snippet.slice(0, 200)
-        }
-        throw new Error(msg || `查询失败（${res.status}）`)
+        const message = await readErrorMessage(res, `查询失败（${res.status}）`)
+        throw new Error(message)
       }
       const json = await res.json()
       setItems(Array.isArray(json.items) ? json.items : [])
@@ -104,46 +98,79 @@ export default function MappingsPage() {
 
   const activeCount = items.filter(item => item.active).length
   const inactiveCount = items.length - activeCount
+  const isEditing = Boolean(editingKey)
+  const editingLabel = useMemo(() => {
+    if (!editingKey) return ''
+    const target = items.find(item => makeKey(item) === editingKey)
+    if (!target) return ''
+    return `${target.cnb_repo_id} → ${target.plane_project_id}`
+  }, [items, editingKey])
+
+  function mappingToForm(item: Mapping): FormState {
+    return {
+      cnb_repo_id: item.cnb_repo_id,
+      plane_workspace_id: item.plane_workspace_id,
+      plane_project_id: item.plane_project_id,
+      issue_open_state_id: item.issue_open_state_id ?? '',
+      issue_closed_state_id: item.issue_closed_state_id ?? '',
+      sync_direction: item.sync_direction ?? 'cnb_to_plane',
+      label_selector: item.label_selector ?? '',
+      active: item.active,
+    }
+  }
+
+  function buildPayloadFromForm(state: FormState) {
+    return {
+      cnb_repo_id: state.cnb_repo_id.trim(),
+      plane_workspace_id: state.plane_workspace_id.trim(),
+      plane_project_id: state.plane_project_id.trim(),
+      issue_open_state_id: state.issue_open_state_id.trim(),
+      issue_closed_state_id: state.issue_closed_state_id.trim(),
+      sync_direction: state.sync_direction,
+      label_selector: state.label_selector.trim(),
+      active: state.active,
+    }
+  }
+
+  function handleEdit(item: Mapping) {
+    setForm(mappingToForm(item))
+    setEditingKey(makeKey(item))
+    setFeedback(null)
+  }
+
+  function handleResetForm() {
+    const workspace = form.plane_workspace_id
+    const project = form.plane_project_id
+    setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+    setEditingKey(null)
+    setFeedback(null)
+  }
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setSubmitting(true)
     setFeedback(null)
     try {
-      const payload: Record<string, unknown> = {
-        cnb_repo_id: form.cnb_repo_id.trim(),
-        plane_workspace_id: form.plane_workspace_id.trim(),
-        plane_project_id: form.plane_project_id.trim(),
-        active: form.active,
-      }
-      if (form.sync_direction) payload.sync_direction = form.sync_direction
-      if (form.label_selector) payload.label_selector = form.label_selector.trim()
-      if (form.issue_open_state_id) payload.issue_open_state_id = form.issue_open_state_id.trim()
-      if (form.issue_closed_state_id) payload.issue_closed_state_id = form.issue_closed_state_id.trim()
-
+      const payload = buildPayloadFromForm(form)
+      const method = isEditing ? 'PATCH' : 'POST'
       const res = await fetch('/api/admin/mappings/repo-project', {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
-        const text = await res.text()
-        const ct = res.headers.get('content-type') || ''
-        let msg = res.statusText || ''
-        if (ct.includes('application/json')) {
-          try {
-            const json = JSON.parse(text)
-            msg = json?.error?.message || json?.message || msg
-          } catch {}
-        }
-        if (!msg) {
-          const snippet = text.trim().replace(/\s+/g, ' ')
-          msg = snippet.startsWith('<') ? '' : snippet.slice(0, 200)
-        }
-        throw new Error(msg || `保存失败（${res.status}）`)
+        const message = await readErrorMessage(res, `保存失败（${res.status}）`)
+        throw new Error(message)
       }
-      setFeedback({ kind: 'success', message: '映射已保存并刷新。' })
-      setForm(prev => ({ ...prev, cnb_repo_id: '' }))
+      const workspace = form.plane_workspace_id
+      const project = form.plane_project_id
+      setFeedback({ kind: 'success', message: isEditing ? '映射已更新。' : '映射已保存并刷新。' })
+      if (isEditing) {
+        setEditingKey(null)
+        setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+      } else {
+        setForm(prev => ({ ...prev, cnb_repo_id: '' }))
+      }
       await load()
     } catch (err) {
       setFeedback({ kind: 'error', message: err instanceof Error ? err.message : '保存失败，请稍后再试。' })
@@ -152,12 +179,80 @@ export default function MappingsPage() {
     }
   }
 
+  async function handleToggleActive(item: Mapping, nextActive: boolean) {
+    const key = makeKey(item)
+    setActionKey(key)
+    setFeedback(null)
+    try {
+      const payload = { ...buildPayloadFromForm(mappingToForm(item)), active: nextActive }
+      const res = await fetch('/api/admin/mappings/repo-project', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const message = await readErrorMessage(res, `更新失败（${res.status}）`)
+        throw new Error(message)
+      }
+      if (editingKey === key) {
+        setForm(prev => ({ ...prev, active: nextActive }))
+      }
+      setFeedback({ kind: 'success', message: `已${nextActive ? '启用' : '停用'}该映射。` })
+      await load()
+    } catch (err) {
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : '更新映射状态失败。' })
+    } finally {
+      setActionKey(null)
+    }
+  }
+
+  async function handleDelete(item: Mapping) {
+    if (!window.confirm(`确定要删除映射 ${item.cnb_repo_id} → ${item.plane_project_id} 吗？此操作将标记为停用。`)) {
+      return
+    }
+    const key = makeKey(item)
+    setActionKey(key)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/admin/mappings/repo-project', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...buildPayloadFromForm(mappingToForm(item)) }),
+      })
+      if (!res.ok) {
+        const message = await readErrorMessage(res, `删除失败（${res.status}）`)
+        throw new Error(message)
+      }
+      if (editingKey === key) {
+        const workspace = form.plane_workspace_id
+        const project = form.plane_project_id
+        setEditingKey(null)
+        setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+      }
+      setFeedback({ kind: 'success', message: '映射已删除（标记为停用）。' })
+      await load()
+    } catch (err) {
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : '删除映射失败。' })
+    } finally {
+      setActionKey(null)
+    }
+  }
+
   return (
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>新增或更新 Repo ↔ Project 映射</CardTitle>
-          <CardDescription>填写必填字段后提交即可覆盖同名仓库的最新策略。</CardDescription>
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1">
+              <CardTitle>新增或更新 Repo ↔ Project 映射</CardTitle>
+              <CardDescription>
+                {isEditing
+                  ? `正在编辑：${editingLabel || '选中的映射' }。如需更换仓库或项目，请先删除后重新创建。`
+                  : '填写必填字段后提交即可覆盖同名仓库的最新策略。'}
+              </CardDescription>
+            </div>
+            {isEditing && <Badge variant="outline">编辑模式</Badge>}
+          </div>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
@@ -169,6 +264,7 @@ export default function MappingsPage() {
                 placeholder="1024hub/plane-integration"
                 value={form.cnb_repo_id}
                 onChange={event => setForm(prev => ({ ...prev, cnb_repo_id: event.target.value }))}
+                disabled={isEditing}
               />
             </div>
             <div className="grid gap-2">
@@ -189,6 +285,7 @@ export default function MappingsPage() {
                 placeholder="project uuid"
                 value={form.plane_project_id}
                 onChange={event => setForm(prev => ({ ...prev, plane_project_id: event.target.value }))}
+                disabled={isEditing}
               />
             </div>
             <div className="grid gap-2">
@@ -246,20 +343,27 @@ export default function MappingsPage() {
               </div>
             )}
             <div className="md:col-span-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <span className="text-sm text-muted-foreground">保存后列表将自动刷新。</span>
+              <span className="text-sm text-muted-foreground">
+                {isEditing ? '保存后将覆盖该映射的同步设置。' : '保存后列表将自动刷新。'}
+              </span>
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setForm(initialForm)
-                    setFeedback(null)
-                  }}
-                >
+                <Button type="button" variant="ghost" onClick={handleResetForm}>
                   重置表单
                 </Button>
+                {isEditing && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingKey(null)
+                      setForm(prev => ({ ...initialForm, plane_workspace_id: prev.plane_workspace_id, plane_project_id: prev.plane_project_id }))
+                    }}
+                  >
+                    取消编辑
+                  </Button>
+                )}
                 <Button type="submit" disabled={submitting}>
-                  {submitting ? '保存中…' : '保存映射'}
+                  {submitting ? '保存中…' : isEditing ? '保存更新' : '保存映射'}
                 </Button>
               </div>
             </div>
@@ -333,6 +437,7 @@ export default function MappingsPage() {
                   <TableHead>标签选择器</TableHead>
                   <TableHead>Issue 状态映射</TableHead>
                   <TableHead>状态</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -362,6 +467,29 @@ export default function MappingsPage() {
                     <TableCell>
                       {item.active ? <Badge variant="success">启用</Badge> : <Badge variant="muted">停用</Badge>}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                          编辑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleActive(item, !item.active)}
+                          disabled={actionKey === makeKey(item)}
+                        >
+                          {actionKey === makeKey(item) ? '处理中…' : item.active ? '停用' : '启用'}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(item)}
+                          disabled={actionKey === makeKey(item)}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {items.length === 0 && !loading && (
@@ -385,4 +513,23 @@ export default function MappingsPage() {
       </Card>
     </div>
   )
+}
+
+async function readErrorMessage(res: Response, fallback: string) {
+  const text = await res.text()
+  const ct = res.headers.get('content-type') || ''
+  let msg = res.statusText || ''
+  if (ct.includes('application/json')) {
+    try {
+      const json = JSON.parse(text)
+      msg = json?.error?.message || json?.message || msg
+    } catch {}
+  }
+  if (!msg) {
+    const snippet = text.trim().replace(/\s+/g, ' ')
+    if (snippet && !snippet.startsWith('<')) {
+      msg = snippet.slice(0, 200)
+    }
+  }
+  return msg || fallback
 }
