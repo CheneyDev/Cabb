@@ -157,8 +157,8 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                     if seq := extractBrowseSequence(text); seq != "" && hHasDB(h) {
                         rctx, cancel := context.WithTimeout(c.Request().Context(), 8*time.Second)
                         defer cancel()
-                        token, err := h.db.FindBotTokenByWorkspaceSlug(rctx, slug)
-                        if err == nil && token != "" {
+                        token, _ := h.ensurePlaneBotToken(rctx, slug)
+                        if token != "" {
                             pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
                             if iid, pid, err := pc.GetIssueBySequence(rctx, token, slug, seq); err == nil {
                                 issueID, projectID = iid, pid
@@ -433,8 +433,8 @@ func (h *Handler) postPlaneComment(tl *store.LarkThreadLink, comment string) {
     projectID := ""
     if tl.PlaneProjectID.Valid { projectID = tl.PlaneProjectID.String }
     if slug == "" || projectID == "" { return } // cannot route; 待确认：是否支持通过 Issue API 反查
-    token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug)
-    if err != nil || token == "" { return }
+    token, _ := h.ensurePlaneBotToken(ctx, slug)
+    if token == "" { return }
     pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
     // Wrap as simple HTML; escape minimal
     html := comment // Feishu text contains no HTML; Plane accepts HTML
@@ -489,6 +489,39 @@ func nsToString(ns sql.NullString) string {
     return ""
 }
 
+// ensurePlaneBotToken returns a valid Plane bot token for the workspace slug.
+// If the stored token is near expiry or expired and installation id is available,
+// it refreshes the token via client_credentials and persists it.
+func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string) (string, error) {
+    if !hHasDB(h) || strings.TrimSpace(workspaceSlug) == "" {
+        return "", nil
+    }
+    ws, err := h.db.GetWorkspaceBySlug(ctx, workspaceSlug)
+    if err != nil || ws == nil {
+        return "", err
+    }
+    token := strings.TrimSpace(ws.AccessToken)
+    // Consider refresh if expires_at is set and within 60s of expiry
+    needRefresh := false
+    if ws.ExpiresAt.Valid {
+        if time.Now().After(ws.ExpiresAt.Time.Add(-60 * time.Second)) {
+            needRefresh = true
+        }
+    }
+    if needRefresh && ws.AppInstallationID.Valid && ws.AppInstallationID.String != "" {
+        if tr, err := h.getBotToken(ctx, ws.AppInstallationID.String); err == nil && tr != nil && tr.AccessToken != "" {
+            exp := ""
+            if tr.ExpiresIn > 0 {
+                exp = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
+            }
+            // Persist refreshed token
+            _ = h.db.UpsertWorkspaceToken(ctx, ws.PlaneWorkspaceID, ws.AppInstallationID.String, "bot", tr.AccessToken, tr.RefreshToken, exp, workspaceSlug, nsToString(ws.AppBot))
+            token = tr.AccessToken
+        }
+    }
+    return token, nil
+}
+
 // postBoundAlready posts an idempotent notice that the chat is already bound to the issue.
 func (h *Handler) postBoundAlready(chatID, threadID, slug, projectID, issueID string) error {
     url := h.planeIssueURL(slug, projectID, issueID)
@@ -496,7 +529,7 @@ func (h *Handler) postBoundAlready(chatID, threadID, slug, projectID, issueID st
     if slug != "" && projectID != "" && issueID != "" && hHasDB(h) {
         ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
         defer cancel()
-        if token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug); err == nil && token != "" {
+        if token, _ := h.ensurePlaneBotToken(ctx, slug); token != "" {
             pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
             if name, err := pc.GetIssueName(ctx, token, slug, projectID, issueID); err == nil {
                 title = name
@@ -520,7 +553,7 @@ func (h *Handler) postBindAck(chatID, threadID, slug, projectID, issueID string)
     if slug != "" && projectID != "" && issueID != "" && hHasDB(h) {
         ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
         defer cancel()
-        if token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug); err == nil && token != "" {
+        if token, _ := h.ensurePlaneBotToken(ctx, slug); token != "" {
             pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
             if name, err := pc.GetIssueName(ctx, token, slug, projectID, issueID); err == nil {
                 title = name

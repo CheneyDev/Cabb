@@ -391,17 +391,32 @@ func nullableText(v sql.NullString) any {
 
 // Workspaces repo (store tokens)
 type Workspace struct {
-	ID                string
-	PlaneWorkspaceID  string
-	AppInstallationID sql.NullString
-	TokenType         string
-	AccessToken       string
-	RefreshToken      sql.NullString
-	ExpiresAt         sql.NullTime
-	WorkspaceSlug     sql.NullString
-	AppBot            sql.NullString
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+    ID                string
+    PlaneWorkspaceID  string
+    AppInstallationID sql.NullString
+    TokenType         string
+    AccessToken       string
+    RefreshToken      sql.NullString
+    ExpiresAt         sql.NullTime
+    WorkspaceSlug     sql.NullString
+    AppBot            sql.NullString
+    CreatedAt         time.Time
+    UpdatedAt         time.Time
+}
+
+func (d *DB) GetWorkspaceBySlug(ctx context.Context, workspaceSlug string) (*Workspace, error) {
+    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
+    const q = `
+SELECT id::text, plane_workspace_id::text, app_installation_id, token_type, access_token, refresh_token, expires_at, workspace_slug, app_bot, created_at, updated_at
+FROM workspaces
+WHERE workspace_slug=$1 AND token_type='bot'
+ORDER BY updated_at DESC
+LIMIT 1`
+    var w Workspace
+    if err := d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&w.ID, &w.PlaneWorkspaceID, &w.AppInstallationID, &w.TokenType, &w.AccessToken, &w.RefreshToken, &w.ExpiresAt, &w.WorkspaceSlug, &w.AppBot, &w.CreatedAt, &w.UpdatedAt); err != nil {
+        return nil, err
+    }
+    return &w, nil
 }
 
 func (d *DB) UpsertWorkspaceToken(ctx context.Context, planeWorkspaceID, appInstallationID, tokenType, accessToken, refreshToken, expiresAt, workspaceSlug, appBot string) error {
