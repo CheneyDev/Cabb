@@ -287,8 +287,11 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
         }
     }
 
-    // Notify Feishu thread if bound
-    if planeIssueID != "" {
+    // Notify Feishu thread if bound, but avoid duplicate notifications when this issue event is caused by a comment activity.
+    // Plane 会同时发送 issue_comment 与 issue.updated(仅评论相关字段变更) 两个事件。为避免重复通知，这里在 activity.field 含 "comment" 时不发送摘要通知。
+    af := strings.ToLower(strings.TrimSpace(env.Activity.Field))
+    isCommentActivity := strings.Contains(af, "comment")
+    if !isCommentActivity && planeIssueID != "" {
         if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
             summary := "Plane 工作项更新: " + truncate(name, 80)
             if action != "" { summary += " (" + action + ")" }
