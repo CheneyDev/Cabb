@@ -139,7 +139,18 @@ func (h *Handler) LarkEvents(c echo.Context) error {
             if threadID == "" { threadID = ev.Message.MessageID }
 
             issueID, slug, projectID := parsePlaneIssueLink(text)
-            // Fast-fail feedbacks according to Feishu "事件与回调"（3 秒内需响应；消息结果通过 IM 回复展示）
+
+            // If this chat has already been bound, short-circuit as idempotent regardless of new link content
+            if hHasDB(h) && ev.Message.ChatID != "" {
+                if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
+                    slugCurr := nsToString(cl.WorkspaceSlug)
+                    projCurr := nsToString(cl.PlaneProjectID)
+                    go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID) }()
+                    return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"bind","status":"duplicate_chat","plane_issue_id": cl.PlaneIssueID})
+                }
+            }
+
+            // Resolve short link KEY-N via Plane API when possible
             if issueID == "" {
                 // Try resolving via workspace browse short link: /{slug}/browse/{KEY-N}
                 if slug != "" {
