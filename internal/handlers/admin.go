@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"plane-integration/internal/lark"
 	"plane-integration/internal/plane"
 	"plane-integration/internal/store"
 )
@@ -407,10 +408,10 @@ func (h *Handler) AdminMappings(c echo.Context) error {
 
 // GET /admin/mappings?scope_kind=plane_project&scope_id=<id>&mapping_type=priority
 func (h *Handler) AdminMappingsList(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        scopeKind := c.QueryParam("scope_kind")
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	scopeKind := c.QueryParam("scope_kind")
 	scopeID := c.QueryParam("scope_id")
 	mappingType := c.QueryParam("mapping_type")
 	items, err := h.db.ListIntegrationMappings(c.Request().Context(), scopeKind, scopeID, mappingType)
@@ -436,193 +437,486 @@ func (h *Handler) AdminMappingsList(c echo.Context) error {
 			"created_at":    m.CreatedAt.UTC().Format(time.RFC3339),
 			"updated_at":    m.UpdatedAt.UTC().Format(time.RFC3339),
 		})
-        }
-        return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
 }
 
 // GET /admin/links/issues
 func (h *Handler) AdminIssueLinksList(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        limit := 50
-        if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
-                if v, err := strconv.Atoi(l); err == nil {
-                        limit = v
-                }
-        }
-        planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
-        cnbRepoID := strings.TrimSpace(c.QueryParam("cnb_repo_id"))
-        cnbIssueID := strings.TrimSpace(c.QueryParam("cnb_issue_id"))
-        items, err := h.db.ListIssueLinks(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID, limit)
-        if err != nil {
-                return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
-        }
-        out := make([]map[string]any, 0, len(items))
-        for _, it := range items {
-                out = append(out, map[string]any{
-                        "plane_issue_id": it.PlaneIssueID,
-                        "cnb_repo_id":    nullString(it.CNBRepoID),
-                        "cnb_issue_id":   nullString(it.CNBIssueID),
-                        "linked_at":      it.LinkedAt.UTC().Format(time.RFC3339),
-                        "created_at":     it.CreatedAt.UTC().Format(time.RFC3339),
-                        "updated_at":     it.UpdatedAt.UTC().Format(time.RFC3339),
-                })
-        }
-        return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	limit := 50
+	if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
+		if v, err := strconv.Atoi(l); err == nil {
+			limit = v
+		}
+	}
+	planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
+	cnbRepoID := strings.TrimSpace(c.QueryParam("cnb_repo_id"))
+	cnbIssueID := strings.TrimSpace(c.QueryParam("cnb_issue_id"))
+	ctx := c.Request().Context()
+	items, err := h.db.ListIssueLinks(ctx, planeIssueID, cnbRepoID, cnbIssueID, limit)
+	if err != nil {
+		return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+	}
+	trimNull := func(ns sql.NullString) string {
+		if ns.Valid {
+			return strings.TrimSpace(ns.String)
+		}
+		return ""
+	}
+	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+	type workspaceToken struct {
+		token string
+		slug  string
+	}
+	tokens := make(map[string]workspaceToken, len(items))
+	for _, it := range items {
+		wsID := trimNull(it.PlaneWorkspaceID)
+		if wsID == "" {
+			continue
+		}
+		if _, exists := tokens[wsID]; exists {
+			continue
+		}
+		accessToken, slug, terr := h.db.FindBotTokenByWorkspaceID(ctx, wsID)
+		if terr != nil {
+			tokens[wsID] = workspaceToken{}
+			continue
+		}
+		tokens[wsID] = workspaceToken{token: strings.TrimSpace(accessToken), slug: strings.TrimSpace(slug)}
+	}
+	type workspaceMeta struct {
+		name string
+		slug string
+	}
+	workspaceInfos := make(map[string]workspaceMeta, len(tokens))
+	for wsID, tk := range tokens {
+		meta := workspaceMeta{slug: tk.slug}
+		if tk.token != "" && meta.slug != "" {
+			wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			ws, werr := planeClient.GetWorkspace(wctx, tk.token, meta.slug)
+			cancel()
+			if werr == nil && ws != nil {
+				name := strings.TrimSpace(ws.Name)
+				if name == "" {
+					name = strings.TrimSpace(ws.Title)
+				}
+				if name != "" {
+					meta.name = name
+				}
+				if slug := strings.TrimSpace(ws.Slug); slug != "" {
+					meta.slug = slug
+				}
+			}
+		}
+		workspaceInfos[wsID] = meta
+	}
+	type projectMeta struct {
+		name       string
+		identifier string
+		slug       string
+	}
+	projectInfos := make(map[string]projectMeta, len(items))
+	for _, it := range items {
+		wsID := trimNull(it.PlaneWorkspaceID)
+		projectID := trimNull(it.PlaneProjectID)
+		if wsID == "" || projectID == "" {
+			continue
+		}
+		key := wsID + "::" + projectID
+		if _, exists := projectInfos[key]; exists {
+			continue
+		}
+		meta := projectMeta{}
+		tk := tokens[wsID]
+		slug := workspaceInfos[wsID].slug
+		if slug == "" {
+			slug = tk.slug
+		}
+		if tk.token != "" && slug != "" {
+			pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			proj, perr := planeClient.GetProject(pctx, tk.token, slug, projectID)
+			cancel()
+			if perr == nil && proj != nil {
+				if name := strings.TrimSpace(proj.Name); name != "" {
+					meta.name = name
+				} else if alt := strings.TrimSpace(proj.Slug); alt != "" {
+					meta.name = alt
+				}
+				if identifier := strings.TrimSpace(proj.Identifier); identifier != "" {
+					meta.identifier = identifier
+				}
+				if pslug := strings.TrimSpace(proj.Slug); pslug != "" {
+					meta.slug = pslug
+				}
+			}
+		}
+		projectInfos[key] = meta
+	}
+	issueNames := make(map[string]string, len(items))
+	for _, it := range items {
+		wsID := trimNull(it.PlaneWorkspaceID)
+		projectID := trimNull(it.PlaneProjectID)
+		issueID := strings.TrimSpace(it.PlaneIssueID)
+		if wsID == "" || projectID == "" || issueID == "" {
+			continue
+		}
+		key := wsID + "::" + projectID + "::" + issueID
+		if _, exists := issueNames[key]; exists {
+			continue
+		}
+		tk := tokens[wsID]
+		slug := workspaceInfos[wsID].slug
+		if slug == "" {
+			slug = tk.slug
+		}
+		if tk.token != "" && slug != "" {
+			ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			name, ierr := planeClient.GetIssueName(ictx, tk.token, slug, projectID, issueID)
+			cancel()
+			if ierr == nil {
+				if trimmed := strings.TrimSpace(name); trimmed != "" {
+					issueNames[key] = trimmed
+					continue
+				}
+			}
+		}
+		issueNames[key] = ""
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		wsID := trimNull(it.PlaneWorkspaceID)
+		projectID := trimNull(it.PlaneProjectID)
+		issueID := strings.TrimSpace(it.PlaneIssueID)
+		wm := workspaceInfos[wsID]
+		pm := projectInfos[wsID+"::"+projectID]
+		issueName := ""
+		if wsID != "" && projectID != "" && issueID != "" {
+			issueName = issueNames[wsID+"::"+projectID+"::"+issueID]
+		}
+		out = append(out, map[string]any{
+			"plane_issue_id":           it.PlaneIssueID,
+			"plane_issue_name":         optionalString(issueName),
+			"cnb_repo_id":              nullString(it.CNBRepoID),
+			"cnb_issue_id":             nullString(it.CNBIssueID),
+			"plane_project_id":         nullString(it.PlaneProjectID),
+			"plane_project_name":       optionalString(pm.name),
+			"plane_project_identifier": optionalString(pm.identifier),
+			"plane_project_slug":       optionalString(pm.slug),
+			"plane_workspace_id":       nullString(it.PlaneWorkspaceID),
+			"plane_workspace_name":     optionalString(wm.name),
+			"plane_workspace_slug":     optionalString(wm.slug),
+			"linked_at":                it.LinkedAt.UTC().Format(time.RFC3339),
+			"created_at":               it.CreatedAt.UTC().Format(time.RFC3339),
+			"updated_at":               it.UpdatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
 }
 
 // POST /admin/links/issues
 func (h *Handler) AdminIssueLinksUpsert(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        var req struct {
-                PlaneIssueID string `json:"plane_issue_id"`
-                CNBRepoID    string `json:"cnb_repo_id"`
-                CNBIssueID   string `json:"cnb_issue_id"`
-        }
-        if err := c.Bind(&req); err != nil {
-                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
-        }
-        planeIssueID := strings.TrimSpace(req.PlaneIssueID)
-        cnbRepoID := strings.TrimSpace(req.CNBRepoID)
-        cnbIssueID := strings.TrimSpace(req.CNBIssueID)
-        if planeIssueID == "" || cnbRepoID == "" || cnbIssueID == "" {
-                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 plane_issue_id/cnb_repo_id/cnb_issue_id", nil)
-        }
-        inserted, err := h.db.CreateIssueLink(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID)
-        if err != nil {
-                return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
-        }
-        status := map[string]any{"result": "ok", "inserted": inserted}
-        if !inserted {
-                status["message"] = "记录已存在"
-        }
-        return c.JSON(http.StatusOK, status)
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	var req struct {
+		PlaneIssueID string `json:"plane_issue_id"`
+		CNBRepoID    string `json:"cnb_repo_id"`
+		CNBIssueID   string `json:"cnb_issue_id"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+	}
+	planeIssueID := strings.TrimSpace(req.PlaneIssueID)
+	cnbRepoID := strings.TrimSpace(req.CNBRepoID)
+	cnbIssueID := strings.TrimSpace(req.CNBIssueID)
+	if planeIssueID == "" || cnbRepoID == "" || cnbIssueID == "" {
+		return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 plane_issue_id/cnb_repo_id/cnb_issue_id", nil)
+	}
+	inserted, err := h.db.CreateIssueLink(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID)
+	if err != nil {
+		return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
+	}
+	status := map[string]any{"result": "ok", "inserted": inserted}
+	if !inserted {
+		status["message"] = "记录已存在"
+	}
+	return c.JSON(http.StatusOK, status)
 }
 
 // DELETE /admin/links/issues
 func (h *Handler) AdminIssueLinksDelete(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        var req struct {
-                PlaneIssueID string `json:"plane_issue_id"`
-                CNBRepoID    string `json:"cnb_repo_id"`
-                CNBIssueID   string `json:"cnb_issue_id"`
-        }
-        if err := c.Bind(&req); err != nil {
-                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
-        }
-        planeIssueID := strings.TrimSpace(req.PlaneIssueID)
-        cnbRepoID := strings.TrimSpace(req.CNBRepoID)
-        cnbIssueID := strings.TrimSpace(req.CNBIssueID)
-        if planeIssueID == "" || cnbRepoID == "" || cnbIssueID == "" {
-                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 plane_issue_id/cnb_repo_id/cnb_issue_id", nil)
-        }
-        deleted, err := h.db.DeleteIssueLink(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID)
-        if err != nil {
-                return writeError(c, http.StatusBadGateway, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
-        }
-        if !deleted {
-                return writeError(c, http.StatusNotFound, "not_found", "未找到对应映射", nil)
-        }
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	var req struct {
+		PlaneIssueID string `json:"plane_issue_id"`
+		CNBRepoID    string `json:"cnb_repo_id"`
+		CNBIssueID   string `json:"cnb_issue_id"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+	}
+	planeIssueID := strings.TrimSpace(req.PlaneIssueID)
+	cnbRepoID := strings.TrimSpace(req.CNBRepoID)
+	cnbIssueID := strings.TrimSpace(req.CNBIssueID)
+	if planeIssueID == "" || cnbRepoID == "" || cnbIssueID == "" {
+		return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 plane_issue_id/cnb_repo_id/cnb_issue_id", nil)
+	}
+	deleted, err := h.db.DeleteIssueLink(c.Request().Context(), planeIssueID, cnbRepoID, cnbIssueID)
+	if err != nil {
+		return writeError(c, http.StatusBadGateway, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
+	}
+	if !deleted {
+		return writeError(c, http.StatusNotFound, "not_found", "未找到对应映射", nil)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
 }
 
 // GET /admin/links/lark-threads
 func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        limit := 50
-        if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
-                if v, err := strconv.Atoi(l); err == nil {
-                        limit = v
-                }
-        }
-        planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
-        larkThreadID := strings.TrimSpace(c.QueryParam("lark_thread_id"))
-        var syncEnabled *bool
-        if sv := strings.TrimSpace(c.QueryParam("sync_enabled")); sv != "" {
-                if b, err := strconv.ParseBool(sv); err == nil {
-                        syncEnabled = &b
-                }
-        }
-        items, err := h.db.ListLarkThreadLinks(c.Request().Context(), planeIssueID, larkThreadID, syncEnabled, limit)
-        if err != nil {
-                return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
-        }
-        out := make([]map[string]any, 0, len(items))
-        for _, it := range items {
-                out = append(out, map[string]any{
-                        "lark_thread_id":   it.LarkThreadID,
-                        "plane_issue_id":   it.PlaneIssueID,
-                        "plane_project_id": nullString(it.PlaneProjectID),
-                        "workspace_slug":   nullString(it.WorkspaceSlug),
-                        "sync_enabled":     it.SyncEnabled,
-                        "linked_at":        it.LinkedAt.UTC().Format(time.RFC3339),
-                        "created_at":       it.CreatedAt.UTC().Format(time.RFC3339),
-                        "updated_at":       it.UpdatedAt.UTC().Format(time.RFC3339),
-                })
-        }
-        return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	limit := 50
+	if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
+		if v, err := strconv.Atoi(l); err == nil {
+			limit = v
+		}
+	}
+	planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
+	larkThreadID := strings.TrimSpace(c.QueryParam("lark_thread_id"))
+	var syncEnabled *bool
+	if sv := strings.TrimSpace(c.QueryParam("sync_enabled")); sv != "" {
+		if b, err := strconv.ParseBool(sv); err == nil {
+			syncEnabled = &b
+		}
+	}
+	ctx := c.Request().Context()
+	items, err := h.db.ListLarkThreadLinks(ctx, planeIssueID, larkThreadID, syncEnabled, limit)
+	if err != nil {
+		return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+	}
+	trimNull := func(ns sql.NullString) string {
+		if ns.Valid {
+			return strings.TrimSpace(ns.String)
+		}
+		return ""
+	}
+	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+	type workspaceMeta struct {
+		token string
+		name  string
+	}
+	workspaceInfos := make(map[string]workspaceMeta, len(items))
+	for _, it := range items {
+		slug := trimNull(it.WorkspaceSlug)
+		if slug == "" {
+			continue
+		}
+		if _, exists := workspaceInfos[slug]; exists {
+			continue
+		}
+		meta := workspaceMeta{}
+		if token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug); err == nil {
+			meta.token = strings.TrimSpace(token)
+		}
+		if meta.token != "" {
+			wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			ws, err := planeClient.GetWorkspace(wctx, meta.token, slug)
+			cancel()
+			if err == nil && ws != nil {
+				name := strings.TrimSpace(ws.Name)
+				if name == "" {
+					name = strings.TrimSpace(ws.Title)
+				}
+				meta.name = name
+			}
+		}
+		workspaceInfos[slug] = meta
+	}
+	type projectMeta struct {
+		name       string
+		identifier string
+		slug       string
+	}
+	projectInfos := make(map[string]projectMeta, len(items))
+	for _, it := range items {
+		slug := trimNull(it.WorkspaceSlug)
+		projectID := trimNull(it.PlaneProjectID)
+		if slug == "" || projectID == "" {
+			continue
+		}
+		key := slug + "::" + projectID
+		if _, exists := projectInfos[key]; exists {
+			continue
+		}
+		meta := projectMeta{}
+		if wm, ok := workspaceInfos[slug]; ok && wm.token != "" {
+			pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			proj, err := planeClient.GetProject(pctx, wm.token, slug, projectID)
+			cancel()
+			if err == nil && proj != nil {
+				if name := strings.TrimSpace(proj.Name); name != "" {
+					meta.name = name
+				}
+				if identifier := strings.TrimSpace(proj.Identifier); identifier != "" {
+					meta.identifier = identifier
+				}
+				if pslug := strings.TrimSpace(proj.Slug); pslug != "" {
+					meta.slug = pslug
+				}
+			}
+		}
+		projectInfos[key] = meta
+	}
+	issueNames := make(map[string]string, len(items))
+	for _, it := range items {
+		slug := trimNull(it.WorkspaceSlug)
+		projectID := trimNull(it.PlaneProjectID)
+		issueID := strings.TrimSpace(it.PlaneIssueID)
+		if slug == "" || projectID == "" || issueID == "" {
+			continue
+		}
+		key := slug + "::" + projectID + "::" + issueID
+		if _, exists := issueNames[key]; exists {
+			continue
+		}
+		if wm, ok := workspaceInfos[slug]; ok && wm.token != "" {
+			ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			name, ierr := planeClient.GetIssueName(ictx, wm.token, slug, projectID, issueID)
+			cancel()
+			if ierr == nil {
+				trimmed := strings.TrimSpace(name)
+				if trimmed != "" {
+					issueNames[key] = trimmed
+					continue
+				}
+			}
+		}
+		issueNames[key] = ""
+	}
+	chatNames := make(map[string]string)
+	chatIDs := make([]string, 0)
+	for _, it := range items {
+		if chatID := trimNull(it.LarkChatID); chatID != "" {
+			if _, exists := chatNames[chatID]; !exists {
+				chatNames[chatID] = ""
+				chatIDs = append(chatIDs, chatID)
+			}
+		}
+	}
+	if len(chatIDs) > 0 && strings.TrimSpace(h.cfg.LarkAppID) != "" && strings.TrimSpace(h.cfg.LarkAppSecret) != "" {
+		larkClient := lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+		tctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		tenantToken, _, tokenErr := larkClient.TenantAccessToken(tctx)
+		cancel()
+		tenantToken = strings.TrimSpace(tenantToken)
+		if tokenErr == nil && tenantToken != "" {
+			for _, chatID := range chatIDs {
+				cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				chat, cerr := larkClient.GetChat(cctx, tenantToken, chatID)
+				cancel()
+				if cerr == nil && chat != nil {
+					if name := strings.TrimSpace(chat.Name); name != "" {
+						chatNames[chatID] = name
+					}
+				}
+			}
+		}
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		slug := trimNull(it.WorkspaceSlug)
+		projectID := trimNull(it.PlaneProjectID)
+		issueID := strings.TrimSpace(it.PlaneIssueID)
+		chatID := trimNull(it.LarkChatID)
+		wm := workspaceInfos[slug]
+		pm := projectInfos[slug+"::"+projectID]
+		issueName := ""
+		if slug != "" && projectID != "" && issueID != "" {
+			issueName = issueNames[slug+"::"+projectID+"::"+issueID]
+		}
+		chatName := ""
+		if chatID != "" {
+			chatName = chatNames[chatID]
+		}
+		out = append(out, map[string]any{
+			"lark_thread_id":           it.LarkThreadID,
+			"lark_chat_id":             nullString(it.LarkChatID),
+			"lark_chat_name":           optionalString(chatName),
+			"plane_issue_id":           it.PlaneIssueID,
+			"plane_issue_name":         optionalString(issueName),
+			"plane_project_id":         nullString(it.PlaneProjectID),
+			"plane_project_name":       optionalString(pm.name),
+			"plane_project_identifier": optionalString(pm.identifier),
+			"plane_project_slug":       optionalString(pm.slug),
+			"workspace_slug":           nullString(it.WorkspaceSlug),
+			"workspace_name":           optionalString(wm.name),
+			"sync_enabled":             it.SyncEnabled,
+			"linked_at":                it.LinkedAt.UTC().Format(time.RFC3339),
+			"created_at":               it.CreatedAt.UTC().Format(time.RFC3339),
+			"updated_at":               it.UpdatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
 }
 
 // POST /admin/links/lark-threads
 func (h *Handler) AdminLarkThreadLinksUpsert(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        var req struct {
-                LarkThreadID   string `json:"lark_thread_id"`
-                PlaneIssueID   string `json:"plane_issue_id"`
-                PlaneProjectID string `json:"plane_project_id"`
-                WorkspaceSlug  string `json:"workspace_slug"`
-                SyncEnabled    *bool  `json:"sync_enabled"`
-        }
-        if err := c.Bind(&req); err != nil {
-                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
-        }
-        larkThreadID := strings.TrimSpace(req.LarkThreadID)
-        planeIssueID := strings.TrimSpace(req.PlaneIssueID)
-        if larkThreadID == "" || planeIssueID == "" {
-                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 lark_thread_id/plane_issue_id", nil)
-        }
-        planeProjectID := strings.TrimSpace(req.PlaneProjectID)
-        workspaceSlug := strings.TrimSpace(req.WorkspaceSlug)
-        syncEnabled := false
-        if req.SyncEnabled != nil {
-                syncEnabled = *req.SyncEnabled
-        }
-        if err := h.db.UpsertLarkThreadLink(c.Request().Context(), larkThreadID, planeIssueID, planeProjectID, workspaceSlug, syncEnabled); err != nil {
-                return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
-        }
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok"})
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	var req struct {
+		LarkThreadID   string `json:"lark_thread_id"`
+		PlaneIssueID   string `json:"plane_issue_id"`
+		PlaneProjectID string `json:"plane_project_id"`
+		WorkspaceSlug  string `json:"workspace_slug"`
+		SyncEnabled    *bool  `json:"sync_enabled"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+	}
+	larkThreadID := strings.TrimSpace(req.LarkThreadID)
+	planeIssueID := strings.TrimSpace(req.PlaneIssueID)
+	if larkThreadID == "" || planeIssueID == "" {
+		return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 lark_thread_id/plane_issue_id", nil)
+	}
+	planeProjectID := strings.TrimSpace(req.PlaneProjectID)
+	workspaceSlug := strings.TrimSpace(req.WorkspaceSlug)
+	syncEnabled := false
+	if req.SyncEnabled != nil {
+		syncEnabled = *req.SyncEnabled
+	}
+	if err := h.db.UpsertLarkThreadLink(c.Request().Context(), larkThreadID, planeIssueID, planeProjectID, workspaceSlug, syncEnabled); err != nil {
+		return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"result": "ok"})
 }
 
 // DELETE /admin/links/lark-threads
 func (h *Handler) AdminLarkThreadLinksDelete(c echo.Context) error {
-        if !hHasDB(h) {
-                return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-        }
-        var req struct {
-                LarkThreadID string `json:"lark_thread_id"`
-        }
-        if err := c.Bind(&req); err != nil {
-                return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
-        }
-        larkThreadID := strings.TrimSpace(req.LarkThreadID)
-        if larkThreadID == "" {
-                return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 lark_thread_id", nil)
-        }
-        deleted, err := h.db.DeleteLarkThreadLink(c.Request().Context(), larkThreadID)
-        if err != nil {
-                return writeError(c, http.StatusBadGateway, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
-        }
-        if !deleted {
-                return writeError(c, http.StatusNotFound, "not_found", "未找到对应映射", nil)
-        }
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	var req struct {
+		LarkThreadID string `json:"lark_thread_id"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
+	}
+	larkThreadID := strings.TrimSpace(req.LarkThreadID)
+	if larkThreadID == "" {
+		return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 lark_thread_id", nil)
+	}
+	deleted, err := h.db.DeleteLarkThreadLink(c.Request().Context(), larkThreadID)
+	if err != nil {
+		return writeError(c, http.StatusBadGateway, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
+	}
+	if !deleted {
+		return writeError(c, http.StatusNotFound, "not_found", "未找到对应映射", nil)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
 }
