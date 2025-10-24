@@ -324,7 +324,7 @@ export default function LarkThreadLinksPage() {
                         <TableCell className="font-mono text-xs">{item.plane_project_id || '—'}</TableCell>
                         <TableCell className="font-mono text-xs">{item.workspace_slug || '—'}</TableCell>
                         <TableCell>
-                          <Badge variant={item.sync_enabled ? 'success' : 'secondary'}>
+                          <Badge variant={item.sync_enabled ? 'success' : 'muted'}>
                             {item.sync_enabled ? '已开启' : '已关闭'}
                           </Badge>
                         </TableCell>
