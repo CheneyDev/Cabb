@@ -20,8 +20,16 @@ type FormState = typeof initialForm
 
 type IssueLink = {
   plane_issue_id: string
+  plane_issue_name?: string | null
   cnb_repo_id?: string | null
   cnb_issue_id?: string | null
+  plane_project_id?: string | null
+  plane_project_name?: string | null
+  plane_project_identifier?: string | null
+  plane_project_slug?: string | null
+  plane_workspace_id?: string | null
+  plane_workspace_name?: string | null
+  plane_workspace_slug?: string | null
   linked_at?: string
   created_at?: string
   updated_at?: string
@@ -33,6 +41,20 @@ type Filters = {
   plane_issue_id: string
   cnb_repo_id: string
   cnb_issue_id: string
+}
+
+function safeTrim(value?: string | null) {
+  return value?.trim() ?? ''
+}
+
+function firstNonEmpty(...values: (string | null | undefined)[]) {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) {
+      return trimmed
+    }
+  }
+  return ''
 }
 
 function makeKey(item: IssueLink) {
@@ -242,9 +264,10 @@ export default function IssueLinksPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Plane Issue ID</TableHead>
-                  <TableHead>CNB 仓库</TableHead>
-                  <TableHead>CNB Issue IID</TableHead>
+                  <TableHead>Plane Issue</TableHead>
+                  <TableHead>Plane Project</TableHead>
+                  <TableHead>Workspace</TableHead>
+                  <TableHead>CNB Issue</TableHead>
                   <TableHead>Linked At</TableHead>
                   <TableHead>更新时间</TableHead>
                   <TableHead className="text-right">操作</TableHead>
@@ -253,35 +276,141 @@ export default function IssueLinksPage() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                       暂无数据，请调整筛选条件。
                     </TableCell>
                   </TableRow>
                 ) : (
-                  items.map(item => (
-                    <TableRow key={makeKey(item)}>
-                      <TableCell className="font-mono text-xs">{item.plane_issue_id}</TableCell>
-                      <TableCell className="font-mono text-xs">{item.cnb_repo_id || '—'}</TableCell>
-                      <TableCell className="font-mono text-xs">{item.cnb_issue_id || '—'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {item.linked_at ? new Date(item.linked_at).toLocaleString() : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(item)}
-                          disabled={deletingKey === makeKey(item)}
-                        >
-                          {deletingKey === makeKey(item) ? '删除中…' : '删除'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  items.map(item => {
+                    const issueName = safeTrim(item.plane_issue_name)
+                    const issueId = safeTrim(item.plane_issue_id)
+                    const projectName = firstNonEmpty(
+                      item.plane_project_name,
+                      item.plane_project_identifier,
+                      item.plane_project_slug,
+                    )
+                    const projectId = safeTrim(item.plane_project_id)
+                    const projectIdentifier = safeTrim(item.plane_project_identifier)
+                    const projectSlug = safeTrim(item.plane_project_slug)
+                    const projectDisplay = projectName || projectId
+                    const workspaceName = safeTrim(item.plane_workspace_name)
+                    const workspaceSlug = safeTrim(item.plane_workspace_slug)
+                    const workspaceId = safeTrim(item.plane_workspace_id)
+                    const workspaceDisplay = firstNonEmpty(workspaceName, workspaceSlug) || workspaceId
+                    const projectDetails: { key: string; value: string; monospace?: boolean }[] = []
+                    if (projectId && projectDisplay !== projectId) {
+                      projectDetails.push({ key: 'id', value: `ID: ${projectId}`, monospace: true })
+                    }
+                    if (projectIdentifier && projectIdentifier !== projectDisplay) {
+                      projectDetails.push({ key: 'identifier', value: `标识符: ${projectIdentifier}` })
+                    }
+                    if (
+                      projectSlug &&
+                      projectSlug !== projectDisplay &&
+                      projectSlug !== projectIdentifier
+                    ) {
+                      projectDetails.push({ key: 'slug', value: `Slug: ${projectSlug}` })
+                    }
+                    const workspaceDetails: { key: string; value: string; monospace?: boolean }[] = []
+                    if (workspaceSlug && workspaceSlug !== workspaceDisplay) {
+                      workspaceDetails.push({ key: 'slug', value: `Slug: ${workspaceSlug}`, monospace: true })
+                    }
+                    if (workspaceId && workspaceId !== workspaceDisplay) {
+                      workspaceDetails.push({ key: 'id', value: `ID: ${workspaceId}`, monospace: true })
+                    }
+                    const cnbRepo = safeTrim(item.cnb_repo_id)
+                    const cnbIssue = safeTrim(item.cnb_issue_id)
+                    const rowKey = makeKey(item)
+                    return (
+                      <TableRow key={rowKey}>
+                        <TableCell>
+                          {issueName || issueId ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{issueName || issueId}</span>
+                              {issueName ? (
+                                <span className="font-mono text-xs text-muted-foreground">{issueId}</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {projectDisplay ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{projectDisplay}</span>
+                              {projectDetails.length > 0 ? (
+                                <div className="flex flex-col text-xs text-muted-foreground">
+                                  {projectDetails.map(detail => (
+                                    <span
+                                      key={detail.key}
+                                      className={detail.monospace ? 'font-mono' : undefined}
+                                    >
+                                      {detail.value}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {workspaceDisplay ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{workspaceDisplay}</span>
+                              {workspaceDetails.length > 0 ? (
+                                <div className="flex flex-col text-xs text-muted-foreground">
+                                  {workspaceDetails.map(detail => (
+                                    <span
+                                      key={detail.key}
+                                      className={detail.monospace ? 'font-mono' : undefined}
+                                    >
+                                      {detail.value}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {cnbRepo || cnbIssue ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{cnbRepo || `Issue #${cnbIssue}`}</span>
+                              {cnbIssue ? (
+                                <span className="font-mono text-xs text-muted-foreground">
+                                  {cnbRepo ? `IID: ${cnbIssue}` : cnbIssue}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {item.linked_at ? new Date(item.linked_at).toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(item)}
+                            disabled={deletingKey === rowKey}
+                          >
+                            {deletingKey === rowKey ? '删除中…' : '删除'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>

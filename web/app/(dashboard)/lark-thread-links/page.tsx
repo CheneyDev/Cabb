@@ -24,9 +24,16 @@ type FormState = typeof initialForm
 
 type ThreadLink = {
   lark_thread_id: string
+  lark_chat_id?: string | null
+  lark_chat_name?: string | null
   plane_issue_id: string
+  plane_issue_name?: string | null
   plane_project_id?: string | null
+  plane_project_name?: string | null
+  plane_project_identifier?: string | null
+  plane_project_slug?: string | null
   workspace_slug?: string | null
+  workspace_name?: string | null
   sync_enabled: boolean
   linked_at?: string
   created_at?: string
@@ -39,6 +46,20 @@ type Filters = {
   plane_issue_id: string
   lark_thread_id: string
   sync_enabled: 'all' | 'true' | 'false'
+}
+
+function safeTrim(value?: string | null) {
+  return value?.trim() ?? ''
+}
+
+function firstNonEmpty(...values: (string | null | undefined)[]) {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) {
+      return trimmed
+    }
+  }
+  return ''
 }
 
 function makeKey(item: ThreadLink) {
@@ -295,10 +316,11 @@ export default function LarkThreadLinksPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Lark Chat</TableHead>
                   <TableHead>Lark Thread ID</TableHead>
-                  <TableHead>Plane Issue ID</TableHead>
-                  <TableHead>Plane Project ID</TableHead>
-                  <TableHead>Workspace Slug</TableHead>
+                  <TableHead>Plane Issue</TableHead>
+                  <TableHead>Plane Project</TableHead>
+                  <TableHead>Workspace</TableHead>
                   <TableHead>自动同步</TableHead>
                   <TableHead>Linked At</TableHead>
                   <TableHead>更新时间</TableHead>
@@ -308,7 +330,7 @@ export default function LarkThreadLinksPage() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
                       暂无数据，请调整筛选条件。
                     </TableCell>
                   </TableRow>
@@ -317,12 +339,88 @@ export default function LarkThreadLinksPage() {
                     const key = makeKey(item)
                     const toggleBusy = actionKey === key
                     const deleteBusy = actionKey === `${key}:delete`
+                    const chatName = safeTrim(item.lark_chat_name)
+                    const chatId = safeTrim(item.lark_chat_id)
+                    const issueName = safeTrim(item.plane_issue_name)
+                    const issueId = safeTrim(item.plane_issue_id)
+                    const projectName = firstNonEmpty(item.plane_project_name, item.plane_project_identifier, item.plane_project_slug)
+                    const projectId = safeTrim(item.plane_project_id)
+                    const projectIdentifier = safeTrim(item.plane_project_identifier)
+                    const projectSlug = safeTrim(item.plane_project_slug)
+                    const workspaceDisplay = firstNonEmpty(item.workspace_name, item.workspace_slug)
+                    const rawWorkspaceName = safeTrim(item.workspace_name)
+                    const workspaceSlug = safeTrim(item.workspace_slug)
+                    const projectDetails: { key: string; value: string; monospace?: boolean }[] = []
+                    if (projectName && projectId) {
+                      projectDetails.push({ key: 'id', value: projectId, monospace: true })
+                    }
+                    if (projectIdentifier && projectIdentifier !== projectName) {
+                      projectDetails.push({ key: 'identifier', value: `标识符: ${projectIdentifier}` })
+                    }
+                    if (projectSlug && projectSlug !== projectIdentifier && projectSlug !== projectName) {
+                      projectDetails.push({ key: 'slug', value: `Slug: ${projectSlug}` })
+                    }
+                    const workspaceShowSlug = rawWorkspaceName && workspaceSlug && rawWorkspaceName !== workspaceSlug
                     return (
                       <TableRow key={key}>
+                        <TableCell>
+                          {chatName || chatId ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{chatName || chatId}</span>
+                              {chatName && chatId ? (
+                                <span className="font-mono text-xs text-muted-foreground">{chatId}</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{item.lark_thread_id}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.plane_issue_id}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.plane_project_id || '—'}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.workspace_slug || '—'}</TableCell>
+                        <TableCell>
+                          {issueName || issueId ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{issueName || issueId}</span>
+                              {issueName ? (
+                                <span className="font-mono text-xs text-muted-foreground">{issueId}</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {projectName || projectId ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{projectName || projectId}</span>
+                              {projectDetails.length > 0 ? (
+                                <div className="flex flex-col text-xs text-muted-foreground">
+                                  {projectDetails.map(detail => (
+                                    <span
+                                      key={detail.key}
+                                      className={detail.monospace ? 'font-mono' : undefined}
+                                    >
+                                      {detail.value}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {workspaceDisplay ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{workspaceDisplay}</span>
+                              {workspaceShowSlug ? (
+                                <span className="font-mono text-xs text-muted-foreground">{workspaceSlug}</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={item.sync_enabled ? 'success' : 'muted'}>
                             {item.sync_enabled ? '已开启' : '已关闭'}
