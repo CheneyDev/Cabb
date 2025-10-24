@@ -168,6 +168,27 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                 go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：服务未连接数据库，请稍后重试或联系管理员。")
                 return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","plane_issue_id":issueID,"error":"db_unavailable"})
             }
+            // Prevent duplicate binding within the same chat
+            if hHasDB(h) && ev.Message.ChatID != "" {
+                if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
+                    // Same issue already bound for this chat
+                    if strings.EqualFold(cl.PlaneIssueID, issueID) {
+                        // Reply "ISSUE {title} 已绑定" and do not create duplicate thread link
+                        // Prefer existing mapping's project/slug for title/url
+                        slugEff := nsToString(cl.WorkspaceSlug)
+                        projEff := nsToString(cl.PlaneProjectID)
+                        go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugEff, projEff, issueID) }()
+                        return c.JSON(http.StatusOK, map[string]any{"result":"ok","action":"bind","status":"duplicate","plane_issue_id":issueID})
+                    }
+                    // Different issue already bound → reject duplicate binding in same chat
+                    // Reply with current binding info
+                    slugCurr := nsToString(cl.WorkspaceSlug)
+                    projCurr := nsToString(cl.PlaneProjectID)
+                    go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID) }()
+                    return c.JSON(http.StatusOK, map[string]any{"result":"error","action":"bind","error":"chat_already_bound_other","plane_issue_id":cl.PlaneIssueID})
+                }
+            }
+
             // Persist link
             if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, issueID, projectID, slug, false); err != nil {
                 go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：内部错误，请稍后重试。")
@@ -457,6 +478,29 @@ func nsToString(ns sql.NullString) string {
     return ""
 }
 
+// postBoundAlready posts an idempotent notice that the chat is already bound to the issue.
+func (h *Handler) postBoundAlready(chatID, threadID, slug, projectID, issueID string) error {
+    url := h.planeIssueURL(slug, projectID, issueID)
+    title := ""
+    if slug != "" && projectID != "" && issueID != "" && hHasDB(h) {
+        ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+        defer cancel()
+        if token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug); err == nil && token != "" {
+            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+            if name, err := pc.GetIssueName(ctx, token, slug, projectID, issueID); err == nil {
+                title = name
+            }
+        }
+    }
+    if title != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
+        return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定")
+    }
+    // fallback text
+    msg := "已绑定："
+    if url != "" { msg += url } else { msg += issueID }
+    return h.sendLarkTextToThread(chatID, threadID, msg)
+}
+
 // postBindAck best-effort sends a rich anchor link with issue title; fallback to plain text
 func (h *Handler) postBindAck(chatID, threadID, slug, projectID, issueID string) {
     url := h.planeIssueURL(slug, projectID, issueID)
@@ -474,7 +518,7 @@ func (h *Handler) postBindAck(chatID, threadID, slug, projectID, issueID string)
     }
     // If we have a title, send as post anchor; else plain text
     if title != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
-        if err := h.sendLarkPostToThread(chatID, threadID, "绑定成功", title, url, "在该线程使用 /comment 添加评论可同步至 Plane。"); err == nil {
+        if err := h.sendLarkPostToThread(chatID, threadID, title, url, "绑定成功"); err == nil {
             return
         }
         // fall through to text fallback on error
@@ -490,8 +534,8 @@ func (h *Handler) postBindAck(chatID, threadID, slug, projectID, issueID string)
     _ = h.sendLarkTextToThread(chatID, threadID, msg)
 }
 
-// sendLarkPostToThread composes a minimal zh_cn post with an anchor title and optional subtitle, and replies in thread
-func (h *Handler) sendLarkPostToThread(chatID, threadID, header, anchorText, href, subtitle string) error {
+// sendLarkPostToThread composes a minimal zh_cn post: "ISSUE {anchor(title)} {suffix}", and replies in thread
+func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffix string) error {
     ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
     defer cancel()
     cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
@@ -501,7 +545,7 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, header, anchorText, hre
     line := []map[string]any{
         {"tag": "text", "text": "ISSUE "},
         {"tag": "a", "text": anchorText, "href": href},
-        {"tag": "text", "text": " 绑定成功"},
+        {"tag": "text", "text": " " + suffix},
     }
     post := map[string]any{
         "zh_cn": map[string]any{
