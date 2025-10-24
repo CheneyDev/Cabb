@@ -20,6 +20,11 @@ const directionOptions = [
 type Mapping = {
   plane_project_id: string
   plane_workspace_id: string
+  plane_workspace_slug?: string | null
+  plane_workspace_name?: string | null
+  plane_project_name?: string | null
+  plane_project_identifier?: string | null
+  plane_project_slug?: string | null
   cnb_repo_id: string
   issue_open_state_id?: string | null
   issue_closed_state_id?: string | null
@@ -34,6 +39,48 @@ type ActiveFilter = 'all' | 'active' | 'inactive'
 
 function makeKey(item: { cnb_repo_id: string; plane_project_id: string }) {
   return `${item.cnb_repo_id}::${item.plane_project_id}`
+}
+
+function trimValue(value?: string | null) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : ''
+}
+
+function formatWorkspaceLabel(item: Mapping) {
+  return trimValue(item.plane_workspace_name) || trimValue(item.plane_workspace_slug) || item.plane_workspace_id
+}
+
+function formatWorkspaceDetails(item: Mapping) {
+  const details: string[] = []
+  const slug = trimValue(item.plane_workspace_slug)
+  if (slug) {
+    details.push(`Slug: ${slug}`)
+  }
+  details.push(`ID: ${item.plane_workspace_id}`)
+  return details.join(' · ')
+}
+
+function formatProjectLabel(item: Mapping) {
+  return (
+    trimValue(item.plane_project_name) ||
+    trimValue(item.plane_project_identifier) ||
+    trimValue(item.plane_project_slug) ||
+    item.plane_project_id
+  )
+}
+
+function formatProjectDetails(item: Mapping) {
+  const details: string[] = []
+  const identifier = trimValue(item.plane_project_identifier)
+  const slug = trimValue(item.plane_project_slug)
+  if (identifier) {
+    details.push(`标识符: ${identifier}`)
+  }
+  if (slug && slug !== identifier) {
+    details.push(`Slug: ${slug}`)
+  }
+  details.push(`ID: ${item.plane_project_id}`)
+  return details.join(' · ')
 }
 
 const initialForm = {
@@ -103,7 +150,7 @@ export default function MappingsPage() {
     if (!editingKey) return ''
     const target = items.find(item => makeKey(item) === editingKey)
     if (!target) return ''
-    return `${target.cnb_repo_id} → ${target.plane_project_id}`
+    return `${target.cnb_repo_id} → ${formatProjectLabel(target)}`
   }, [items, editingKey])
 
   function mappingToForm(item: Mapping): FormState {
@@ -207,7 +254,7 @@ export default function MappingsPage() {
   }
 
   async function handleDelete(item: Mapping) {
-    if (!window.confirm(`确定要删除映射 ${item.cnb_repo_id} → ${item.plane_project_id} 吗？此操作将标记为停用。`)) {
+    if (!window.confirm(`确定要删除映射 ${item.cnb_repo_id} → ${formatProjectLabel(item)} 吗？此操作将标记为停用。`)) {
       return
     }
     const key = makeKey(item)
@@ -447,9 +494,15 @@ export default function MappingsPage() {
                       <span className="font-medium text-foreground">{item.cnb_repo_id}</span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm text-foreground">Workspace: {item.plane_workspace_id}</span>
-                        <span className="text-xs text-muted-foreground">Project ID: {item.plane_project_id}</span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-foreground">Workspace: {formatWorkspaceLabel(item)}</span>
+                          <span className="text-xs text-muted-foreground">{formatWorkspaceDetails(item)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-foreground">Project: {formatProjectLabel(item)}</span>
+                          <span className="text-xs text-muted-foreground">{formatProjectDetails(item)}</span>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
