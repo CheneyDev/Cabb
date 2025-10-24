@@ -841,6 +841,16 @@ func (d *DB) GetPRStateMapping(ctx context.Context, cnbRepoID string) (*PRStateM
 	return &m, nil
 }
 
+// FindDisplayNameByPlaneUserID returns a preferred display name mapped for the plane user, if any.
+func (d *DB) FindDisplayNameByPlaneUserID(ctx context.Context, planeUserID string) (string, error) {
+    if d == nil || d.SQL == nil { return "", sql.ErrConnDone }
+    const q = `SELECT display_name FROM user_mappings WHERE plane_user_id=$1::uuid LIMIT 1`
+    var name sql.NullString
+    if err := d.SQL.QueryRowContext(ctx, q, planeUserID).Scan(&name); err != nil { return "", err }
+    if name.Valid { return name.String, nil }
+    return "", sql.ErrNoRows
+}
+
 // helpers
 func nullIfEmpty(s string) any {
 	if s == "" {

@@ -64,6 +64,11 @@ type planeWebhookEnvelope struct {
         Field    string      `json:"field"`
         NewValue any         `json:"new_value"`
         OldValue any         `json:"old_value"`
+        Actor    struct {
+            ID          string `json:"id"`
+            DisplayName string `json:"display_name"`
+            Email       string `json:"email"`
+        } `json:"actor"`
     } `json:"activity"`
 }
 
@@ -86,4 +91,3 @@ func (h *Handler) processPlaneWebhook(event string, body []byte, deliveryID stri
         // ignore others for CNB integration
     }
 }
-

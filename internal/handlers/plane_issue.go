@@ -310,7 +310,24 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
     data := env.Data
     planeIssueID, _ := dataGetString(data, "issue")
     commentHTML, _ := dataGetString(data, "comment_html")
+    commentID, _ := dataGetString(data, "id")
+    action := strings.ToLower(strings.TrimSpace(env.Action))
+    // Only process newly created comments to avoid duplicates from subsequent updates
+    if action != "create" && action != "created" {
+        if deliveryID != "" {
+            _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "skipped", nil)
+        }
+        return
+    }
     if planeIssueID == "" || commentHTML == "" { return }
+    // Idempotency guard by comment id (cross-delivery dedupe)
+    if commentID != "" {
+        if dup, err := h.db.IsDuplicateDelivery(ctx, "plane.issue_comment_id", commentID, ""); err == nil && dup {
+            if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "duplicate", nil) }
+            return
+        }
+        _ = h.db.UpsertEventDelivery(ctx, "plane.issue_comment_id", "incoming", commentID, "", "seen")
+    }
     if h.cfg.CNBOutboundEnabled {
         if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
             cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken, IssueCreatePath: h.cfg.CNBIssueCreatePath, IssueUpdatePath: h.cfg.CNBIssueUpdatePath, IssueCommentPath: h.cfg.CNBIssueCommentPath}
@@ -327,12 +344,17 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
         txt := commentHTML
         txt = strings.ReplaceAll(txt, "<br>", "\n")
         txt = stripTags(txt)
-        msg := "Plane 评论: " + truncate(txt, 140)
+        // Prefer mapped display name; fallback to Plane actor display name
+        actorName := ""
+        if id := strings.TrimSpace(env.Activity.Actor.ID); id != "" && hHasDB(h) {
+            if name, err := h.db.FindDisplayNameByPlaneUserID(ctx, id); err == nil && strings.TrimSpace(name) != "" { actorName = strings.TrimSpace(name) }
+        }
+        if actorName == "" { actorName = strings.TrimSpace(env.Activity.Actor.DisplayName) }
+        if actorName == "" { actorName = "Plane 用户" }
+        msg := actorName + " 评论: " + truncate(txt, 140)
         go h.sendLarkTextToThread("", tid, msg)
     }
-    if deliveryID != "" {
-        _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil)
-    }
+    if deliveryID != "" { _ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil) }
 }
 
 // ==== helpers (issue) ====
