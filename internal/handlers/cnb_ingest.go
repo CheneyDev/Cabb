@@ -295,7 +295,7 @@ func (h *Handler) processCNBIssue(p cnbIssuePayload, deliveryID, sum string) {
 		if err != nil {
 			return
 		}
-		_ = h.db.CreateIssueLink(ctx, issueID, p.Repo, p.IssueIID)
+                _, _ = h.db.CreateIssueLink(ctx, issueID, p.Repo, p.IssueIID)
 		_ = cl.AddComment(ctx, token, slug, mapping.PlaneProjectID, issueID, fmt.Sprintf("<p>Linked from CNB issue <code>%s#%s</code></p>", p.Repo, p.IssueIID))
 		LogStructured("info", map[string]any{
 			"event":          "cnb.issue.planerpc",

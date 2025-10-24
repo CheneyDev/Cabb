@@ -120,7 +120,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
                     unlock()
                     continue
                 }
-                _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
+                _, _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
                 LogStructured("info", map[string]any{"event": "plane.issue.cnbrpc", "delivery_id": deliveryID, "action": action, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "op": "create_issue", "result": "created", "cnb_issue_iid": iid})
                 unlock()
                 if startDate != "" || dueDate != "" || hasPriority {

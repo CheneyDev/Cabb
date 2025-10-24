@@ -111,6 +111,12 @@ export default function Page() {
                 <span className="font-medium text-foreground">label_mappings</span> — CNB 标签到 Plane 标签的映射表。
               </li>
               <li>
+                <span className="font-medium text-foreground">issue_links</span> — Plane Issue ↔ CNB Issue 的人工纠错映射。
+              </li>
+              <li>
+                <span className="font-medium text-foreground">thread_links</span> — 飞书线程 ↔ Plane Issue 的同步绑定。
+              </li>
+              <li>
                 <span className="font-medium text-foreground">user_mappings</span> — Plane 成员与外部账号的身份绑定。
               </li>
             </ul>
