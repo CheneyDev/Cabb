@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuPortal } from '@/components/ui/menu'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuPortal, MenuGroup, MenuGroupLabel } from '@/components/ui/menu'
 
 const initialForm = {
   plane_issue_id: '',
@@ -404,20 +404,24 @@ export default function IssueLinksPage() {
                               <MenuTrigger
                                 aria-label="更多操作"
                                 title="更多操作"
-                                className="!min-w-0 !px-0 !py-0 w-9 h-9 rounded-full border-transparent bg-transparent hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                                className="!min-w-0 h-9 px-3"
                               >
-                                <MoreIcon className="h-4 w-4" />
+                                <span className="text-sm">更多</span>
+                                <ChevronDownIcon className="h-4 w-4" />
                               </MenuTrigger>
                               <MenuPortal>
                                 <MenuPositioner>
-                                  <MenuPopup className="p-1 min-w-[10rem]">
-                                  <MenuItem
-                                    onSelect={() => handleDelete(item)}
-                                    className="justify-start text-destructive-foreground"
-                                    disabled={deletingKey === rowKey}
-                                  >
-                                    <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
-                                  </MenuItem>
+                                  <MenuPopup className="p-1 min-w-[12rem]" align="end" sideOffset={6}>
+                                    <MenuGroup>
+                                      <MenuGroupLabel>危险操作</MenuGroupLabel>
+                                      <MenuItem
+                                        onClick={() => handleDelete(item)}
+                                        className="justify-start text-destructive-foreground"
+                                        disabled={deletingKey === rowKey}
+                                      >
+                                        <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
+                                      </MenuItem>
+                                    </MenuGroup>
                                   </MenuPopup>
                                 </MenuPositioner>
                               </MenuPortal>
@@ -474,6 +478,13 @@ function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
       <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+function ChevronDownIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+      <path d="M6 9l6 6 6-6" />
     </svg>
   )
 }

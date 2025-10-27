@@ -519,7 +519,7 @@ function EditIcon(props: React.SVGProps<SVGSVGElement>) {
                             <MenuPositioner>
                               <MenuPopup className="p-1 min-w-[10rem]">
                               <MenuItem
-                                onSelect={() => startEdit(item)}
+                                onClick={() => startEdit(item)}
                                 className="justify-start"
                                 disabled={!item.cnb_user_id}
                               >

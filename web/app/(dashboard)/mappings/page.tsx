@@ -11,7 +11,17 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator, MenuPortal } from '@/components/ui/menu'
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuPositioner,
+  MenuTrigger,
+  MenuSeparator,
+  MenuPortal,
+  MenuGroup,
+  MenuGroupLabel,
+} from '@/components/ui/menu'
 
 const directionOptions = [
   { value: 'cnb_to_plane', label: '仅 CNB → Plane' },
@@ -235,6 +245,14 @@ export default function MappingsPage() {
     )
   }
   // endregion
+
+  function ChevronDownIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    )
+  }
 
   function handleResetForm() {
     const workspace = form.plane_workspace_id
@@ -586,36 +604,43 @@ export default function MappingsPage() {
                           <MenuTrigger
                             aria-label="更多操作"
                             title="更多操作"
-                            className="!min-w-0 !px-0 !py-0 w-9 h-9 rounded-full border-transparent bg-transparent hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                            className="!min-w-0 h-9 px-3"
                           >
-                            <MoreIcon className="h-4 w-4" />
+                            <span className="text-sm">更多</span>
+                            <ChevronDownIcon className="h-4 w-4" />
                           </MenuTrigger>
                           <MenuPortal>
                             <MenuPositioner>
-                              <MenuPopup className="p-1 min-w-[10rem]">
-                              <MenuItem
-                                onSelect={() => handleToggleActive(item, !item.active)}
-                                className="justify-start"
-                                data-active={item.active ? true : undefined}
-                                disabled={actionKey === makeKey(item)}
-                              >
-                                {item.active ? (
-                                  <span className="inline-flex items-center gap-2"><ToggleOffIcon className="h-4 w-4" /> 停用</span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-2"><ToggleOnIcon className="h-4 w-4" /> 启用</span>
-                                )}
-                              </MenuItem>
-                              <MenuItem onSelect={() => handleEdit(item)} className="justify-start">
-                                <span className="inline-flex items-center gap-2"><EditIcon className="h-4 w-4" /> 编辑</span>
-                              </MenuItem>
-                              <MenuSeparator />
-                              <MenuItem
-                                onSelect={() => handleDelete(item)}
-                                className="justify-start text-destructive-foreground"
-                                disabled={actionKey === makeKey(item)}
-                              >
-                                <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
-                              </MenuItem>
+                              <MenuPopup className="p-1 min-w-[12rem]" align="end" sideOffset={6}>
+                                <MenuGroup>
+                                  <MenuGroupLabel>快速操作</MenuGroupLabel>
+                                  <MenuItem
+                                    onClick={() => handleToggleActive(item, !item.active)}
+                                    className="justify-start"
+                                    data-active={item.active ? true : undefined}
+                                    disabled={actionKey === makeKey(item)}
+                                  >
+                                    {item.active ? (
+                                      <span className="inline-flex items-center gap-2"><ToggleOffIcon className="h-4 w-4" /> 停用</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-2"><ToggleOnIcon className="h-4 w-4" /> 启用</span>
+                                    )}
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleEdit(item)} className="justify-start">
+                                    <span className="inline-flex items-center gap-2"><EditIcon className="h-4 w-4" /> 编辑</span>
+                                  </MenuItem>
+                                </MenuGroup>
+                                <MenuSeparator />
+                                <MenuGroup>
+                                  <MenuGroupLabel>危险操作</MenuGroupLabel>
+                                  <MenuItem
+                                    onClick={() => handleDelete(item)}
+                                    className="justify-start text-destructive-foreground"
+                                    disabled={actionKey === makeKey(item)}
+                                  >
+                                    <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
+                                  </MenuItem>
+                                </MenuGroup>
                               </MenuPopup>
                             </MenuPositioner>
                           </MenuPortal>
