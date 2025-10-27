@@ -411,7 +411,7 @@ export default function IssueLinksPage() {
                               </MenuTrigger>
                               <MenuPortal>
                                 <MenuPositioner>
-                                  <MenuPopup className="p-1 min-w-[12rem]" align="end" sideOffset={6}>
+                                  <MenuPopup className="p-1 min-w-[12rem]">
                                     <MenuGroup>
                                       <MenuGroupLabel>危险操作</MenuGroupLabel>
                                       <MenuItem
