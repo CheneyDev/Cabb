@@ -484,7 +484,7 @@ export default function MappingsPage() {
                   <TableHead>标签选择器</TableHead>
                   <TableHead>Issue 状态映射</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead className="text-right w-[240px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -520,24 +520,34 @@ export default function MappingsPage() {
                     <TableCell>
                       {item.active ? <Badge variant="success">启用</Badge> : <Badge variant="muted">停用</Badge>}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                    <TableCell className="w-[240px]">
+                      <div className="flex items-center justify-end gap-2 flex-nowrap">
+                        <Button
+                          className="shrink-0"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(item)}
+                          title="编辑映射"
+                        >
                           编辑
                         </Button>
                         <Button
+                          className="shrink-0"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleActive(item, !item.active)}
                           disabled={actionKey === makeKey(item)}
+                          title={item.active ? '停用映射' : '启用映射'}
                         >
                           {actionKey === makeKey(item) ? '处理中…' : item.active ? '停用' : '启用'}
                         </Button>
                         <Button
+                          className="shrink-0"
                           variant="destructive"
                           size="sm"
                           onClick={() => handleDelete(item)}
                           disabled={actionKey === makeKey(item)}
+                          title="删除映射（标记为停用）"
                         >
                           删除
                         </Button>
@@ -547,14 +557,14 @@ export default function MappingsPage() {
                 ))}
                 {items.length === 0 && !loading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                       暂无符合条件的映射。
                     </TableCell>
                   </TableRow>
                 )}
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                       正在加载映射数据…
                     </TableCell>
                   </TableRow>
