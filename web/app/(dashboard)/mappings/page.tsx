@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator } from '@/components/ui/menu'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator, MenuPortal } from '@/components/ui/menu'
 
 const directionOptions = [
   { value: 'cnb_to_plane', label: '仅 CNB → Plane' },
@@ -590,8 +590,9 @@ export default function MappingsPage() {
                           >
                             <MoreIcon className="h-4 w-4" />
                           </MenuTrigger>
-                          <MenuPositioner>
-                            <MenuPopup className="p-1 min-w-[10rem]">
+                          <MenuPortal>
+                            <MenuPositioner>
+                              <MenuPopup className="p-1 min-w-[10rem]">
                               <MenuItem
                                 onSelect={() => handleToggleActive(item, !item.active)}
                                 className="justify-start"
@@ -615,8 +616,9 @@ export default function MappingsPage() {
                               >
                                 <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
                               </MenuItem>
-                            </MenuPopup>
-                          </MenuPositioner>
+                              </MenuPopup>
+                            </MenuPositioner>
+                          </MenuPortal>
                         </Menu>
                       </div>
                     </TableCell>

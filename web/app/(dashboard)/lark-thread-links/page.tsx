@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator } from '@/components/ui/menu'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator, MenuPortal } from '@/components/ui/menu'
 
 const initialForm = {
   lark_thread_id: '',
@@ -453,8 +453,9 @@ export default function LarkThreadLinksPage() {
                               >
                                 <MoreIcon className="h-4 w-4" />
                               </MenuTrigger>
-                              <MenuPositioner>
-                                <MenuPopup className="p-1 min-w-[10rem]">
+                              <MenuPortal>
+                                <MenuPositioner>
+                                  <MenuPopup className="p-1 min-w-[10rem]">
                                   <MenuItem
                                     onSelect={() => handleDelete(item)}
                                     className="justify-start text-destructive-foreground"
@@ -462,8 +463,9 @@ export default function LarkThreadLinksPage() {
                                   >
                                     <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
                                   </MenuItem>
-                                </MenuPopup>
-                              </MenuPositioner>
+                                  </MenuPopup>
+                                </MenuPositioner>
+                              </MenuPortal>
                             </Menu>
                           </div>
                         </TableCell>

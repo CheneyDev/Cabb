@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger } from '@/components/ui/menu'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuPortal } from '@/components/ui/menu'
 
 const initialForm = {
   plane_issue_id: '',
@@ -408,8 +408,9 @@ export default function IssueLinksPage() {
                               >
                                 <MoreIcon className="h-4 w-4" />
                               </MenuTrigger>
-                              <MenuPositioner>
-                                <MenuPopup className="p-1 min-w-[10rem]">
+                              <MenuPortal>
+                                <MenuPositioner>
+                                  <MenuPopup className="p-1 min-w-[10rem]">
                                   <MenuItem
                                     onSelect={() => handleDelete(item)}
                                     className="justify-start text-destructive-foreground"
@@ -417,8 +418,9 @@ export default function IssueLinksPage() {
                                   >
                                     <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
                                   </MenuItem>
-                                </MenuPopup>
-                              </MenuPositioner>
+                                  </MenuPopup>
+                                </MenuPositioner>
+                              </MenuPortal>
                             </Menu>
                           </div>
                         </TableCell>
