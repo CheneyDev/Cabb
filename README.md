@@ -369,6 +369,8 @@ docker run --rm -p 8080:8080 \
   - `POST /admin/mappings/pr-states`
   - `POST /admin/mappings/users`
   - `POST /admin/mappings/channel-project`
+  - `GET /admin/links/issues` / `POST /admin/links/issues` / `DELETE /admin/links/issues` — 管理 `issue_links`（Plane Issue ↔ CNB Issue）。
+  - `GET /admin/links/lark-threads` / `POST /admin/links/lark-threads` / `DELETE /admin/links/lark-threads` — 管理 `thread_links`（飞书线程 ↔ Plane Issue）。
 - 任务
   - `POST /jobs/issue-summary/daily`
 

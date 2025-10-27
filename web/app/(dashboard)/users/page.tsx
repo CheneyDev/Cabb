@@ -41,6 +41,9 @@ export default function UsersPage() {
   const [submitting, setSubmitting] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [editing, setEditing] = useState<UserMapping | null>(null)
+  const [editForm, setEditForm] = useState<FormRow>(initialRow)
+  const [editPending, setEditPending] = useState(false)
   const [filterPlaneUser, setFilterPlaneUser] = useState('')
   const [filterCNBUser, setFilterCNBUser] = useState('')
   const [search, setSearch] = useState('')
@@ -92,6 +95,21 @@ export default function UsersPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (!editing?.cnb_user_id) return
+    const match = mappings.find(item => item.cnb_user_id === editing.cnb_user_id)
+    if (!match) {
+      setEditing(null)
+      setEditForm(initialRow)
+      return
+    }
+    setEditForm({
+      plane_user_id: match.plane_user_id,
+      cnb_user_id: match.cnb_user_id ?? '',
+      display_name: match.display_name ?? '',
+    })
+  }, [mappings, editing?.cnb_user_id])
 
   function updateRow(index: number, field: keyof FormRow, value: string) {
     setRows(prev => prev.map((row, idx) => (idx === index ? { ...row, [field]: value } : row)))
@@ -153,6 +171,79 @@ export default function UsersPage() {
     }
   }
 
+  function startEdit(mapping: UserMapping) {
+    if (!mapping.cnb_user_id) {
+      setFeedback({ kind: 'error', message: '该映射缺少 CNB 用户 ID，无法编辑。' })
+      return
+    }
+    setEditing(mapping)
+    setEditForm({
+      plane_user_id: mapping.plane_user_id,
+      cnb_user_id: mapping.cnb_user_id ?? '',
+      display_name: mapping.display_name ?? '',
+    })
+    setFeedback(null)
+  }
+
+  function cancelEdit() {
+    setEditing(null)
+    setEditForm(initialRow)
+  }
+
+  async function submitEdit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editing) {
+      setFeedback({ kind: 'error', message: '请先在列表中选择需要编辑的映射。' })
+      return
+    }
+    const planeUserID = editForm.plane_user_id.trim()
+    const cnbUserID = editForm.cnb_user_id.trim()
+    if (!planeUserID || !cnbUserID) {
+      setFeedback({ kind: 'error', message: 'Plane 用户 ID 与 CNB 用户 ID 均不能为空。' })
+      return
+    }
+    setEditPending(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/admin/mappings/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mappings: [
+            {
+              plane_user_id: planeUserID,
+              cnb_user_id: cnbUserID,
+              display_name: editForm.display_name.trim(),
+            },
+          ],
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        const ct = res.headers.get('content-type') || ''
+        let msg = res.statusText || ''
+        if (ct.includes('application/json')) {
+          try {
+            const json = JSON.parse(text)
+            msg = json?.error?.message || json?.message || msg
+          } catch {}
+        }
+        if (!msg) {
+          const snippet = text.trim().replace(/\s+/g, ' ')
+          msg = snippet.startsWith('<') ? '' : snippet.slice(0, 200)
+        }
+        throw new Error(msg || `保存失败（${res.status}）`)
+      }
+      setFeedback({ kind: 'success', message: '映射已更新。' })
+      cancelEdit()
+      await load()
+    } catch (err) {
+      setFeedback({ kind: 'error', message: err instanceof Error ? err.message : '保存失败，请稍后再试。' })
+    } finally {
+      setEditPending(false)
+    }
+  }
+
   function formatDate(value?: string | null) {
     if (!value) return '—'
     const date = new Date(value)
@@ -161,6 +252,15 @@ export default function UsersPage() {
   }
 
   const connectedCount = mappings.filter(item => Boolean(item.connected_at)).length
+
+  const editingLabel = useMemo(() => {
+    if (!editing) return '选择列表中的映射进行编辑。'
+    const display = editForm.display_name || editing.display_name || ''
+    const cnb = editing.cnb_user_id || editForm.cnb_user_id || ''
+    const plane = editForm.plane_user_id
+    const segments = [display || plane, cnb ? `CNB: ${cnb}` : '', `Plane: ${plane}`].filter(Boolean)
+    return segments.join(' ｜ ')
+  }, [editing, editForm])
 
   return (
     <div className="grid gap-6">
@@ -216,7 +316,6 @@ export default function UsersPage() {
                 </div>
               ))}
             </div>
-            {feedback && <Alert variant={feedback.kind === 'success' ? 'success' : 'destructive'}>{feedback.message}</Alert>}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <span className="text-sm text-muted-foreground">提交后列表会立即刷新，确保最新绑定生效。</span>
               <Button type="submit" disabled={submitting}>
@@ -226,6 +325,69 @@ export default function UsersPage() {
           </form>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1">
+              <CardTitle>编辑已有用户映射</CardTitle>
+              <CardDescription>{editingLabel}</CardDescription>
+            </div>
+            {editing && <Badge variant="outline">编辑模式</Badge>}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4 md:grid-cols-3" onSubmit={submitEdit}>
+            <div className="grid gap-2">
+              <Label htmlFor="edit_plane_user">Plane 用户 ID</Label>
+              <Input
+                id="edit_plane_user"
+                placeholder="Plane 用户 UUID"
+                value={editForm.plane_user_id}
+                onChange={event => setEditForm(prev => ({ ...prev, plane_user_id: event.target.value }))}
+                disabled={!editing}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit_cnb_user">CNB 用户 ID</Label>
+              <Input
+                id="edit_cnb_user"
+                placeholder="CNB 用户名或 ID"
+                value={editForm.cnb_user_id}
+                onChange={event => setEditForm(prev => ({ ...prev, cnb_user_id: event.target.value }))}
+                disabled={!editing}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit_display_name">显示名（可选）</Label>
+              <Input
+                id="edit_display_name"
+                placeholder="用于后台备注的名称"
+                value={editForm.display_name}
+                onChange={event => setEditForm(prev => ({ ...prev, display_name: event.target.value }))}
+                disabled={!editing}
+              />
+            </div>
+            <div className="md:col-span-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span className="text-sm text-muted-foreground">
+                {editing
+                  ? '保存后会覆盖该条映射的 Plane 用户或显示名配置。'
+                  : '从下方列表选择映射后即可在此处更新绑定信息。'}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={cancelEdit} disabled={!editing}>
+                  取消
+                </Button>
+                <Button type="submit" disabled={!editing || editPending}>
+                  {editPending ? '保存中…' : '保存更新'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {feedback && <Alert variant={feedback.kind === 'success' ? 'success' : 'destructive'}>{feedback.message}</Alert>}
 
       <Card>
         <CardHeader>
@@ -294,6 +456,7 @@ export default function UsersPage() {
                   <TableHead>Lark 用户</TableHead>
                   <TableHead>连接时间</TableHead>
                   <TableHead>最近更新</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -320,18 +483,30 @@ export default function UsersPage() {
                     <TableCell>
                       <span className="text-sm text-foreground">{formatDate(item.updated_at)}</span>
                     </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEdit(item)}
+                          disabled={!item.cnb_user_id}
+                        >
+                          编辑
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {mappings.length === 0 && !loading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                       暂无符合条件的用户映射。
                     </TableCell>
                   </TableRow>
                 )}
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                       正在加载用户映射…
                     </TableCell>
                   </TableRow>

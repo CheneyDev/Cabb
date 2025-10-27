@@ -1,13 +1,13 @@
 package store
 
 import (
-    "context"
-    "database/sql"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "strings"
-    "time"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
 )
 
 // EventDeliveries repo
@@ -209,153 +209,155 @@ type PRStateMapping struct {
 // ===== Unified Integration Mappings =====
 
 type IntegrationMappingRec struct {
-    ScopeKind     string
-    ScopeID       string
-    MappingType   string
-    LeftSystem    string
-    LeftType      string
-    LeftKey       string
-    RightSystem   string
-    RightType     string
-    RightKey      string
-    Bidirectional bool
-    Extras        map[string]any
-    Active        bool
+	ScopeKind     string
+	ScopeID       string
+	MappingType   string
+	LeftSystem    string
+	LeftType      string
+	LeftKey       string
+	RightSystem   string
+	RightType     string
+	RightKey      string
+	Bidirectional bool
+	Extras        map[string]any
+	Active        bool
 }
 
 // UpsertIntegrationMapping inserts or updates a single mapping row.
 func (d *DB) UpsertIntegrationMapping(ctx context.Context, m IntegrationMappingRec) error {
-    if d == nil || d.SQL == nil {
-        return sql.ErrConnDone
-    }
-    // Normalize strings
-    norm := func(s string) string { return strings.TrimSpace(s) }
-    m.ScopeKind = norm(m.ScopeKind)
-    m.ScopeID = norm(m.ScopeID)
-    m.MappingType = norm(m.MappingType)
-    m.LeftSystem = norm(m.LeftSystem)
-    m.LeftType = norm(m.LeftType)
-    m.LeftKey = norm(m.LeftKey)
-    m.RightSystem = norm(m.RightSystem)
-    m.RightType = norm(m.RightType)
-    m.RightKey = norm(m.RightKey)
-    if strings.EqualFold(m.MappingType, "priority") {
-        // Priorities: standardize plane priority key to lowercase label
-        m.LeftKey = strings.ToLower(m.LeftKey)
-    }
-    extrasJSON := "{}"
-    if m.Extras != nil {
-        if b, err := json.Marshal(m.Extras); err == nil {
-            extrasJSON = string(b)
-        }
-    }
-    const upd = `UPDATE integration_mappings SET bidirectional=$11, extras=$12::jsonb, active=$13, updated_at=now()
+	if d == nil || d.SQL == nil {
+		return sql.ErrConnDone
+	}
+	// Normalize strings
+	norm := func(s string) string { return strings.TrimSpace(s) }
+	m.ScopeKind = norm(m.ScopeKind)
+	m.ScopeID = norm(m.ScopeID)
+	m.MappingType = norm(m.MappingType)
+	m.LeftSystem = norm(m.LeftSystem)
+	m.LeftType = norm(m.LeftType)
+	m.LeftKey = norm(m.LeftKey)
+	m.RightSystem = norm(m.RightSystem)
+	m.RightType = norm(m.RightType)
+	m.RightKey = norm(m.RightKey)
+	if strings.EqualFold(m.MappingType, "priority") {
+		// Priorities: standardize plane priority key to lowercase label
+		m.LeftKey = strings.ToLower(m.LeftKey)
+	}
+	extrasJSON := "{}"
+	if m.Extras != nil {
+		if b, err := json.Marshal(m.Extras); err == nil {
+			extrasJSON = string(b)
+		}
+	}
+	const upd = `UPDATE integration_mappings SET bidirectional=$11, extras=$12::jsonb, active=$13, updated_at=now()
                  WHERE scope_kind=$1 AND scope_id=COALESCE($2, scope_id) AND mapping_type=$3 AND left_system=$4 AND left_type=$5 AND left_key=$6 AND right_system=$7 AND right_type=$8 AND right_key=$9`
-    res, err := d.SQL.ExecContext(ctx, upd, m.ScopeKind, nullIfEmpty(m.ScopeID), m.MappingType, m.LeftSystem, m.LeftType, m.LeftKey, m.RightSystem, m.RightType, m.RightKey, m.Bidirectional, extrasJSON, m.Active)
-    if err != nil {
-        return err
-    }
-    if n, _ := res.RowsAffected(); n > 0 {
-        return nil
-    }
-    const ins = `INSERT INTO integration_mappings (scope_kind, scope_id, mapping_type, left_system, left_type, left_key, right_system, right_type, right_key, bidirectional, extras, active, created_at, updated_at)
+	res, err := d.SQL.ExecContext(ctx, upd, m.ScopeKind, nullIfEmpty(m.ScopeID), m.MappingType, m.LeftSystem, m.LeftType, m.LeftKey, m.RightSystem, m.RightType, m.RightKey, m.Bidirectional, extrasJSON, m.Active)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	const ins = `INSERT INTO integration_mappings (scope_kind, scope_id, mapping_type, left_system, left_type, left_key, right_system, right_type, right_key, bidirectional, extras, active, created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, now(), now())`
-    _, err = d.SQL.ExecContext(ctx, ins, m.ScopeKind, nullIfEmpty(m.ScopeID), m.MappingType, m.LeftSystem, m.LeftType, m.LeftKey, m.RightSystem, m.RightType, m.RightKey, m.Bidirectional, extrasJSON, m.Active)
-    return err
+	_, err = d.SQL.ExecContext(ctx, ins, m.ScopeKind, nullIfEmpty(m.ScopeID), m.MappingType, m.LeftSystem, m.LeftType, m.LeftKey, m.RightSystem, m.RightType, m.RightKey, m.Bidirectional, extrasJSON, m.Active)
+	return err
 }
 
 type IntegrationMappingRow struct {
-    ID           int64
-    ScopeKind    string
-    ScopeID      sql.NullString
-    MappingType  string
-    LeftSystem   string
-    LeftType     string
-    LeftKey      string
-    RightSystem  string
-    RightType    string
-    RightKey     string
-    Bidirectional bool
-    Extras       sql.NullString
-    Active       bool
-    CreatedAt    time.Time
-    UpdatedAt    time.Time
+	ID            int64
+	ScopeKind     string
+	ScopeID       sql.NullString
+	MappingType   string
+	LeftSystem    string
+	LeftType      string
+	LeftKey       string
+	RightSystem   string
+	RightType     string
+	RightKey      string
+	Bidirectional bool
+	Extras        sql.NullString
+	Active        bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // ListIntegrationMappings lists mappings by scope and type (minimal filters for admin UI).
 func (d *DB) ListIntegrationMappings(ctx context.Context, scopeKind, scopeID, mappingType string) ([]IntegrationMappingRow, error) {
-    if d == nil || d.SQL == nil {
-        return nil, sql.ErrConnDone
-    }
-    where := "WHERE 1=1"
-    args := []any{}
-    idx := 1
-    if scopeKind != "" {
-        where += " AND scope_kind=$" + itoa(idx)
-        args = append(args, scopeKind)
-        idx++
-    }
-    if scopeID != "" {
-        where += " AND scope_id=$" + itoa(idx)
-        args = append(args, scopeID)
-        idx++
-    }
-    if mappingType != "" {
-        where += " AND mapping_type=$" + itoa(idx)
-        args = append(args, mappingType)
-        idx++
-    }
-    q := "SELECT id, scope_kind, scope_id, mapping_type, left_system, left_type, left_key, right_system, right_type, right_key, bidirectional, extras::text, active, created_at, updated_at FROM integration_mappings " + where + " ORDER BY mapping_type, left_system, left_type, left_key"
-    rows, err := d.SQL.QueryContext(ctx, q, args...)
-    if err != nil { return nil, err }
-    defer rows.Close()
-    var out []IntegrationMappingRow
-    for rows.Next() {
-        var r IntegrationMappingRow
-        if err := rows.Scan(&r.ID, &r.ScopeKind, &r.ScopeID, &r.MappingType, &r.LeftSystem, &r.LeftType, &r.LeftKey, &r.RightSystem, &r.RightType, &r.RightKey, &r.Bidirectional, &r.Extras, &r.Active, &r.CreatedAt, &r.UpdatedAt); err != nil {
-            return nil, err
-        }
-        returnErr := rows.Err()
-        _ = returnErr
-        out = append(out, r)
-    }
-    return out, rows.Err()
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	where := "WHERE 1=1"
+	args := []any{}
+	idx := 1
+	if scopeKind != "" {
+		where += " AND scope_kind=$" + itoa(idx)
+		args = append(args, scopeKind)
+		idx++
+	}
+	if scopeID != "" {
+		where += " AND scope_id=$" + itoa(idx)
+		args = append(args, scopeID)
+		idx++
+	}
+	if mappingType != "" {
+		where += " AND mapping_type=$" + itoa(idx)
+		args = append(args, mappingType)
+		idx++
+	}
+	q := "SELECT id, scope_kind, scope_id, mapping_type, left_system, left_type, left_key, right_system, right_type, right_key, bidirectional, extras::text, active, created_at, updated_at FROM integration_mappings " + where + " ORDER BY mapping_type, left_system, left_type, left_key"
+	rows, err := d.SQL.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []IntegrationMappingRow
+	for rows.Next() {
+		var r IntegrationMappingRow
+		if err := rows.Scan(&r.ID, &r.ScopeKind, &r.ScopeID, &r.MappingType, &r.LeftSystem, &r.LeftType, &r.LeftKey, &r.RightSystem, &r.RightType, &r.RightKey, &r.Bidirectional, &r.Extras, &r.Active, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		returnErr := rows.Err()
+		_ = returnErr
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 // MapPlanePriorityToCNB resolves Plane priority to CNB priority via integration_mappings with scope fallback.
 func (d *DB) MapPlanePriorityToCNB(ctx context.Context, planeProjectID, planePriority string) (string, bool, error) {
-    if d == nil || d.SQL == nil {
-        return "", false, sql.ErrConnDone
-    }
-    lp := strings.ToLower(strings.TrimSpace(planePriority))
-    // First try project scope
-    const q = `SELECT right_key FROM integration_mappings
+	if d == nil || d.SQL == nil {
+		return "", false, sql.ErrConnDone
+	}
+	lp := strings.ToLower(strings.TrimSpace(planePriority))
+	// First try project scope
+	const q = `SELECT right_key FROM integration_mappings
                WHERE active=true AND mapping_type='priority'
                  AND left_system='plane' AND left_type='priority' AND left_key=$1
                  AND right_system='cnb' AND right_type='priority'
                  AND scope_kind='plane_project' AND scope_id=$2
                LIMIT 1`
-    var out sql.NullString
-    if planeProjectID != "" {
-        if err := d.SQL.QueryRowContext(ctx, q, lp, planeProjectID).Scan(&out); err == nil && out.Valid {
-            return out.String, true, nil
-        } else if err != nil && !errors.Is(err, sql.ErrNoRows) {
-            return "", false, err
-        }
-    }
-    // Fallback to global
-    const qg = `SELECT right_key FROM integration_mappings
+	var out sql.NullString
+	if planeProjectID != "" {
+		if err := d.SQL.QueryRowContext(ctx, q, lp, planeProjectID).Scan(&out); err == nil && out.Valid {
+			return out.String, true, nil
+		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", false, err
+		}
+	}
+	// Fallback to global
+	const qg = `SELECT right_key FROM integration_mappings
                WHERE active=true AND mapping_type='priority'
                  AND left_system='plane' AND left_type='priority' AND left_key=$1
                  AND right_system='cnb' AND right_type='priority'
                  AND scope_kind='global'
                LIMIT 1`
-    if err := d.SQL.QueryRowContext(ctx, qg, lp).Scan(&out); err == nil && out.Valid {
-        return out.String, true, nil
-    } else if err != nil && !errors.Is(err, sql.ErrNoRows) {
-        return "", false, err
-    }
-    return "", false, nil
+	if err := d.SQL.QueryRowContext(ctx, qg, lp).Scan(&out); err == nil && out.Valid {
+		return out.String, true, nil
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", false, err
+	}
+	return "", false, nil
 }
 
 func (d *DB) UpsertPRStateMapping(ctx context.Context, m PRStateMapping) error {
@@ -391,32 +393,34 @@ func nullableText(v sql.NullString) any {
 
 // Workspaces repo (store tokens)
 type Workspace struct {
-    ID                string
-    PlaneWorkspaceID  string
-    AppInstallationID sql.NullString
-    TokenType         string
-    AccessToken       string
-    RefreshToken      sql.NullString
-    ExpiresAt         sql.NullTime
-    WorkspaceSlug     sql.NullString
-    AppBot            sql.NullString
-    CreatedAt         time.Time
-    UpdatedAt         time.Time
+	ID                string
+	PlaneWorkspaceID  string
+	AppInstallationID sql.NullString
+	TokenType         string
+	AccessToken       string
+	RefreshToken      sql.NullString
+	ExpiresAt         sql.NullTime
+	WorkspaceSlug     sql.NullString
+	AppBot            sql.NullString
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 func (d *DB) GetWorkspaceBySlug(ctx context.Context, workspaceSlug string) (*Workspace, error) {
-    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
-    const q = `
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
 SELECT id::text, plane_workspace_id::text, app_installation_id, token_type, access_token, refresh_token, expires_at, workspace_slug, app_bot, created_at, updated_at
 FROM workspaces
 WHERE workspace_slug=$1 AND token_type='bot'
 ORDER BY updated_at DESC
 LIMIT 1`
-    var w Workspace
-    if err := d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&w.ID, &w.PlaneWorkspaceID, &w.AppInstallationID, &w.TokenType, &w.AccessToken, &w.RefreshToken, &w.ExpiresAt, &w.WorkspaceSlug, &w.AppBot, &w.CreatedAt, &w.UpdatedAt); err != nil {
-        return nil, err
-    }
-    return &w, nil
+	var w Workspace
+	if err := d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&w.ID, &w.PlaneWorkspaceID, &w.AppInstallationID, &w.TokenType, &w.AccessToken, &w.RefreshToken, &w.ExpiresAt, &w.WorkspaceSlug, &w.AppBot, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &w, nil
 }
 
 func (d *DB) UpsertWorkspaceToken(ctx context.Context, planeWorkspaceID, appInstallationID, tokenType, accessToken, refreshToken, expiresAt, workspaceSlug, appBot string) error {
@@ -459,33 +463,41 @@ LIMIT 1`
 // ===== Lark (Feishu) chat-level binding =====
 
 type LarkChatIssueLink struct {
-    LarkChatID     string
-    LarkThreadID   sql.NullString
-    PlaneIssueID   string
-    PlaneProjectID sql.NullString
-    WorkspaceSlug  sql.NullString
+	LarkChatID     string
+	LarkThreadID   sql.NullString
+	PlaneIssueID   string
+	PlaneProjectID sql.NullString
+	WorkspaceSlug  sql.NullString
 }
 
 // UpsertLarkChatIssueLink binds a Lark chat to a Plane issue (single active binding per chat)
 func (d *DB) UpsertLarkChatIssueLink(ctx context.Context, chatID, threadID, planeIssueID, planeProjectID, workspaceSlug string) error {
-    if d == nil || d.SQL == nil { return sql.ErrConnDone }
-    const upd = `UPDATE chat_issue_links SET lark_thread_id=$2, plane_issue_id=$3::uuid, plane_project_id=$4::uuid, workspace_slug=$5, updated_at=now() WHERE lark_chat_id=$1`
-    res, err := d.SQL.ExecContext(ctx, upd, chatID, nullIfEmpty(threadID), planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug))
-    if err != nil { return err }
-    if n, _ := res.RowsAffected(); n > 0 { return nil }
-    const ins = `INSERT INTO chat_issue_links (lark_chat_id, lark_thread_id, plane_issue_id, plane_project_id, workspace_slug, created_at, updated_at) VALUES ($1,$2,$3::uuid,$4::uuid,$5,now(),now())`
-    _, err = d.SQL.ExecContext(ctx, ins, chatID, nullIfEmpty(threadID), planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug))
-    return err
+	if d == nil || d.SQL == nil {
+		return sql.ErrConnDone
+	}
+	const upd = `UPDATE chat_issue_links SET lark_thread_id=$2, plane_issue_id=$3::uuid, plane_project_id=$4::uuid, workspace_slug=$5, updated_at=now() WHERE lark_chat_id=$1`
+	res, err := d.SQL.ExecContext(ctx, upd, chatID, nullIfEmpty(threadID), planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug))
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	const ins = `INSERT INTO chat_issue_links (lark_chat_id, lark_thread_id, plane_issue_id, plane_project_id, workspace_slug, created_at, updated_at) VALUES ($1,$2,$3::uuid,$4::uuid,$5,now(),now())`
+	_, err = d.SQL.ExecContext(ctx, ins, chatID, nullIfEmpty(threadID), planeIssueID, nullIfEmpty(planeProjectID), nullIfEmpty(workspaceSlug))
+	return err
 }
 
 func (d *DB) GetLarkChatIssueLink(ctx context.Context, chatID string) (*LarkChatIssueLink, error) {
-    if d == nil || d.SQL == nil { return nil, sql.ErrConnDone }
-    const q = `SELECT lark_chat_id, lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug FROM chat_issue_links WHERE lark_chat_id=$1 LIMIT 1`
-    var l LarkChatIssueLink
-    if err := d.SQL.QueryRowContext(ctx, q, chatID).Scan(&l.LarkChatID, &l.LarkThreadID, &l.PlaneIssueID, &l.PlaneProjectID, &l.WorkspaceSlug); err != nil {
-        return nil, err
-    }
-    return &l, nil
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `SELECT lark_chat_id, lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug FROM chat_issue_links WHERE lark_chat_id=$1 LIMIT 1`
+	var l LarkChatIssueLink
+	if err := d.SQL.QueryRowContext(ctx, q, chatID).Scan(&l.LarkChatID, &l.LarkThreadID, &l.PlaneIssueID, &l.PlaneProjectID, &l.WorkspaceSlug); err != nil {
+		return nil, err
+	}
+	return &l, nil
 }
 
 // IssueLinks repo
@@ -659,13 +671,108 @@ func (d *DB) ListUserMappings(ctx context.Context, planeUserID, cnbUserID, searc
 	return out, rows.Err()
 }
 
-func (d *DB) CreateIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) error {
+func (d *DB) CreateIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) (bool, error) {
 	if d == nil || d.SQL == nil {
-		return sql.ErrConnDone
+		return false, sql.ErrConnDone
 	}
 	const q = `INSERT INTO issue_links (plane_issue_id, cnb_issue_id, cnb_repo_id, linked_at, created_at, updated_at) VALUES ($1::uuid,$2,$3,now(),now(),now()) ON CONFLICT DO NOTHING`
-	_, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbIssueID, cnbRepoID)
-	return err
+	res, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbIssueID, cnbRepoID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+type IssueLinkRow struct {
+	PlaneIssueID     string
+	CNBRepoID        sql.NullString
+	CNBIssueID       sql.NullString
+	PlaneProjectID   sql.NullString
+	PlaneWorkspaceID sql.NullString
+	LinkedAt         time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+func (d *DB) ListIssueLinks(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string, limit int) ([]IssueLinkRow, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 200 {
+		limit = 200
+	}
+	where := "WHERE 1=1"
+	args := []any{}
+	idx := 1
+	if strings.TrimSpace(planeIssueID) != "" {
+		where += " AND plane_issue_id=$" + itoa(idx) + "::uuid"
+		args = append(args, planeIssueID)
+		idx++
+	}
+	if strings.TrimSpace(cnbRepoID) != "" {
+		where += " AND cnb_repo_id=$" + itoa(idx)
+		args = append(args, cnbRepoID)
+		idx++
+	}
+	if strings.TrimSpace(cnbIssueID) != "" {
+		where += " AND cnb_issue_id=$" + itoa(idx)
+		args = append(args, cnbIssueID)
+		idx++
+	}
+	order := " ORDER BY il.updated_at DESC LIMIT $" + itoa(idx)
+	args = append(args, limit)
+	query := `SELECT il.plane_issue_id::text,
+       il.cnb_repo_id,
+       il.cnb_issue_id,
+       il.linked_at,
+       il.created_at,
+       il.updated_at,
+       rpm.plane_project_id,
+       rpm.plane_workspace_id
+FROM issue_links il
+LEFT JOIN LATERAL (
+        SELECT plane_project_id::text AS plane_project_id,
+               plane_workspace_id::text AS plane_workspace_id
+        FROM repo_project_mappings
+        WHERE cnb_repo_id=il.cnb_repo_id AND active=true
+        ORDER BY repo_project_mappings.updated_at DESC
+        LIMIT 1
+) rpm ON true
+` + where + order
+	rows, err := d.SQL.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []IssueLinkRow
+	for rows.Next() {
+		var row IssueLinkRow
+		if err := rows.Scan(&row.PlaneIssueID, &row.CNBRepoID, &row.CNBIssueID, &row.LinkedAt, &row.CreatedAt, &row.UpdatedAt, &row.PlaneProjectID, &row.PlaneWorkspaceID); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) DeleteIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) (bool, error) {
+	if d == nil || d.SQL == nil {
+		return false, sql.ErrConnDone
+	}
+	const q = `DELETE FROM issue_links WHERE plane_issue_id=$1::uuid AND cnb_repo_id=$2 AND cnb_issue_id=$3`
+	res, err := d.SQL.ExecContext(ctx, q, planeIssueID, cnbRepoID, cnbIssueID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // ListCNBIssuesByPlaneIssue returns all CNB links for a Plane issue.
@@ -765,20 +872,85 @@ type LarkThreadLink struct {
 	PlaneIssueID   string
 	PlaneProjectID sql.NullString
 	WorkspaceSlug  sql.NullString
+	LarkChatID     sql.NullString
 	SyncEnabled    bool
+	LinkedAt       time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 func (d *DB) GetLarkThreadLink(ctx context.Context, larkThreadID string) (*LarkThreadLink, error) {
 	if d == nil || d.SQL == nil {
 		return nil, sql.ErrConnDone
 	}
-	const q = `SELECT lark_thread_id, plane_issue_id::text, plane_project_id::text, workspace_slug, sync_enabled FROM thread_links WHERE lark_thread_id=$1 LIMIT 1`
+	const q = `SELECT tl.lark_thread_id, tl.plane_issue_id::text, tl.plane_project_id::text, tl.workspace_slug, cil.lark_chat_id, tl.sync_enabled, tl.linked_at, tl.created_at, tl.updated_at FROM thread_links tl LEFT JOIN chat_issue_links cil ON cil.lark_thread_id = tl.lark_thread_id WHERE tl.lark_thread_id=$1 LIMIT 1`
 	var tl LarkThreadLink
-	err := d.SQL.QueryRowContext(ctx, q, larkThreadID).Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.SyncEnabled)
+	err := d.SQL.QueryRowContext(ctx, q, larkThreadID).Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.LarkChatID, &tl.SyncEnabled, &tl.LinkedAt, &tl.CreatedAt, &tl.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &tl, nil
+}
+
+func (d *DB) ListLarkThreadLinks(ctx context.Context, planeIssueID, larkThreadID string, syncEnabled *bool, limit int) ([]LarkThreadLink, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 200 {
+		limit = 200
+	}
+	where := "WHERE 1=1"
+	args := []any{}
+	idx := 1
+	if strings.TrimSpace(planeIssueID) != "" {
+		where += " AND plane_issue_id=$" + itoa(idx) + "::uuid"
+		args = append(args, planeIssueID)
+		idx++
+	}
+	if strings.TrimSpace(larkThreadID) != "" {
+		where += " AND lark_thread_id=$" + itoa(idx)
+		args = append(args, larkThreadID)
+		idx++
+	}
+	if syncEnabled != nil {
+		where += " AND sync_enabled=$" + itoa(idx)
+		args = append(args, *syncEnabled)
+		idx++
+	}
+	order := " ORDER BY updated_at DESC LIMIT $" + itoa(idx)
+	args = append(args, limit)
+	query := "SELECT tl.lark_thread_id, tl.plane_issue_id::text, tl.plane_project_id::text, tl.workspace_slug, cil.lark_chat_id, tl.sync_enabled, tl.linked_at, tl.created_at, tl.updated_at FROM thread_links tl LEFT JOIN chat_issue_links cil ON cil.lark_thread_id = tl.lark_thread_id " + where + order
+	rows, err := d.SQL.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LarkThreadLink
+	for rows.Next() {
+		var tl LarkThreadLink
+		if err := rows.Scan(&tl.LarkThreadID, &tl.PlaneIssueID, &tl.PlaneProjectID, &tl.WorkspaceSlug, &tl.LarkChatID, &tl.SyncEnabled, &tl.LinkedAt, &tl.CreatedAt, &tl.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, tl)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) DeleteLarkThreadLink(ctx context.Context, larkThreadID string) (bool, error) {
+	if d == nil || d.SQL == nil {
+		return false, sql.ErrConnDone
+	}
+	const q = `DELETE FROM thread_links WHERE lark_thread_id=$1`
+	res, err := d.SQL.ExecContext(ctx, q, larkThreadID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // Find bot token by workspace slug
@@ -793,12 +965,16 @@ func (d *DB) FindBotTokenByWorkspaceSlug(ctx context.Context, workspaceSlug stri
 
 // CleanupStaleThreadLinks deletes thread links that are not sync-enabled and not updated since before the cutoff.
 func (d *DB) CleanupStaleThreadLinks(ctx context.Context, cutoff time.Time) (int64, error) {
-    if d == nil || d.SQL == nil { return 0, sql.ErrConnDone }
-    const q = `DELETE FROM thread_links WHERE sync_enabled=false AND updated_at < $1`
-    res, err := d.SQL.ExecContext(ctx, q, cutoff)
-    if err != nil { return 0, err }
-    n, _ := res.RowsAffected()
-    return n, nil
+	if d == nil || d.SQL == nil {
+		return 0, sql.ErrConnDone
+	}
+	const q = `DELETE FROM thread_links WHERE sync_enabled=false AND updated_at < $1`
+	res, err := d.SQL.ExecContext(ctx, q, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }
 
 // PR links
@@ -843,12 +1019,18 @@ func (d *DB) GetPRStateMapping(ctx context.Context, cnbRepoID string) (*PRStateM
 
 // FindDisplayNameByPlaneUserID returns a preferred display name mapped for the plane user, if any.
 func (d *DB) FindDisplayNameByPlaneUserID(ctx context.Context, planeUserID string) (string, error) {
-    if d == nil || d.SQL == nil { return "", sql.ErrConnDone }
-    const q = `SELECT display_name FROM user_mappings WHERE plane_user_id=$1::uuid LIMIT 1`
-    var name sql.NullString
-    if err := d.SQL.QueryRowContext(ctx, q, planeUserID).Scan(&name); err != nil { return "", err }
-    if name.Valid { return name.String, nil }
-    return "", sql.ErrNoRows
+	if d == nil || d.SQL == nil {
+		return "", sql.ErrConnDone
+	}
+	const q = `SELECT display_name FROM user_mappings WHERE plane_user_id=$1::uuid LIMIT 1`
+	var name sql.NullString
+	if err := d.SQL.QueryRowContext(ctx, q, planeUserID).Scan(&name); err != nil {
+		return "", err
+	}
+	if name.Valid {
+		return name.String, nil
+	}
+	return "", sql.ErrNoRows
 }
 
 // helpers
