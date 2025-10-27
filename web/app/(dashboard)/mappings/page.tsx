@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator } from '@/components/ui/menu'
 
 const directionOptions = [
   { value: 'cnb_to_plane', label: '仅 CNB → Plane' },
@@ -184,6 +185,56 @@ export default function MappingsPage() {
     setEditingKey(makeKey(item))
     setFeedback(null)
   }
+
+  // region: icons (inline SVG to avoid extra deps)
+  function MoreIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" {...props}>
+        <circle cx="6" cy="12" r="1.5" />
+        <circle cx="12" cy="12" r="1.5" />
+        <circle cx="18" cy="12" r="1.5" />
+      </svg>
+    )
+  }
+
+  function EditIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+      </svg>
+    )
+  }
+
+  function ToggleOnIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+        <rect x="2" y="6" width="20" height="12" rx="6" />
+        <circle cx="16" cy="12" r="4" />
+      </svg>
+    )
+  }
+
+  function ToggleOffIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+        <rect x="2" y="6" width="20" height="12" rx="6" />
+        <circle cx="8" cy="12" r="4" />
+      </svg>
+    )
+  }
+
+  function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+        <path d="M3 6h18" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+      </svg>
+    )
+  }
+  // endregion
 
   function handleResetForm() {
     const workspace = form.plane_workspace_id
@@ -484,7 +535,7 @@ export default function MappingsPage() {
                   <TableHead>标签选择器</TableHead>
                   <TableHead>Issue 状态映射</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="text-right w-[240px]">操作</TableHead>
+                  <TableHead className="text-right w-[200px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -520,8 +571,8 @@ export default function MappingsPage() {
                     <TableCell>
                       {item.active ? <Badge variant="success">启用</Badge> : <Badge variant="muted">停用</Badge>}
                     </TableCell>
-                    <TableCell className="w-[240px]">
-                      <div className="flex items-center justify-end gap-2 flex-nowrap">
+                    <TableCell className="w-[200px]">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           className="shrink-0"
                           variant="ghost"
@@ -531,26 +582,42 @@ export default function MappingsPage() {
                         >
                           编辑
                         </Button>
-                        <Button
-                          className="shrink-0"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleActive(item, !item.active)}
-                          disabled={actionKey === makeKey(item)}
-                          title={item.active ? '停用映射' : '启用映射'}
-                        >
-                          {actionKey === makeKey(item) ? '处理中…' : item.active ? '停用' : '启用'}
-                        </Button>
-                        <Button
-                          className="shrink-0"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(item)}
-                          disabled={actionKey === makeKey(item)}
-                          title="删除映射（标记为停用）"
-                        >
-                          删除
-                        </Button>
+                        <Menu>
+                          <MenuTrigger
+                            aria-label="更多操作"
+                            title="更多操作"
+                            className="!min-w-0 !px-0 !py-0 w-9 h-9 rounded-full border-transparent bg-transparent hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                          >
+                            <MoreIcon className="h-4 w-4" />
+                          </MenuTrigger>
+                          <MenuPositioner>
+                            <MenuPopup className="p-1 min-w-[10rem]">
+                              <MenuItem
+                                onSelect={() => handleToggleActive(item, !item.active)}
+                                className="justify-start"
+                                data-active={item.active ? true : undefined}
+                                disabled={actionKey === makeKey(item)}
+                              >
+                                {item.active ? (
+                                  <span className="inline-flex items-center gap-2"><ToggleOffIcon className="h-4 w-4" /> 停用</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-2"><ToggleOnIcon className="h-4 w-4" /> 启用</span>
+                                )}
+                              </MenuItem>
+                              <MenuItem onSelect={() => handleEdit(item)} className="justify-start">
+                                <span className="inline-flex items-center gap-2"><EditIcon className="h-4 w-4" /> 编辑</span>
+                              </MenuItem>
+                              <MenuSeparator />
+                              <MenuItem
+                                onSelect={() => handleDelete(item)}
+                                className="justify-start text-destructive-foreground"
+                                disabled={actionKey === makeKey(item)}
+                              >
+                                <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
+                              </MenuItem>
+                            </MenuPopup>
+                          </MenuPositioner>
+                        </Menu>
                       </div>
                     </TableCell>
                   </TableRow>

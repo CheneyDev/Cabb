@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator } from '@/components/ui/menu'
 
 const initialForm = {
   lark_thread_id: '',
@@ -324,7 +325,7 @@ export default function LarkThreadLinksPage() {
                   <TableHead>自动同步</TableHead>
                   <TableHead>Linked At</TableHead>
                   <TableHead>更新时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead className="text-right w-[200px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -432,25 +433,39 @@ export default function LarkThreadLinksPage() {
                         <TableCell className="text-xs text-muted-foreground">
                           {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
                         </TableCell>
-                        <TableCell className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleSync(item)}
-                            disabled={toggleBusy || deleteBusy}
-                          >
-                            {toggleBusy ? '更新中…' : item.sync_enabled ? '关闭同步' : '开启同步'}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(item)}
-                            disabled={deleteBusy || toggleBusy}
-                          >
-                            {deleteBusy ? '删除中…' : '删除'}
-                          </Button>
+                        <TableCell className="w-[200px]">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleSync(item)}
+                              disabled={toggleBusy || deleteBusy}
+                              title={item.sync_enabled ? '关闭自动同步' : '开启自动同步'}
+                            >
+                              {toggleBusy ? '更新中…' : item.sync_enabled ? '关闭同步' : '开启同步'}
+                            </Button>
+                            <Menu>
+                              <MenuTrigger
+                                aria-label="更多操作"
+                                title="更多操作"
+                                className="!min-w-0 !px-0 !py-0 w-9 h-9 rounded-full border-transparent bg-transparent hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                              >
+                                <MoreIcon className="h-4 w-4" />
+                              </MenuTrigger>
+                              <MenuPositioner>
+                                <MenuPopup className="p-1 min-w-[10rem]">
+                                  <MenuItem
+                                    onSelect={() => handleDelete(item)}
+                                    className="justify-start text-destructive-foreground"
+                                    disabled={deleteBusy || toggleBusy}
+                                  >
+                                    <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
+                                  </MenuItem>
+                                </MenuPopup>
+                              </MenuPositioner>
+                            </Menu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
@@ -483,3 +498,26 @@ async function readErrorMessage(res: Response, fallback: string) {
   }
   return msg || fallback
 }
+
+// region: inline icons (kept locally to avoid deps)
+function MoreIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" {...props}>
+      <circle cx="6" cy="12" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="18" cy="12" r="1.5" />
+    </svg>
+  )
+}
+
+function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+// endregion

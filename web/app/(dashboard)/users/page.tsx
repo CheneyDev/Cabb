@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger } from '@/components/ui/menu'
 
 type Feedback = { kind: 'success' | 'error'; message: string }
 
@@ -244,12 +245,33 @@ export default function UsersPage() {
     }
   }
 
-  function formatDate(value?: string | null) {
-    if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return value
-    return date.toLocaleString('zh-CN', { hour12: false })
-  }
+function formatDate(value?: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+// region: inline icons for menu
+function MoreIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" {...props}>
+      <circle cx="6" cy="12" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="18" cy="12" r="1.5" />
+    </svg>
+  )
+}
+
+function EditIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  )
+}
+// endregion
 
   const connectedCount = mappings.filter(item => Boolean(item.connected_at)).length
 
@@ -456,7 +478,7 @@ export default function UsersPage() {
                   <TableHead>Lark 用户</TableHead>
                   <TableHead>连接时间</TableHead>
                   <TableHead>最近更新</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead className="text-right w-[160px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -483,16 +505,28 @@ export default function UsersPage() {
                     <TableCell>
                       <span className="text-sm text-foreground">{formatDate(item.updated_at)}</span>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEdit(item)}
-                          disabled={!item.cnb_user_id}
-                        >
-                          编辑
-                        </Button>
+                    <TableCell className="w-[160px]">
+                      <div className="flex items-center justify-end">
+                        <Menu>
+                          <MenuTrigger
+                            aria-label="更多操作"
+                            title="更多操作"
+                            className="!min-w-0 !px-0 !py-0 w-9 h-9 rounded-full border-transparent bg-transparent hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                          >
+                            <MoreIcon className="h-4 w-4" />
+                          </MenuTrigger>
+                          <MenuPositioner>
+                            <MenuPopup className="p-1 min-w-[10rem]">
+                              <MenuItem
+                                onSelect={() => startEdit(item)}
+                                className="justify-start"
+                                disabled={!item.cnb_user_id}
+                              >
+                                <span className="inline-flex items-center gap-2"><EditIcon className="h-4 w-4" /> 编辑</span>
+                              </MenuItem>
+                            </MenuPopup>
+                          </MenuPositioner>
+                        </Menu>
                       </div>
                     </TableCell>
                   </TableRow>
