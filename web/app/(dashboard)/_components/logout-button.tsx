@@ -16,9 +16,10 @@ function LogoutIcon(props: React.SVGProps<SVGSVGElement>) {
       aria-hidden="true"
       {...props}
     >
-      <path d="M16 17l5-5-5-5" />
-      <path d="M21 12H9" />
-      <path d="M12 19v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      {/* lucide-style logout: left bar + right arrow */}
+      <path d="M21 12H11" />
+      <path d="M15 16l4-4-4-4" />
+      <path d="M7 21V3" />
     </svg>
   )
 }
