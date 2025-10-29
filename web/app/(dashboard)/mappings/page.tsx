@@ -107,6 +107,19 @@ const initialForm = {
 
 type FormState = typeof initialForm
 
+type WorkspaceOption = {
+  id: string
+  name: string
+  slug: string
+}
+
+type ProjectOption = {
+  id: string
+  name: string
+  identifier: string
+  slug: string
+}
+
 export default function MappingsPage() {
   const [items, setItems] = useState<Mapping[]>([])
   const [loading, setLoading] = useState(false)
@@ -119,6 +132,10 @@ export default function MappingsPage() {
   const [form, setForm] = useState<FormState>(initialForm)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [actionKey, setActionKey] = useState<string | null>(null)
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([])
+  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false)
+  const [loadingProjects, setLoadingProjects] = useState(false)
 
   const querySuffix = useMemo(() => {
     const params = new URLSearchParams()
@@ -153,6 +170,45 @@ export default function MappingsPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    async function loadWorkspaces() {
+      setLoadingWorkspaces(true)
+      try {
+        const res = await fetch('/api/admin/plane/workspaces', { cache: 'no-store' })
+        if (!res.ok) throw new Error('加载 workspaces 失败')
+        const json = await res.json()
+        setWorkspaces(Array.isArray(json.items) ? json.items : [])
+      } catch (err) {
+        console.error('Failed to load workspaces:', err)
+      } finally {
+        setLoadingWorkspaces(false)
+      }
+    }
+    loadWorkspaces()
+  }, [])
+
+  useEffect(() => {
+    async function loadProjects() {
+      if (!form.plane_workspace_id) {
+        setProjects([])
+        return
+      }
+      setLoadingProjects(true)
+      try {
+        const res = await fetch(`/api/admin/plane/projects?workspace_id=${encodeURIComponent(form.plane_workspace_id)}`, { cache: 'no-store' })
+        if (!res.ok) throw new Error('加载 projects 失败')
+        const json = await res.json()
+        setProjects(Array.isArray(json.items) ? json.items : [])
+      } catch (err) {
+        console.error('Failed to load projects:', err)
+        setProjects([])
+      } finally {
+        setLoadingProjects(false)
+      }
+    }
+    loadProjects()
+  }, [form.plane_workspace_id])
 
   const activeCount = items.filter(item => item.active).length
   const inactiveCount = items.length - activeCount
@@ -384,25 +440,40 @@ export default function MappingsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="plane_workspace_id">Plane Workspace ID</Label>
-              <Input
+              <Label htmlFor="plane_workspace_id">Plane Workspace</Label>
+              <Select
                 id="plane_workspace_id"
                 required
-                placeholder="workspace uuid"
                 value={form.plane_workspace_id}
-                onChange={event => setForm(prev => ({ ...prev, plane_workspace_id: event.target.value }))}
-              />
+                onChange={event => {
+                  setForm(prev => ({ ...prev, plane_workspace_id: event.target.value, plane_project_id: '' }))
+                }}
+                disabled={loadingWorkspaces}
+              >
+                <option value="">选择 Workspace</option>
+                {workspaces.map(ws => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="plane_project_id">Plane Project ID</Label>
-              <Input
+              <Label htmlFor="plane_project_id">Plane Project</Label>
+              <Select
                 id="plane_project_id"
                 required
-                placeholder="project uuid"
                 value={form.plane_project_id}
                 onChange={event => setForm(prev => ({ ...prev, plane_project_id: event.target.value }))}
-                disabled={isEditing}
-              />
+                disabled={isEditing || !form.plane_workspace_id || loadingProjects}
+              >
+                <option value="">{loadingProjects ? '加载中...' : form.plane_workspace_id ? '选择 Project' : '请先选择 Workspace'}</option>
+                {projects.map(proj => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="sync_direction">同步方向</Label>

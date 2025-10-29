@@ -301,3 +301,66 @@ func (c *Client) GetProject(ctx context.Context, bearer, workspaceSlug, projectI
 	}
 	return &out, nil
 }
+
+// ListWorkspaces fetches all workspaces accessible by the bearer token.
+// GET /api/v1/workspaces/
+func (c *Client) ListWorkspaces(ctx context.Context, bearer string) ([]map[string]any, error) {
+	path := "/api/v1/workspaces/"
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("plane list workspaces status=%d", resp.StatusCode)
+	}
+	var results []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// ListProjects fetches all projects within a workspace.
+// GET /api/v1/workspaces/{workspace_slug}/projects/
+func (c *Client) ListProjects(ctx context.Context, bearer, workspaceSlug string) ([]map[string]any, error) {
+	if strings.TrimSpace(workspaceSlug) == "" {
+		return nil, fmt.Errorf("workspace slug is empty")
+	}
+	path := fmt.Sprintf("/api/v1/workspaces/%s/projects/", url.PathEscape(workspaceSlug))
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("plane list projects status=%d", resp.StatusCode)
+	}
+	var results []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
