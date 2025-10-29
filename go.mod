@@ -1,4 +1,4 @@
-module plane-integration
+module cabb
 
 go 1.24
 

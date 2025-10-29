@@ -8,7 +8,7 @@ import (
     "sync"
     "time"
 
-    "plane-integration/internal/cnb"
+    "cabb/internal/cnb"
 )
 
 // acquireCreateLock locks on a (repo|planeIssueID) key to serialize CNB issue creation in-process

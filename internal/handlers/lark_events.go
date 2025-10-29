@@ -14,9 +14,9 @@ import (
     "time"
 
     "github.com/labstack/echo/v4"
-    "plane-integration/internal/lark"
-    "plane-integration/internal/plane"
-    "plane-integration/internal/store"
+    "cabb/internal/lark"
+    "cabb/internal/plane"
+    "cabb/internal/store"
 )
 
 // Event v2 envelope (兼容 challenge 握手)

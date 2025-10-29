@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"plane-integration/internal/store"
-	"plane-integration/pkg/config"
+	"cabb/internal/store"
+	"cabb/pkg/config"
 )
 
 // BootstrapAdminUser ensures there is at least one admin account when credentials are provided via env.

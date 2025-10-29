@@ -377,7 +377,7 @@ export default function MappingsPage() {
               <Input
                 id="cnb_repo_id"
                 required
-                placeholder="1024hub/plane-integration"
+                placeholder="1024hub/cabb"
                 value={form.cnb_repo_id}
                 onChange={event => setForm(prev => ({ ...prev, cnb_repo_id: event.target.value }))}
                 disabled={isEditing}

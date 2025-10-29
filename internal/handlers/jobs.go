@@ -9,8 +9,8 @@ import (
 
     "github.com/labstack/echo/v4"
 
-    "plane-integration/internal/store"
-    "plane-integration/pkg/config"
+    "cabb/internal/store"
+    "cabb/pkg/config"
 )
 
 func (h *Handler) JobIssueSummaryDaily(c echo.Context) error {

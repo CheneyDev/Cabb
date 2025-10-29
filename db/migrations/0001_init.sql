@@ -1,4 +1,4 @@
--- Schema initialization for plane-integration
+-- Schema initialization for cabb
 -- Requires Postgres 16+
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

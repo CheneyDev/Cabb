@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"plane-integration/internal/lark"
-	"plane-integration/internal/plane"
-	"plane-integration/internal/store"
+	"cabb/internal/lark"
+	"cabb/internal/plane"
+	"cabb/internal/store"
 )
 
 // POST /admin/mappings/repo-project

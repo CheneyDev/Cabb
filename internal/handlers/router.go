@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"plane-integration/internal/store"
-	"plane-integration/pkg/config"
+	"cabb/internal/store"
+	"cabb/pkg/config"
 
 	"github.com/labstack/echo/v4"
 )

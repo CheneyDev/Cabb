@@ -1,4 +1,4 @@
-APP ?= plane-integration
+APP ?= cabb
 IMAGE ?= $(APP):dev
 PORT ?= 8080
 

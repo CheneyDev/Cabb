@@ -1,4 +1,4 @@
-## Multi-stage build for plane-integration
+## Multi-stage build for cabb
 # Build stage
 FROM golang:1.24-alpine AS build
 

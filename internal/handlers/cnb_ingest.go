@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	planeapi "plane-integration/internal/plane"
+	planeapi "cabb/internal/plane"
 
 	"github.com/labstack/echo/v4"
 )

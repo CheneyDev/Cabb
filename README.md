@@ -1,4 +1,4 @@
-# Plane Integration Service（Plane 集成服务）
+# Cabb（Plane 集成服务）
 
 将 Plane 作为统一的“工作项中枢”，无缝衔接 CNB 与飞书（Feishu）协作场景，打通需求、开发与沟通的全流程。本仓库提供一个可运行的 Go/Echo 脚手架、数据库迁移，以及后续功能实现的落地入口。
 
@@ -131,8 +131,8 @@ go run ./cmd/server
 - 或构建二进制：
 
 ```
-go build -o bin/plane-integration ./cmd/server
-./bin/plane-integration
+go build -o bin/cabb ./cmd/server
+./bin/cabb
 ```
 
 启动后访问健康检查：`GET http://localhost:8080/healthz`
@@ -175,7 +175,7 @@ make ci-verify
   - Blueprint 会创建：
     - Web 服务（后端）：基于 `Dockerfile` 构建，健康检查路径 `/healthz`。
     - Web 服务（前端）：`web/`（Next.js 15）。
-    - Postgres 数据库：`plane-integration-db`，连接串注入为 `DATABASE_URL`。
+    - Postgres 数据库：`cabb-db`，连接串注入为 `DATABASE_URL`。
   - 首次部署会自动执行迁移：容器入口脚本 `scripts/entrypoint.sh` 会在启动时运行 `psql "$DATABASE_URL" -f /app/db/migrations/0001_init.sql`。
   - 在服务的环境变量中补齐：
     - 必填：`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`
@@ -186,8 +186,8 @@ make ci-verify
     - 健康检查：`https://<your-service>.onrender.com/healthz`
     - OAuth 起始：`https://<your-service>.onrender.com/plane/oauth/start`
 
-  - 前端服务 `plane-integration-ui` 环境变量：
-    - `API_BASE`（服务端代理）：通常设置为你的后端外网地址，例如 `https://plane-integration.onrender.com`。
+  - 前端服务 `cabb-ui` 环境变量：
+    - `API_BASE`（服务端代理）：通常设置为你的后端外网地址，例如 `https://cabb.onrender.com`。
     - `NEXT_PUBLIC_API_BASE`（浏览器直连，若需要）：同上；默认通过前端内置的 Route Handler 代理至后端，无需额外 CORS 配置。
 
 - 方式二：原生 Go（非 Docker）
@@ -333,11 +333,11 @@ curl "http://localhost:8080/plane/oauth/callback?app_installation_id=<uuid>&code
 
 ## 使用 Docker 本地运行
 ```
-docker build -t plane-integration:dev .
+docker build -t cabb:dev .
 docker run --rm -p 8080:8080 \
-  -e DATABASE_URL="postgres://root:123456@host.docker.internal:15432/plane_intergration?sslmode=disable" \
+  -e DATABASE_URL="postgres://root:123456@host.docker.internal:15432/cabb?sslmode=disable" \
   -e PLANE_REDIRECT_URI="http://localhost:8080/plane/oauth/callback" \
-  plane-integration:dev
+  cabb:dev
 ```
 
 ## API 与端点（脚手架）
