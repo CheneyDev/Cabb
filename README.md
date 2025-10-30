@@ -387,8 +387,14 @@ docker run --rm -p 8080:8080 \
     2. 查询 repo-project 映射
     3. 查找对应的 Plane Issue
     4. 映射标签到 Plane Label ID
-    5. 更新 Plane Issue 标签（覆盖式同步）
+    5. **增量更新 Plane Issue 标签**（只替换 CNB 管理的标签，保留其他标签）
     6. 发送飞书通知（如配置了 channel-project 映射）
+  - **标签更新策略**：
+    - ✅ 从 Plane 读取当前所有标签
+    - ✅ 识别哪些标签是 CNB 管理的（查询 `label_mappings` 表）
+    - ✅ 保留非 CNB 管理的标签（如 Plane 手动添加的 `priority:high`）
+    - ✅ 合并：保留标签 + 新的 CNB 标签
+    - ✅ 去重后更新到 Plane
 - 飞书（Feishu/Lark）
   - `POST /webhooks/lark/events`（支持 challenge 握手）
   - `POST /webhooks/lark/interactivity`

@@ -153,9 +153,42 @@ func (h *Handler) processLabelSyncSimple(p issueLabelNotifySimplePayload, delive
 		return
 	}
 
-	// 6. 更新 Plane
+	// 6. 更新 Plane（增量更新）
 	planeClient := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
-	patch := map[string]any{"labels": planeLabelIDs}
+
+	// 6.1 获取当前标签
+	currentLabelIDs, err := planeClient.GetIssueLabels(ctx, token, workspaceSlug, mapping.PlaneProjectID, planeIssueID)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event": "label.sync.simple",
+			"error": "get_current_labels_failed",
+		})
+		return
+	}
+
+	// 6.2 获取 CNB 管理的标签 ID
+	cnbManagedIDs, err := h.db.GetCNBManagedLabelIDs(ctx, mapping.PlaneProjectID, p.RepoSlug)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event": "label.sync.simple",
+			"error": "get_cnb_managed_labels_failed",
+		})
+		return
+	}
+
+	// 6.3 保留非 CNB 管理的标签
+	preservedLabelIDs := make([]string, 0)
+	for _, labelID := range currentLabelIDs {
+		if !cnbManagedIDs[labelID] {
+			preservedLabelIDs = append(preservedLabelIDs, labelID)
+		}
+	}
+
+	// 6.4 合并并去重
+	finalLabelIDs := uniqueStrings(append(preservedLabelIDs, planeLabelIDs...))
+
+	// 6.5 更新
+	patch := map[string]any{"labels": finalLabelIDs}
 	err = planeClient.PatchIssue(ctx, token, workspaceSlug, mapping.PlaneProjectID, planeIssueID, patch)
 	if err != nil {
 		LogStructured("error", map[string]any{
@@ -170,7 +203,9 @@ func (h *Handler) processLabelSyncSimple(p issueLabelNotifySimplePayload, delive
 		"event":        "label.sync.simple",
 		"repo_slug":    p.RepoSlug,
 		"issue_number": p.IssueNumber,
-		"labels_count": len(planeLabelIDs),
+		"cnb_labels":   len(planeLabelIDs),
+		"preserved":    len(preservedLabelIDs),
+		"total":        len(finalLabelIDs),
 		"result":       "success",
 	})
 

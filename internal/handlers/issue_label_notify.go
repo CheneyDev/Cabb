@@ -246,9 +246,51 @@ func (h *Handler) processIssueLabelNotify(p issueLabelNotifyPayload, deliveryID,
 		return
 	}
 
-	// 6. 更新 Plane Issue 标签
+	// 6. 更新 Plane Issue 标签（增量更新，只替换 CNB 管理的标签）
 	planeClient := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
-	patch := map[string]any{"labels": planeLabelIDs}
+
+	// 6.1 获取当前 Issue 的所有标签
+	currentLabelIDs, err := planeClient.GetIssueLabels(ctx, token, workspaceSlug, mapping.PlaneProjectID, planeIssueID)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event":          "issue.label.notify.process",
+			"delivery_id":    deliveryID,
+			"plane_issue_id": planeIssueID,
+			"error":          "get_current_labels_failed",
+			"details":        err.Error(),
+		})
+		return
+	}
+
+	// 6.2 获取 CNB 管理的标签 ID 列表（用于识别哪些标签可以被替换）
+	cnbManagedIDs, err := h.db.GetCNBManagedLabelIDs(ctx, mapping.PlaneProjectID, p.RepoSlug)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event":       "issue.label.notify.process",
+			"delivery_id": deliveryID,
+			"error":       "get_cnb_managed_labels_failed",
+			"details":     err.Error(),
+		})
+		return
+	}
+
+	// 6.3 过滤出非 CNB 管理的标签（需要保留）
+	preservedLabelIDs := make([]string, 0)
+	for _, labelID := range currentLabelIDs {
+		if !cnbManagedIDs[labelID] {
+			// 不是 CNB 管理的标签，需要保留
+			preservedLabelIDs = append(preservedLabelIDs, labelID)
+		}
+	}
+
+	// 6.4 合并：保留的标签 + 新的 CNB 标签
+	finalLabelIDs := append(preservedLabelIDs, planeLabelIDs...)
+
+	// 6.5 去重
+	uniqueLabelIDs := uniqueStrings(finalLabelIDs)
+
+	// 6.6 更新到 Plane
+	patch := map[string]any{"labels": uniqueLabelIDs}
 	err = planeClient.PatchIssue(ctx, token, workspaceSlug, mapping.PlaneProjectID, planeIssueID, patch)
 	if err != nil {
 		LogStructured("error", map[string]any{
@@ -262,13 +304,15 @@ func (h *Handler) processIssueLabelNotify(p issueLabelNotifyPayload, deliveryID,
 	}
 
 	LogStructured("info", map[string]any{
-		"event":          "issue.label.notify.process",
-		"delivery_id":    deliveryID,
-		"repo_slug":      p.RepoSlug,
-		"issue_number":   p.IssueNumber,
-		"plane_issue_id": planeIssueID,
-		"labels_synced":  len(planeLabelIDs),
-		"result":         "success",
+		"event":            "issue.label.notify.process",
+		"delivery_id":      deliveryID,
+		"repo_slug":        p.RepoSlug,
+		"issue_number":     p.IssueNumber,
+		"plane_issue_id":   planeIssueID,
+		"cnb_labels_count": len(planeLabelIDs),
+		"preserved_count":  len(preservedLabelIDs),
+		"total_count":      len(uniqueLabelIDs),
+		"result":           "success",
 	})
 
 	// 7. 发送飞书通知（如果配置了 channel-project 映射）
@@ -348,4 +392,17 @@ func buildLabelChangeMessage(p issueLabelNotifyPayload, cnbLabels []string) stri
 		sb.WriteString(fmt.Sprintf("\n🔗 查看详情：%s", p.IssueURL))
 	}
 	return sb.String()
+}
+
+// uniqueStrings removes duplicates from a string slice
+func uniqueStrings(slice []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(slice))
+	for _, item := range slice {
+		if item != "" && !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
 }
