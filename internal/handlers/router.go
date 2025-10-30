@@ -49,7 +49,8 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 
 	// CNB API v1
 	api := e.Group("/api/v1")
-	api.POST("/issues/label-notify", h.IssueLabelNotify)
+	api.POST("/issues/label-notify", h.IssueLabelNotify)     // 完整版（11 个字段）
+	api.POST("/issues/label-sync", h.IssueLabelNotifySimple) // 简化版（3 个字段）
 
 	// Feishu (Lark)
 	e.POST("/webhooks/lark/events", h.LarkEvents)

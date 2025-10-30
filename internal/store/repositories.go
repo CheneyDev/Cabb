@@ -1046,3 +1046,37 @@ func nullTime(s string) any {
 	}
 	return s
 }
+
+// ChannelProjectLink represents a channel-project mapping
+type ChannelProjectLink struct {
+	LarkChatID     string
+	PlaneProjectID string
+	NotifyOnCreate bool
+}
+
+// GetChannelsByPlaneProject retrieves all Lark chat IDs mapped to a Plane project
+func (d *DB) GetChannelsByPlaneProject(ctx context.Context, planeProjectID string) ([]ChannelProjectLink, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT lark_chat_id, plane_project_id::text, notify_on_create
+FROM channel_project_mappings
+WHERE plane_project_id=$1::uuid
+ORDER BY created_at DESC`
+	rows, err := d.SQL.QueryContext(ctx, q, planeProjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []ChannelProjectLink
+	for rows.Next() {
+		var link ChannelProjectLink
+		if err := rows.Scan(&link.LarkChatID, &link.PlaneProjectID, &link.NotifyOnCreate); err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, rows.Err()
+}
