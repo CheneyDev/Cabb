@@ -68,12 +68,12 @@ func (c *Client) defaultCommentPath() string {
 }
 
 func (c *Client) defaultAssigneesPath() string {
-    return "/{repo}/-/issues/{number}/assignees"
+	return "/{repo}/-/issues/{number}/assignees"
 }
 
 // defaultGetIssuePath returns the path for getting a single issue detail
 func (c *Client) defaultGetIssuePath() string {
-    return "/{repo}/-/issues/{number}"
+	return "/{repo}/-/issues/{number}"
 }
 
 func expand(tpl string, repo, number string) (string, error) {
@@ -102,71 +102,71 @@ func expand(tpl string, repo, number string) (string, error) {
 
 // Label represents a minimal label entity from CNB.
 type Label struct {
-    Name  string `json:"name"`
-    Color string `json:"color"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 // IssueDetail contains a small subset we care about for verification
 type IssueDetail struct {
-    Number   string `json:"number"`
-    Priority string `json:"priority"`
-    Title    string `json:"title"`
+	Number   string `json:"number"`
+	Priority string `json:"priority"`
+	Title    string `json:"title"`
 }
 
 // GetIssue retrieves an issue's details
 func (c *Client) GetIssue(ctx context.Context, repo, number string) (*IssueDetail, error) {
-    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
-        return nil, errors.New("missing CNB base URL or token")
-    }
-    p, err := expand(c.defaultGetIssuePath(), repo, number)
-    if err != nil {
-        return nil, err
-    }
-    ep, err := c.join(p)
-    if err != nil {
-        return nil, err
-    }
-    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
-    if err != nil {
-        return nil, err
-    }
-    req.Header.Set("Authorization", "Bearer "+c.Token)
-    req.Header.Set("Accept", "application/json")
-    resp, err := c.httpClient().Do(req)
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
-    if resp.StatusCode == http.StatusNotAcceptable {
-        _ = resp.Body.Close()
-        req2, err2 := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
-        if err2 != nil {
-            return nil, err2
-        }
-        req2.Header.Set("Authorization", "Bearer "+c.Token)
-        req2.Header.Set("Accept", "application/vnd.cnb.api+json")
-        resp2, err2 := c.httpClient().Do(req2)
-        if err2 != nil {
-            return nil, err2
-        }
-        defer resp2.Body.Close()
-        if resp2.StatusCode >= 200 && resp2.StatusCode < 300 {
-            var out IssueDetail
-            if err := json.NewDecoder(resp2.Body).Decode(&out); err != nil {
-                return nil, err
-            }
-            return &out, nil
-        }
-        return nil, fmt.Errorf("cnb get issue status=%d", resp2.StatusCode)
-    }
-    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-        return nil, fmt.Errorf("cnb get issue status=%d", resp.StatusCode)
-    }
-    var out IssueDetail
-    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-        return nil, err
-    }
-    return &out, nil
+	if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+		return nil, errors.New("missing CNB base URL or token")
+	}
+	p, err := expand(c.defaultGetIssuePath(), repo, number)
+	if err != nil {
+		return nil, err
+	}
+	ep, err := c.join(p)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotAcceptable {
+		_ = resp.Body.Close()
+		req2, err2 := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+		if err2 != nil {
+			return nil, err2
+		}
+		req2.Header.Set("Authorization", "Bearer "+c.Token)
+		req2.Header.Set("Accept", "application/vnd.cnb.api+json")
+		resp2, err2 := c.httpClient().Do(req2)
+		if err2 != nil {
+			return nil, err2
+		}
+		defer resp2.Body.Close()
+		if resp2.StatusCode >= 200 && resp2.StatusCode < 300 {
+			var out IssueDetail
+			if err := json.NewDecoder(resp2.Body).Decode(&out); err != nil {
+				return nil, err
+			}
+			return &out, nil
+		}
+		return nil, fmt.Errorf("cnb get issue status=%d", resp2.StatusCode)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("cnb get issue status=%d", resp.StatusCode)
+	}
+	var out IssueDetail
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // EnsureRepoLabels makes sure the given label names exist in the repository.
@@ -637,9 +637,9 @@ func (c *Client) AddComment(ctx context.Context, repo, number, commentHTML strin
 
 // CloseIssue transitions an issue to closed via UpdateIssue.
 func (c *Client) CloseIssue(ctx context.Context, repo, number string) error {
-    // CNB requires state and state_reason to both be set or both absent.
-    // Default close reason to "completed".
-    return c.UpdateIssue(ctx, repo, number, map[string]any{"state": "closed", "state_reason": "completed"})
+	// CNB requires state and state_reason to both be set or both absent.
+	// Default close reason to "completed".
+	return c.UpdateIssue(ctx, repo, number, map[string]any{"state": "closed", "state_reason": "completed"})
 }
 
 // UpdateIssueAssignees replaces the assignees list of an issue via PATCH.
