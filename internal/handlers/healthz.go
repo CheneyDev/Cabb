@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"plane-integration/internal/version"
+	"cabb/internal/version"
 )
 
 func (h *Handler) Healthz(c echo.Context) error {

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: plane-integration
+    name: cabb
     env: docker
     plan: free
     autoDeploy: true
@@ -25,12 +25,12 @@ services:
         value: https://REPLACE_ME.onrender.com/plane/oauth/callback
       - key: DATABASE_URL
         fromDatabase:
-          name: plane-integration-db
+          name: cabb-db
           property: connectionString
     # Migrations are applied in Docker entrypoint (scripts/entrypoint.sh) across all db/migrations/*.sql
 
   - type: web
-    name: plane-integration-ui
+    name: cabb-ui
     env: node
     plan: free
     autoDeploy: true
@@ -42,11 +42,11 @@ services:
         value: 20
       # Server-side proxy base for route handlers
       - key: API_BASE
-        value: https://plane-integration.onrender.com
+        value: https://cabb.onrender.com
       # Client-side direct calls (only used when not hitting the proxy)
       - key: NEXT_PUBLIC_API_BASE
-        value: https://plane-integration.onrender.com
+        value: https://cabb.onrender.com
 
 databases:
-  - name: plane-integration-db
+  - name: cabb-db
     plan: free

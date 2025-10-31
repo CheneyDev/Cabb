@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"plane-integration/internal/cnb"
+	"cabb/internal/cnb"
 )
 
 // acquireCreateLock locks on a (repo|planeIssueID) key to serialize CNB issue creation in-process
@@ -37,6 +37,20 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	planeProjectID, _ := dataGetString(data, "project")
 	name, _ := dataGetString(data, "name")
 	descHTML, _ := dataGetString(data, "description_html")
+
+	// Extract workspace_slug and project_slug for snapshot (may be in workspace/project nested objects)
+	workspaceSlug, _ := dataGetString(data, "workspace_slug")
+	projectSlug, _ := dataGetString(data, "project_slug")
+	if workspaceSlug == "" {
+		if ws, ok := data["workspace"].(map[string]any); ok {
+			workspaceSlug, _ = dataGetString(ws, "slug")
+		}
+	}
+	if projectSlug == "" {
+		if proj, ok := data["project_detail"].(map[string]any); ok {
+			projectSlug, _ = dataGetString(proj, "slug")
+		}
+	}
 	// Extract state name/id if present (for close decision)
 	stateName, _ := dataGetStateNameAndID(data)
 	// Fallback via activity for state changes
@@ -69,6 +83,11 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 
 	labels := dataGetLabels(data)
 	mappings, err := h.db.ListRepoProjectMappingsByPlaneProject(ctx, planeProjectID)
+
+	// Write issue snapshot (webhook-only refactor: cache metadata for preview/notification)
+	if planeIssueID != "" && planeProjectID != "" && env.WorkspaceID != "" {
+		_ = h.db.UpsertPlaneIssueSnapshot(ctx, planeIssueID, planeProjectID, env.WorkspaceID, workspaceSlug, projectSlug, name, descHTML, stateName, planePriority, labels, assigneePlaneIDs)
+	}
 
 	LogStructured("info", map[string]any{
 		"event":            "plane.issue",
@@ -659,7 +678,7 @@ func dataGetLabelItems(m map[string]any) []planeLabel {
 func labelSelectorMatch(selector string, labels []string) bool {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
-		return false
+		return true
 	}
 	tokens := make([]string, 0, 8)
 	for _, p := range strings.FieldsFunc(selector, func(r rune) bool { return r == ',' || r == ' ' || r == ';' || r == '|' }) {

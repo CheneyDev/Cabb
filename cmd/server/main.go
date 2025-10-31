@@ -8,10 +8,10 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"plane-integration/internal/handlers"
-	"plane-integration/internal/store"
-	"plane-integration/internal/version"
-	"plane-integration/pkg/config"
+	"cabb/internal/handlers"
+	"cabb/internal/store"
+	"cabb/internal/version"
+	"cabb/pkg/config"
 )
 
 func main() {

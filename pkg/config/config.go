@@ -12,13 +12,10 @@ type Config struct {
 	DatabaseURL string
 	Timezone    string
 
-	// Plane
+	// Plane (Webhook-only)
 	PlaneBaseURL       string
-	PlaneClientID      string
-	PlaneClientSecret  string
-	PlaneRedirectURI   string
 	PlaneWebhookSecret string
-	PlaneAppBaseURL    string
+	PlaneServiceToken  string // Global Service Token for outbound API calls
 
 	// Feishu (Lark)
 	LarkAppID             string
@@ -64,11 +61,8 @@ func FromEnv() Config {
 		Timezone:    strFromEnv("TIMEZONE", "Local"),
 
 		PlaneBaseURL:       strFromEnv("PLANE_BASE_URL", "https://api.plane.so"),
-		PlaneClientID:      os.Getenv("PLANE_CLIENT_ID"),
-		PlaneClientSecret:  os.Getenv("PLANE_CLIENT_SECRET"),
-		PlaneRedirectURI:   strFromEnv("PLANE_REDIRECT_URI", "http://localhost:8080/plane/oauth/callback"),
 		PlaneWebhookSecret: os.Getenv("PLANE_WEBHOOK_SECRET"),
-		PlaneAppBaseURL:    os.Getenv("PLANE_APP_BASE_URL"),
+		PlaneServiceToken:  os.Getenv("PLANE_SERVICE_TOKEN"),
 
 		LarkAppID:             os.Getenv("LARK_APP_ID"),
 		LarkAppSecret:         os.Getenv("LARK_APP_SECRET"),
@@ -78,7 +72,7 @@ func FromEnv() Config {
 		CNBAppToken:        os.Getenv("CNB_APP_TOKEN"),
 		IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),
 		CNBBaseURL:         os.Getenv("CNB_BASE_URL"),
-		CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", false),
+		CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", true),
 
 		CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
 		CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),

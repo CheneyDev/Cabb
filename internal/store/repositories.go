@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // EventDeliveries repo
@@ -65,6 +67,7 @@ type RepoProjectMapping struct {
 	PlaneProjectID     string
 	PlaneWorkspaceID   string
 	CNBRepoID          string
+	WorkspaceSlug      sql.NullString
 	IssueOpenStateID   sql.NullString
 	IssueClosedStateID sql.NullString
 	Active             bool
@@ -77,12 +80,12 @@ func (d *DB) GetRepoProjectMapping(ctx context.Context, cnbRepoID string) (*Repo
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE cnb_repo_id=$1 AND active=true
 LIMIT 1`
 	var m RepoProjectMapping
-	err := d.SQL.QueryRowContext(ctx, q, cnbRepoID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
+	err := d.SQL.QueryRowContext(ctx, q, cnbRepoID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +97,12 @@ func (d *DB) GetRepoProjectMappingByPlaneProject(ctx context.Context, planeProje
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE plane_project_id=$1::uuid AND active=true
 LIMIT 1`
 	var m RepoProjectMapping
-	err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
+	err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +115,7 @@ func (d *DB) ListRepoProjectMappingsByPlaneProject(ctx context.Context, planePro
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE plane_project_id=$1::uuid AND active=true`
 	rows, err := d.SQL.QueryContext(ctx, q, planeProjectID)
@@ -123,7 +126,7 @@ WHERE plane_project_id=$1::uuid AND active=true`
 	var out []RepoProjectMapping
 	for rows.Next() {
 		var m RepoProjectMapping
-		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
+		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -174,7 +177,7 @@ func (d *DB) ListRepoProjectMappings(ctx context.Context, planeProjectID, cnbRep
 		args = append(args, activeParam == "true")
 		idx++
 	}
-	q := "SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector FROM repo_project_mappings " + where
+	q := "SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector FROM repo_project_mappings " + where
 	rows, err := d.SQL.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -183,7 +186,7 @@ func (d *DB) ListRepoProjectMappings(ctx context.Context, planeProjectID, cnbRep
 	var out []RepoProjectMapping
 	for rows.Next() {
 		var m RepoProjectMapping
-		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
+		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -406,59 +409,8 @@ type Workspace struct {
 	UpdatedAt         time.Time
 }
 
-func (d *DB) GetWorkspaceBySlug(ctx context.Context, workspaceSlug string) (*Workspace, error) {
-	if d == nil || d.SQL == nil {
-		return nil, sql.ErrConnDone
-	}
-	const q = `
-SELECT id::text, plane_workspace_id::text, app_installation_id, token_type, access_token, refresh_token, expires_at, workspace_slug, app_bot, created_at, updated_at
-FROM workspaces
-WHERE workspace_slug=$1 AND token_type='bot'
-ORDER BY updated_at DESC
-LIMIT 1`
-	var w Workspace
-	if err := d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&w.ID, &w.PlaneWorkspaceID, &w.AppInstallationID, &w.TokenType, &w.AccessToken, &w.RefreshToken, &w.ExpiresAt, &w.WorkspaceSlug, &w.AppBot, &w.CreatedAt, &w.UpdatedAt); err != nil {
-		return nil, err
-	}
-	return &w, nil
-}
-
-func (d *DB) UpsertWorkspaceToken(ctx context.Context, planeWorkspaceID, appInstallationID, tokenType, accessToken, refreshToken, expiresAt, workspaceSlug, appBot string) error {
-	if d == nil || d.SQL == nil {
-		return nil
-	}
-	// Try update existing row of same plane_workspace_id & token_type, else insert
-	const upd = `
-UPDATE workspaces SET app_installation_id=$2, access_token=$3, refresh_token=$4, expires_at=$5::timestamptz, workspace_slug=$6, app_bot=$7, updated_at=now()
-WHERE plane_workspace_id=$1::uuid AND token_type=$8
-`
-	res, err := d.SQL.ExecContext(ctx, upd, planeWorkspaceID, appInstallationID, accessToken, nullIfEmpty(refreshToken), nullTime(expiresAt), nullIfEmpty(workspaceSlug), nullIfEmpty(appBot), tokenType)
-	if err != nil {
-		return err
-	}
-	rows, _ := res.RowsAffected()
-	if rows > 0 {
-		return nil
-	}
-	const ins = `
-INSERT INTO workspaces (plane_workspace_id, app_installation_id, token_type, access_token, refresh_token, expires_at, workspace_slug, app_bot, created_at, updated_at)
-VALUES ($1::uuid,$2,$3,$4,$5,$6::timestamptz,$7,$8,now(),now())`
-	_, err = d.SQL.ExecContext(ctx, ins, planeWorkspaceID, appInstallationID, tokenType, accessToken, nullIfEmpty(refreshToken), nullTime(expiresAt), nullIfEmpty(workspaceSlug), nullIfEmpty(appBot))
-	return err
-}
-
-func (d *DB) FindBotTokenByWorkspaceID(ctx context.Context, planeWorkspaceID string) (accessToken string, workspaceSlug string, err error) {
-	if d == nil || d.SQL == nil {
-		return "", "", sql.ErrConnDone
-	}
-	const q = `
-SELECT access_token, COALESCE(workspace_slug, '') FROM workspaces
-WHERE plane_workspace_id=$1::uuid AND token_type='bot'
-ORDER BY updated_at DESC
-LIMIT 1`
-	err = d.SQL.QueryRowContext(ctx, q, planeWorkspaceID).Scan(&accessToken, &workspaceSlug)
-	return
-}
+// NOTE: FindBotTokenByWorkspaceID and GetWorkspaceSlug removed - using global PLANE_SERVICE_TOKEN from config
+// and storing workspace_slug directly in repo_project_mappings table
 
 // ===== Lark (Feishu) chat-level binding =====
 
@@ -975,15 +927,7 @@ func (d *DB) DeleteLarkThreadLink(ctx context.Context, larkThreadID string) (boo
 	return false, nil
 }
 
-// Find bot token by workspace slug
-func (d *DB) FindBotTokenByWorkspaceSlug(ctx context.Context, workspaceSlug string) (accessToken string, err error) {
-	if d == nil || d.SQL == nil {
-		return "", sql.ErrConnDone
-	}
-	const q = `SELECT access_token FROM workspaces WHERE workspace_slug=$1 AND token_type='bot' ORDER BY updated_at DESC LIMIT 1`
-	err = d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&accessToken)
-	return
-}
+// NOTE: FindBotTokenByWorkspaceSlug removed - use global PLANE_SERVICE_TOKEN from config
 
 // CleanupStaleThreadLinks deletes thread links that are not sync-enabled and not updated since before the cutoff.
 func (d *DB) CleanupStaleThreadLinks(ctx context.Context, cutoff time.Time) (int64, error) {
@@ -1053,6 +997,88 @@ func (d *DB) FindDisplayNameByPlaneUserID(ctx context.Context, planeUserID strin
 		return name.String, nil
 	}
 	return "", sql.ErrNoRows
+}
+
+// ===== Plane Snapshots (webhook-only refactor) =====
+
+// UpsertPlaneIssueSnapshot inserts or updates an issue snapshot from Plane webhook events.
+func (d *DB) UpsertPlaneIssueSnapshot(ctx context.Context, planeIssueID, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, descriptionHTML, stateName, priority string, labels []string, assigneeIDs []string) error {
+	if d == nil || d.SQL == nil {
+		return nil
+	}
+	const q = `
+INSERT INTO plane_issue_snapshots (plane_issue_id, plane_project_id, plane_workspace_id, workspace_slug, project_slug, name, description_html, state_name, priority, labels, assignee_ids, updated_at)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, now())
+ON CONFLICT (plane_issue_id) DO UPDATE SET
+  plane_project_id = EXCLUDED.plane_project_id,
+  plane_workspace_id = EXCLUDED.plane_workspace_id,
+  workspace_slug = EXCLUDED.workspace_slug,
+  project_slug = EXCLUDED.project_slug,
+  name = EXCLUDED.name,
+  description_html = EXCLUDED.description_html,
+  state_name = EXCLUDED.state_name,
+  priority = EXCLUDED.priority,
+  labels = EXCLUDED.labels,
+  assignee_ids = EXCLUDED.assignee_ids,
+  updated_at = now()
+`
+	_, err := d.SQL.ExecContext(ctx, q, planeIssueID, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, descriptionHTML, nullIfEmpty(stateName), nullIfEmpty(priority), pq.Array(labels), pq.Array(assigneeIDs))
+	return err
+}
+
+// UpsertPlaneProjectSnapshot inserts or updates a project snapshot from Plane webhook events.
+func (d *DB) UpsertPlaneProjectSnapshot(ctx context.Context, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, identifier string) error {
+	if d == nil || d.SQL == nil {
+		return nil
+	}
+	const q = `
+INSERT INTO plane_project_snapshots (plane_project_id, plane_workspace_id, workspace_slug, project_slug, name, identifier, updated_at)
+VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, now())
+ON CONFLICT (plane_project_id) DO UPDATE SET
+  plane_workspace_id = EXCLUDED.plane_workspace_id,
+  workspace_slug = EXCLUDED.workspace_slug,
+  project_slug = EXCLUDED.project_slug,
+  name = EXCLUDED.name,
+  identifier = EXCLUDED.identifier,
+  updated_at = now()
+`
+	_, err := d.SQL.ExecContext(ctx, q, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, identifier)
+	return err
+}
+
+// GetPlaneIssueSnapshot retrieves an issue snapshot by plane_issue_id.
+func (d *DB) GetPlaneIssueSnapshot(ctx context.Context, planeIssueID string) (map[string]any, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT plane_issue_id::text, plane_project_id::text, plane_workspace_id::text, workspace_slug, project_slug, name, 
+       COALESCE(description_html, ''), COALESCE(state_name, ''), COALESCE(priority, ''), 
+       COALESCE(labels, '{}'), COALESCE(assignee_ids, '{}'), updated_at
+FROM plane_issue_snapshots WHERE plane_issue_id=$1::uuid LIMIT 1`
+	var (
+		issueID, projectID, workspaceID, wsSlug, projSlug, name, desc, state, pri string
+		labels, assignees                                                         pq.StringArray
+		updatedAt                                                                 time.Time
+	)
+	err := d.SQL.QueryRowContext(ctx, q, planeIssueID).Scan(&issueID, &projectID, &workspaceID, &wsSlug, &projSlug, &name, &desc, &state, &pri, &labels, &assignees, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"plane_issue_id":     issueID,
+		"plane_project_id":   projectID,
+		"plane_workspace_id": workspaceID,
+		"workspace_slug":     wsSlug,
+		"project_slug":       projSlug,
+		"name":               name,
+		"description_html":   desc,
+		"state_name":         state,
+		"priority":           pri,
+		"labels":             []string(labels),
+		"assignee_ids":       []string(assignees),
+		"updated_at":         updatedAt,
+	}, nil
 }
 
 // helpers

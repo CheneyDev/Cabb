@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"cabb/internal/lark"
+	"cabb/internal/plane"
+	"cabb/internal/store"
 	"github.com/labstack/echo/v4"
-	"plane-integration/internal/lark"
-	"plane-integration/internal/plane"
-	"plane-integration/internal/store"
 )
 
 // Event v2 envelope (兼容 challenge 握手)
@@ -124,7 +124,7 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			return c.NoContent(http.StatusOK)
 		}
 		// Command parse: support "/bind <url>" or "绑定 <url>" or "bind <url>"
-		// Only trigger when消息文本自身是 bind 命令（允许前置 @bot），而不是“凡是 @ 都当作 bind”
+		// Only trigger when消息文本自身是 bind 命令（允许前置 @bot），而不是"凡是 @ 都当作 bind"
 		lower := strings.ToLower(text)
 		isBind := strings.HasPrefix(lower, "/bind") || strings.HasPrefix(lower, "bind ") || strings.HasPrefix(text, "绑定 ")
 		if !isBind && len(ev.Message.Mentions) > 0 {
@@ -136,6 +136,17 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 				}
 			}
 		}
+
+		// Debug logging for troubleshooting
+		LogStructured("info", map[string]any{
+			"event":          "lark.message.debug",
+			"text":           text,
+			"lower":          lower,
+			"is_bind":        isBind,
+			"mentions_count": len(ev.Message.Mentions),
+			"chat_id":        ev.Message.ChatID,
+			"message_type":   ev.Message.MessageType,
+		})
 		if isBind {
 			// Determine thread target
 			threadID := ev.Message.RootID
@@ -504,10 +515,17 @@ func (h *Handler) planeIssueURL(slug, projectID, issueID string) string {
 	if slug == "" || projectID == "" || issueID == "" {
 		return ""
 	}
-	base := strings.TrimRight(h.cfg.PlaneAppBaseURL, "/")
+	// Derive app URL from base URL (api.plane.so -> app.plane.so)
+	base := h.cfg.PlaneBaseURL
+	if strings.Contains(base, "api.plane.so") {
+		base = strings.Replace(base, "api.plane.so", "app.plane.so", 1)
+	} else if base != "" {
+		base = strings.Replace(base, "//api.", "//app.", 1)
+	}
 	if base == "" {
 		base = "https://app.plane.so"
 	}
+	base = strings.TrimRight(base, "/")
 	var b strings.Builder
 	b.WriteString(base)
 	b.WriteString("/")
@@ -537,37 +555,10 @@ func nsToString(ns sql.NullString) string {
 	return ""
 }
 
-// ensurePlaneBotToken returns a valid Plane bot token for the workspace slug.
-// If the stored token is near expiry or expired and installation id is available,
-// it refreshes the token via client_credentials and persists it.
+// ensurePlaneBotToken returns the global Plane service token from config.
+// Returns empty if PLANE_SERVICE_TOKEN is not configured.
 func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string) (string, error) {
-	if !hHasDB(h) || strings.TrimSpace(workspaceSlug) == "" {
-		return "", nil
-	}
-	ws, err := h.db.GetWorkspaceBySlug(ctx, workspaceSlug)
-	if err != nil || ws == nil {
-		return "", err
-	}
-	token := strings.TrimSpace(ws.AccessToken)
-	// Consider refresh if expires_at is set and within 60s of expiry
-	needRefresh := false
-	if ws.ExpiresAt.Valid {
-		if time.Now().After(ws.ExpiresAt.Time.Add(-60 * time.Second)) {
-			needRefresh = true
-		}
-	}
-	if needRefresh && ws.AppInstallationID.Valid && ws.AppInstallationID.String != "" {
-		if tr, err := h.getBotToken(ctx, ws.AppInstallationID.String); err == nil && tr != nil && tr.AccessToken != "" {
-			exp := ""
-			if tr.ExpiresIn > 0 {
-				exp = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
-			}
-			// Persist refreshed token
-			_ = h.db.UpsertWorkspaceToken(ctx, ws.PlaneWorkspaceID, ws.AppInstallationID.String, "bot", tr.AccessToken, tr.RefreshToken, exp, workspaceSlug, nsToString(ws.AppBot))
-			token = tr.AccessToken
-		}
-	}
-	return token, nil
+	return strings.TrimSpace(h.cfg.PlaneServiceToken), nil
 }
 
 // postBoundAlready posts an idempotent notice that the chat is already bound to the issue.

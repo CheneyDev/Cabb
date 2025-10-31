@@ -23,10 +23,11 @@ jobs:
 
       - name: Launch server and verify /healthz
         run: |
-          PORT=18080 ./bin/server & echo $! > server.pid
-          for i in {1..20}; do curl -fsS http://localhost:18080/healthz && ok=1 && break || sleep 1; done
-          if [ -z "$ok" ]; then echo "health check failed"; cat server.pid || true; exit 1; fi
-          kill $(cat server.pid)
+          ./scripts/start-server-for-ci.sh 18080 20 2
+          SERVER_PID=$(cat server.pid 2>/dev/null || echo "")
+          if [ -n "$SERVER_PID" ]; then
+            kill $SERVER_PID
+          fi
 
       - name: Docker build
         run: docker build -t plane-integration:ci .
@@ -34,8 +35,16 @@ jobs:
       - name: Run container and verify /healthz
         run: |
           docker run -d --rm --name plane-ci -p 18081:8080 plane-integration:ci
-          for i in {1..30}; do curl -fsS http://localhost:18081/healthz && ok=1 && break || sleep 1; done
-          if [ -z "$ok" ]; then docker logs plane-ci; echo "container health check failed"; exit 1; fi
+          # 等待容器启动，Docker 容器可能需要更长时间
+          sleep 3
+          for i in {1..30}; do 
+            curl -fsS http://localhost:18081/healthz && ok=1 && break || sleep 1
+          done
+          if [ -z "$ok" ]; then 
+            echo "container health check failed after $((3 + i)) seconds"
+            docker logs plane-ci
+            exit 1
+          fi
           docker rm -f plane-ci
 
   db-migrate-verify:
@@ -71,9 +80,11 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/plane_integration?sslmode=disable
           PORT: 18082
         run: |
-          ./bin/server & echo $! > server.pid
-          for i in {1..20}; do curl -fsS http://localhost:18082/healthz && ok=1 && break || sleep 1; done
-          if [ -z "$ok" ]; then echo "server not healthy"; kill $(cat server.pid) || true; exit 1; fi
+          ./scripts/start-server-for-ci.sh 18082 20 2
+          SERVER_PID=$(cat server.pid 2>/dev/null || echo "")
+          if [ -n "$SERVER_PID" ]; then
+            kill $SERVER_PID 2>/dev/null || true
+          fi
           # verify some core tables exist
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.workspaces')" | grep -q workspaces
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.repo_project_mappings')" | grep -q repo_project_mappings
@@ -86,6 +97,6 @@ jobs:
           PORT: 18083
         run: |
           echo "Running migrations against external DATABASE_URL (be careful!)"
-          ./bin/server & echo $! > server.pid
+          PORT=18083 ./bin/server & echo $! > server.pid
           sleep 5
           kill $(cat server.pid)

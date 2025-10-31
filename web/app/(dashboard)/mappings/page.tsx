@@ -11,7 +11,17 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Menu, MenuItem, MenuPopup, MenuPositioner, MenuTrigger, MenuSeparator } from '@/components/ui/menu'
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuPositioner,
+  MenuTrigger,
+  MenuSeparator,
+  MenuPortal,
+  MenuGroup,
+  MenuGroupLabel,
+} from '@/components/ui/menu'
 
 const directionOptions = [
   { value: 'cnb_to_plane', label: '仅 CNB → Plane' },
@@ -48,37 +58,60 @@ function trimValue(value?: string | null) {
 }
 
 function formatWorkspaceLabel(item: Mapping) {
-  return trimValue(item.plane_workspace_name) || trimValue(item.plane_workspace_slug) || item.plane_workspace_id
+  // 优先显示 slug，如果没有则显示 name，最后才显示 ID 的前8位
+  const slug = trimValue(item.plane_workspace_slug)
+  const name = trimValue(item.plane_workspace_name)
+  const id = item.plane_workspace_id
+  
+  if (slug) return slug
+  if (name) return name
+  // ID 太长时显示前8位，便于识别
+  return id.length > 8 ? `${id.slice(0, 8)}...` : id
 }
 
 function formatWorkspaceDetails(item: Mapping) {
   const details: string[] = []
   const slug = trimValue(item.plane_workspace_slug)
+  const name = trimValue(item.plane_workspace_name)
+  
   if (slug) {
     details.push(`Slug: ${slug}`)
+  }
+  if (name && name !== slug) {
+    details.push(`名称: ${name}`)
   }
   details.push(`ID: ${item.plane_workspace_id}`)
   return details.join(' · ')
 }
 
 function formatProjectLabel(item: Mapping) {
-  return (
-    trimValue(item.plane_project_name) ||
-    trimValue(item.plane_project_identifier) ||
-    trimValue(item.plane_project_slug) ||
-    item.plane_project_id
-  )
+  // 优先显示 identifier（最短的项目标识），然后是 name、slug，最后是 ID 的前8位
+  const identifier = trimValue(item.plane_project_identifier)
+  const name = trimValue(item.plane_project_name)
+  const slug = trimValue(item.plane_project_slug)
+  const id = item.plane_project_id
+  
+  if (identifier) return identifier
+  if (name) return name
+  if (slug) return slug
+  // ID 太长时显示前8位，便于识别
+  return id.length > 8 ? `${id.slice(0, 8)}...` : id
 }
 
 function formatProjectDetails(item: Mapping) {
   const details: string[] = []
   const identifier = trimValue(item.plane_project_identifier)
   const slug = trimValue(item.plane_project_slug)
+  const name = trimValue(item.plane_project_name)
+  
   if (identifier) {
     details.push(`标识符: ${identifier}`)
   }
   if (slug && slug !== identifier) {
     details.push(`Slug: ${slug}`)
+  }
+  if (name && name !== slug && name !== identifier) {
+    details.push(`名称: ${name}`)
   }
   details.push(`ID: ${item.plane_project_id}`)
   return details.join(' · ')
@@ -86,6 +119,7 @@ function formatProjectDetails(item: Mapping) {
 
 const initialForm = {
   cnb_repo_id: '',
+  workspace_slug: '',
   plane_workspace_id: '',
   plane_project_id: '',
   issue_open_state_id: '',
@@ -96,6 +130,20 @@ const initialForm = {
 }
 
 type FormState = typeof initialForm
+
+type WorkspaceOption = {
+  id: string
+  name: string
+  slug: string
+}
+
+type ProjectOption = {
+  id: string
+  name: string
+  identifier: string
+  slug: string
+  workspace_id?: string
+}
 
 export default function MappingsPage() {
   const [items, setItems] = useState<Mapping[]>([])
@@ -109,6 +157,8 @@ export default function MappingsPage() {
   const [form, setForm] = useState<FormState>(initialForm)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [actionKey, setActionKey] = useState<string | null>(null)
+  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [loadingProjects, setLoadingProjects] = useState(false)
 
   const querySuffix = useMemo(() => {
     const params = new URLSearchParams()
@@ -144,6 +194,29 @@ export default function MappingsPage() {
     load()
   }, [load])
 
+  useEffect(() => {
+    async function loadProjects() {
+      const slug = form.workspace_slug.trim()
+      if (!slug) {
+        setProjects([])
+        return
+      }
+      setLoadingProjects(true)
+      try {
+        const res = await fetch(`/api/admin/plane/projects?workspace_slug=${encodeURIComponent(slug)}`, { cache: 'no-store' })
+        if (!res.ok) throw new Error('加载 projects 失败')
+        const json = await res.json()
+        setProjects(Array.isArray(json.items) ? json.items : [])
+      } catch (err) {
+        console.error('Failed to load projects:', err)
+        setProjects([])
+      } finally {
+        setLoadingProjects(false)
+      }
+    }
+    loadProjects()
+  }, [form.workspace_slug])
+
   const activeCount = items.filter(item => item.active).length
   const inactiveCount = items.length - activeCount
   const isEditing = Boolean(editingKey)
@@ -157,6 +230,7 @@ export default function MappingsPage() {
   function mappingToForm(item: Mapping): FormState {
     return {
       cnb_repo_id: item.cnb_repo_id,
+      workspace_slug: item.plane_workspace_slug ?? '',
       plane_workspace_id: item.plane_workspace_id,
       plane_project_id: item.plane_project_id,
       issue_open_state_id: item.issue_open_state_id ?? '',
@@ -170,6 +244,7 @@ export default function MappingsPage() {
   function buildPayloadFromForm(state: FormState) {
     return {
       cnb_repo_id: state.cnb_repo_id.trim(),
+      workspace_slug: state.workspace_slug.trim(),
       plane_workspace_id: state.plane_workspace_id.trim(),
       plane_project_id: state.plane_project_id.trim(),
       issue_open_state_id: state.issue_open_state_id.trim(),
@@ -236,10 +311,18 @@ export default function MappingsPage() {
   }
   // endregion
 
+  function ChevronDownIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" {...props}>
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    )
+  }
+
   function handleResetForm() {
-    const workspace = form.plane_workspace_id
+    const slug = form.workspace_slug
     const project = form.plane_project_id
-    setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+    setForm({ ...initialForm, workspace_slug: slug, plane_project_id: project })
     setEditingKey(null)
     setFeedback(null)
   }
@@ -260,12 +343,12 @@ export default function MappingsPage() {
         const message = await readErrorMessage(res, `保存失败（${res.status}）`)
         throw new Error(message)
       }
-      const workspace = form.plane_workspace_id
+      const slug = form.workspace_slug
       const project = form.plane_project_id
       setFeedback({ kind: 'success', message: isEditing ? '映射已更新。' : '映射已保存并刷新。' })
       if (isEditing) {
         setEditingKey(null)
-        setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+        setForm({ ...initialForm, workspace_slug: slug, plane_project_id: project })
       } else {
         setForm(prev => ({ ...prev, cnb_repo_id: '' }))
       }
@@ -322,10 +405,10 @@ export default function MappingsPage() {
         throw new Error(message)
       }
       if (editingKey === key) {
-        const workspace = form.plane_workspace_id
+        const slug = form.workspace_slug
         const project = form.plane_project_id
         setEditingKey(null)
-        setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+        setForm({ ...initialForm, workspace_slug: slug, plane_project_id: project })
       }
       setFeedback({ kind: 'success', message: '映射已删除（标记为停用）。' })
       await load()
@@ -359,32 +442,49 @@ export default function MappingsPage() {
               <Input
                 id="cnb_repo_id"
                 required
-                placeholder="1024hub/plane-integration"
+                placeholder="1024hub/cabb"
                 value={form.cnb_repo_id}
                 onChange={event => setForm(prev => ({ ...prev, cnb_repo_id: event.target.value }))}
                 disabled={isEditing}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="plane_workspace_id">Plane Workspace ID</Label>
+              <Label htmlFor="workspace_slug">Workspace Slug</Label>
               <Input
-                id="plane_workspace_id"
+                id="workspace_slug"
                 required
-                placeholder="workspace uuid"
-                value={form.plane_workspace_id}
-                onChange={event => setForm(prev => ({ ...prev, plane_workspace_id: event.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="plane_project_id">Plane Project ID</Label>
-              <Input
-                id="plane_project_id"
-                required
-                placeholder="project uuid"
-                value={form.plane_project_id}
-                onChange={event => setForm(prev => ({ ...prev, plane_project_id: event.target.value }))}
+                placeholder="your-workspace-slug"
+                value={form.workspace_slug}
+                onChange={event => {
+                  setForm(prev => ({ ...prev, workspace_slug: event.target.value, plane_project_id: '', plane_workspace_id: '' }))
+                }}
                 disabled={isEditing}
               />
+              <p className="text-xs text-gray-500">请手动输入 Plane workspace 的 slug（Plane 暂不提供 workspace 列表 API）</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="plane_project_id">Plane Project</Label>
+              <Select
+                id="plane_project_id"
+                required
+                value={form.plane_project_id}
+                onChange={event => {
+                  const selectedProject = projects.find(p => p.id === event.target.value)
+                  setForm(prev => ({
+                    ...prev,
+                    plane_project_id: event.target.value,
+                    plane_workspace_id: selectedProject?.workspace_id || prev.plane_workspace_id
+                  }))
+                }}
+                disabled={isEditing || !form.workspace_slug.trim() || loadingProjects}
+              >
+                <option value="">{loadingProjects ? '加载中...' : form.workspace_slug.trim() ? '选择 Project' : '请先输入 Workspace Slug'}</option>
+                {projects.map(proj => (
+                  <option key={proj.id} value={proj.id}>
+                    {proj.name}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="sync_direction">同步方向</Label>
@@ -454,7 +554,7 @@ export default function MappingsPage() {
                     variant="ghost"
                     onClick={() => {
                       setEditingKey(null)
-                      setForm(prev => ({ ...initialForm, plane_workspace_id: prev.plane_workspace_id, plane_project_id: prev.plane_project_id }))
+                      setForm(prev => ({ ...initialForm, workspace_slug: prev.workspace_slug, plane_project_id: prev.plane_project_id }))
                     }}
                   >
                     取消编辑
@@ -545,15 +645,13 @@ export default function MappingsPage() {
                       <span className="font-medium text-foreground">{item.cnb_repo_id}</span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-2">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-foreground">Workspace: {formatWorkspaceLabel(item)}</span>
-                          <span className="text-xs text-muted-foreground">{formatWorkspaceDetails(item)}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-foreground">Project: {formatProjectLabel(item)}</span>
-                          <span className="text-xs text-muted-foreground">{formatProjectDetails(item)}</span>
-                        </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium text-foreground">
+                          {formatWorkspaceLabel(item)}/{formatProjectLabel(item)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatWorkspaceDetails(item)} · {formatProjectDetails(item)}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -586,37 +684,46 @@ export default function MappingsPage() {
                           <MenuTrigger
                             aria-label="更多操作"
                             title="更多操作"
-                            className="!min-w-0 !px-0 !py-0 w-9 h-9 rounded-full border-transparent bg-transparent hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+                            className="!min-w-0 h-9 px-3"
                           >
-                            <MoreIcon className="h-4 w-4" />
+                            <span className="text-sm">更多</span>
+                            <ChevronDownIcon className="h-4 w-4" />
                           </MenuTrigger>
-                          <MenuPositioner>
-                            <MenuPopup className="p-1 min-w-[10rem]">
-                              <MenuItem
-                                onSelect={() => handleToggleActive(item, !item.active)}
-                                className="justify-start"
-                                data-active={item.active ? true : undefined}
-                                disabled={actionKey === makeKey(item)}
-                              >
-                                {item.active ? (
-                                  <span className="inline-flex items-center gap-2"><ToggleOffIcon className="h-4 w-4" /> 停用</span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-2"><ToggleOnIcon className="h-4 w-4" /> 启用</span>
-                                )}
-                              </MenuItem>
-                              <MenuItem onSelect={() => handleEdit(item)} className="justify-start">
-                                <span className="inline-flex items-center gap-2"><EditIcon className="h-4 w-4" /> 编辑</span>
-                              </MenuItem>
-                              <MenuSeparator />
-                              <MenuItem
-                                onSelect={() => handleDelete(item)}
-                                className="justify-start text-destructive-foreground"
-                                disabled={actionKey === makeKey(item)}
-                              >
-                                <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
-                              </MenuItem>
-                            </MenuPopup>
-                          </MenuPositioner>
+                          <MenuPortal>
+                            <MenuPositioner>
+                              <MenuPopup className="p-1 min-w-[12rem]">
+                                <MenuGroup>
+                                  <MenuGroupLabel>快速操作</MenuGroupLabel>
+                                  <MenuItem
+                                    onClick={() => handleToggleActive(item, !item.active)}
+                                    className="justify-start"
+                                    data-active={item.active ? true : undefined}
+                                    disabled={actionKey === makeKey(item)}
+                                  >
+                                    {item.active ? (
+                                      <span className="inline-flex items-center gap-2"><ToggleOffIcon className="h-4 w-4" /> 停用</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-2"><ToggleOnIcon className="h-4 w-4" /> 启用</span>
+                                    )}
+                                  </MenuItem>
+                                  <MenuItem onClick={() => handleEdit(item)} className="justify-start">
+                                    <span className="inline-flex items-center gap-2"><EditIcon className="h-4 w-4" /> 编辑</span>
+                                  </MenuItem>
+                                </MenuGroup>
+                                <MenuSeparator />
+                                <MenuGroup>
+                                  <MenuGroupLabel>危险操作</MenuGroupLabel>
+                                  <MenuItem
+                                    onClick={() => handleDelete(item)}
+                                    className="justify-start text-destructive-foreground"
+                                    disabled={actionKey === makeKey(item)}
+                                  >
+                                    <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" /> 删除</span>
+                                  </MenuItem>
+                                </MenuGroup>
+                              </MenuPopup>
+                            </MenuPositioner>
+                          </MenuPortal>
                         </Menu>
                       </div>
                     </TableCell>

@@ -12,7 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 
-	"plane-integration/internal/store"
+	"cabb/internal/store"
 )
 
 const (
