@@ -496,22 +496,10 @@ func nsToString(ns sql.NullString) string {
     return ""
 }
 
-// ensurePlaneBotToken returns a Plane token for the workspace slug (webhook-only mode).
-// Queries plane_credentials for Service Token; returns empty if no credential exists.
+// ensurePlaneBotToken returns the global Plane service token from config.
+// Returns empty if PLANE_SERVICE_TOKEN is not configured.
 func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string) (string, error) {
-    if !hHasDB(h) || strings.TrimSpace(workspaceSlug) == "" {
-        return "", nil
-    }
-    // Query plane_credentials by workspace_slug
-    const q = `SELECT token_enc FROM plane_credentials WHERE workspace_slug=$1 AND kind='service' ORDER BY updated_at DESC LIMIT 1`
-    var token string
-    err := h.db.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&token)
-    if err != nil {
-        // No credential found - skip Plane outbound call
-        return "", nil
-    }
-    // TODO: decrypt token_enc when transparent encryption is implemented
-    return strings.TrimSpace(token), nil
+    return strings.TrimSpace(h.cfg.PlaneServiceToken), nil
 }
 
 // postBoundAlready posts an idempotent notice that the chat is already bound to the issue.

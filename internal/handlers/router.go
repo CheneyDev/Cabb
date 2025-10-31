@@ -77,11 +77,6 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	// Plane data APIs
 	admin.GET("/plane/workspaces", h.AdminPlaneWorkspaces)
 	admin.GET("/plane/projects", h.AdminPlaneProjects)
-	
-	// Plane credentials management
-	admin.GET("/plane/credentials", h.AdminPlaneCredentialsList)
-	admin.POST("/plane/credentials", h.AdminPlaneCredentialsUpsert)
-	admin.DELETE("/plane/credentials/:id", h.AdminPlaneCredentialsDelete)
 
 	access := admin.Group("/access")
 	access.GET("/users", h.AdminAccessList)

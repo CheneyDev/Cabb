@@ -48,7 +48,9 @@
   - `PLANE_BASE_URL`（默认 `https://api.plane.so`）
   - `PLANE_WEBHOOK_SECRET`（必需，用于验证 Webhook 签名）
   - `PLANE_OAUTH_ENABLED`（默认 `false`，自托管版不支持 OAuth）
-  - 向 Plane 写回功能通过 Service Token 存在性控制（通过管理端配置凭据）
+  - `PLANE_SERVICE_TOKEN`（可选，全局 Service Token，用于 CNB/飞书 → Plane 写回功能）
+    - 留空则禁用出站调用（服务降级为只读）
+    - 从 Plane Workspace Settings → Service Token 获取
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
 - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
 - 管理后台：`ADMIN_SESSION_COOKIE`、`ADMIN_SESSION_TTL_HOURS`、`ADMIN_SESSION_SECURE`、`ADMIN_BOOTSTRAP_EMAIL`、`ADMIN_BOOTSTRAP_PASSWORD`
@@ -373,11 +375,6 @@ docker run --rm -p 8080:8080 \
   - `POST /admin/mappings/channel-project`
   - `GET /admin/links/issues` / `POST /admin/links/issues` / `DELETE /admin/links/issues` — 管理 `issue_links`（Plane Issue ↔ CNB Issue）。
   - `GET /admin/links/lark-threads` / `POST /admin/links/lark-threads` / `DELETE /admin/links/lark-threads` — 管理 `thread_links`（飞书线程 ↔ Plane Issue）。
-- Plane 凭据管理（Webhook-only 模式必需）
-  - `GET /admin/plane/credentials` — 列出所有 Workspace Service Token（脱敏显示）
-  - `POST /admin/plane/credentials` — 录入/更新 Service Token（自动验证有效性）
-  - `DELETE /admin/plane/credentials/:id` — 删除凭据（删除后该 Workspace 的出站调用自动禁用）
-  - 说明：配置凭据后可启用 CNB/飞书 → Plane 写回功能；无凭据时出站调用返回 501 或降级读快照
 - 任务
   - `POST /jobs/issue-summary/daily`
 

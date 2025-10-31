@@ -87,17 +87,19 @@ func (h *Handler) AdminRepoProjectList(c echo.Context) error {
 		slug       string
 	}
 
+	// Use global service token from config
+	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	tokens := make(map[string]workspaceToken, len(items))
 	for _, m := range items {
 		if _, exists := tokens[m.PlaneWorkspaceID]; exists {
 			continue
 		}
-		accessToken, slug, err := h.db.FindBotTokenByWorkspaceID(ctx, m.PlaneWorkspaceID)
-		if err != nil {
+		slug, err := h.db.GetWorkspaceSlug(ctx, m.PlaneWorkspaceID)
+		if err != nil || slug == "" {
 			tokens[m.PlaneWorkspaceID] = workspaceToken{}
 			continue
 		}
-		tokens[m.PlaneWorkspaceID] = workspaceToken{token: accessToken, slug: strings.TrimSpace(slug)}
+		tokens[m.PlaneWorkspaceID] = workspaceToken{token: token, slug: slug}
 	}
 
 	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
@@ -389,10 +391,15 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 	
 	ctx := c.Request().Context()
 	
-	// Get bot token for this workspace
-	accessToken, slug, err := h.db.FindBotTokenByWorkspaceID(ctx, workspaceID)
-	if err != nil || strings.TrimSpace(accessToken) == "" || strings.TrimSpace(slug) == "" {
-		return writeError(c, http.StatusNotFound, "workspace_not_found", "未找到该 workspace 的凭证", nil)
+	// Use global service token from config
+	accessToken := strings.TrimSpace(h.cfg.PlaneServiceToken)
+	if accessToken == "" {
+		return writeError(c, http.StatusServiceUnavailable, "token_not_configured", "PLANE_SERVICE_TOKEN 未配置", nil)
+	}
+	// Get workspace slug
+	slug, err := h.db.GetWorkspaceSlug(ctx, workspaceID)
+	if err != nil || slug == "" {
+		return writeError(c, http.StatusNotFound, "workspace_not_found", "未找到该 workspace", nil)
 	}
 	
 	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
@@ -603,6 +610,8 @@ func (h *Handler) AdminIssueLinksList(c echo.Context) error {
 		token string
 		slug  string
 	}
+	// Use global service token from config
+	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	tokens := make(map[string]workspaceToken, len(items))
 	for _, it := range items {
 		wsID := trimNull(it.PlaneWorkspaceID)
@@ -612,12 +621,12 @@ func (h *Handler) AdminIssueLinksList(c echo.Context) error {
 		if _, exists := tokens[wsID]; exists {
 			continue
 		}
-		accessToken, slug, terr := h.db.FindBotTokenByWorkspaceID(ctx, wsID)
-		if terr != nil {
+		slug, terr := h.db.GetWorkspaceSlug(ctx, wsID)
+		if terr != nil || slug == "" {
 			tokens[wsID] = workspaceToken{}
 			continue
 		}
-		tokens[wsID] = workspaceToken{token: strings.TrimSpace(accessToken), slug: strings.TrimSpace(slug)}
+		tokens[wsID] = workspaceToken{token: token, slug: slug}
 	}
 	type workspaceMeta struct {
 		name string

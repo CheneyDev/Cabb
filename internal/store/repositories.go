@@ -408,19 +408,17 @@ type Workspace struct {
 	UpdatedAt         time.Time
 }
 
-// FindBotTokenByWorkspaceID returns Service Token from plane_credentials (webhook-only refactor)
-func (d *DB) FindBotTokenByWorkspaceID(ctx context.Context, planeWorkspaceID string) (accessToken string, workspaceSlug string, err error) {
+// NOTE: FindBotTokenByWorkspaceID removed - using global PLANE_SERVICE_TOKEN from config instead
+
+// GetWorkspaceSlug returns workspace_slug by plane_workspace_id from workspaces table
+func (d *DB) GetWorkspaceSlug(ctx context.Context, planeWorkspaceID string) (string, error) {
 	if d == nil || d.SQL == nil {
-		return "", "", sql.ErrConnDone
+		return "", sql.ErrConnDone
 	}
-	const q = `
-SELECT token_enc, workspace_slug FROM plane_credentials
-WHERE plane_workspace_id=$1::uuid AND kind='service'
-ORDER BY updated_at DESC
-LIMIT 1`
-	err = d.SQL.QueryRowContext(ctx, q, planeWorkspaceID).Scan(&accessToken, &workspaceSlug)
-	// TODO: decrypt token_enc when transparent encryption is implemented
-	return
+	const q = `SELECT workspace_slug FROM workspaces WHERE plane_workspace_id=$1::uuid LIMIT 1`
+	var slug string
+	err := d.SQL.QueryRowContext(ctx, q, planeWorkspaceID).Scan(&slug)
+	return strings.TrimSpace(slug), err
 }
 
 // ===== Lark (Feishu) chat-level binding =====

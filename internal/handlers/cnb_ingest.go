@@ -243,8 +243,14 @@ func (h *Handler) processCNBIssue(p cnbIssuePayload, deliveryID, sum string) {
 	if err != nil {
 		return
 	}
-	token, slug, err := h.db.FindBotTokenByWorkspaceID(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || token == "" || slug == "" {
+	// Use global service token from config
+	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
+	if token == "" {
+		return // No token configured, skip Plane outbound call
+	}
+	// Get workspace slug for Plane API calls
+	slug, err := h.db.GetWorkspaceSlug(ctx, mapping.PlaneWorkspaceID)
+	if err != nil || slug == "" {
 		return
 	}
 	cl := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
@@ -433,8 +439,14 @@ func (h *Handler) processCNBPR(p cnbPRPayload, evt, deliveryID, sum string) {
 	if err != nil {
 		return
 	}
-	token, slug, err := h.db.FindBotTokenByWorkspaceID(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || token == "" || slug == "" {
+	// Use global service token from config
+	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
+	if token == "" {
+		return // No token configured, skip Plane outbound call
+	}
+	// Get workspace slug for Plane API calls
+	slug, err := h.db.GetWorkspaceSlug(ctx, mapping.PlaneWorkspaceID)
+	if err != nil || slug == "" {
 		return
 	}
 	cl := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
@@ -504,8 +516,14 @@ func (h *Handler) processCNBBranch(p cnbBranchPayload, evt, deliveryID, sum stri
 	if err != nil {
 		return
 	}
-	token, slug, err := h.db.FindBotTokenByWorkspaceID(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || token == "" || slug == "" {
+	// Use global service token from config
+	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
+	if token == "" {
+		return // No token configured, skip Plane outbound call
+	}
+	// Get workspace slug for Plane API calls
+	slug, err := h.db.GetWorkspaceSlug(ctx, mapping.PlaneWorkspaceID)
+	if err != nil || slug == "" {
 		return
 	}
 	cl := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}

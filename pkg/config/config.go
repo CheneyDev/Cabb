@@ -15,6 +15,7 @@ type Config struct {
     // Plane (Webhook-only)
     PlaneBaseURL         string
     PlaneWebhookSecret   string
+    PlaneServiceToken    string // Global Service Token for outbound API calls
 
     // Feishu (Lark)
     LarkAppID         string
@@ -61,6 +62,7 @@ func FromEnv() Config {
 
         PlaneBaseURL:         strFromEnv("PLANE_BASE_URL", "https://api.plane.so"),
         PlaneWebhookSecret:   os.Getenv("PLANE_WEBHOOK_SECRET"),
+        PlaneServiceToken:    os.Getenv("PLANE_SERVICE_TOKEN"),
 
         LarkAppID:              os.Getenv("LARK_APP_ID"),
         LarkAppSecret:          os.Getenv("LARK_APP_SECRET"),

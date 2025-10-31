@@ -14,7 +14,6 @@ import { ThemeToggle } from '@/components/theme-toggle'
 const navItems: NavItem[] = [
   { href: '/', label: '概览' },
   { href: '/mappings', label: 'Repo↔Project 同步' },
-  { href: '/plane-credentials', label: 'Plane 凭据管理' },
   { href: '/issue-links', label: 'Plane Issue 映射' },
   { href: '/lark-thread-links', label: '飞书线程映射' },
   { href: '/priorities', label: '优先级映射' },
