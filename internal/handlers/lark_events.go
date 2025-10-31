@@ -498,7 +498,7 @@ func nsToString(ns sql.NullString) string {
 
 // ensurePlaneBotToken returns a Plane token for the workspace slug (webhook-only mode).
 // With PLANE_OUTBOUND_ENABLED=false (default), returns empty.
-// With PLANE_OUTBOUND_ENABLED=true, returns Service Token from plane_credentials (TODO: implement).
+// With PLANE_OUTBOUND_ENABLED=true, queries plane_credentials for Service Token.
 func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string) (string, error) {
     if !h.cfg.PlaneOutboundEnabled {
         return "", nil
@@ -506,14 +506,15 @@ func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string)
     if !hHasDB(h) || strings.TrimSpace(workspaceSlug) == "" {
         return "", nil
     }
-    // TODO: Query plane_credentials table for Service Token by workspace_slug
-    // For now, fallback to legacy bot token from workspaces table (if exists)
-    ws, err := h.db.GetWorkspaceBySlug(ctx, workspaceSlug)
-    if err != nil || ws == nil {
+    // Query plane_credentials by workspace_slug
+    const q = `SELECT token_enc FROM plane_credentials WHERE workspace_slug=$1 AND kind='service' ORDER BY updated_at DESC LIMIT 1`
+    var token string
+    err := h.db.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&token)
+    if err != nil {
         return "", err
     }
-    token := strings.TrimSpace(ws.AccessToken)
-    return token, nil
+    // TODO: decrypt token_enc when transparent encryption is implemented
+    return strings.TrimSpace(token), nil
 }
 
 // postBoundAlready posts an idempotent notice that the chat is already bound to the issue.

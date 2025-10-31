@@ -12,10 +12,9 @@ type Config struct {
     DatabaseURL       string
     Timezone          string
 
-    // Plane
-    PlaneBaseURL       string
-    PlaneWebhookSecret string
-    PlaneOAuthEnabled  bool
+    // Plane (Webhook-only)
+    PlaneBaseURL         string
+    PlaneWebhookSecret   string
     PlaneOutboundEnabled bool
 
     // Feishu (Lark)
@@ -63,7 +62,6 @@ func FromEnv() Config {
 
         PlaneBaseURL:         strFromEnv("PLANE_BASE_URL", "https://api.plane.so"),
         PlaneWebhookSecret:   os.Getenv("PLANE_WEBHOOK_SECRET"),
-        PlaneOAuthEnabled:    boolFromEnv("PLANE_OAUTH_ENABLED", false),
         PlaneOutboundEnabled: boolFromEnv("PLANE_OUTBOUND_ENABLED", false),
 
         LarkAppID:              os.Getenv("LARK_APP_ID"),

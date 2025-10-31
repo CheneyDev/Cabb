@@ -408,57 +408,18 @@ type Workspace struct {
 	UpdatedAt         time.Time
 }
 
-func (d *DB) GetWorkspaceBySlug(ctx context.Context, workspaceSlug string) (*Workspace, error) {
-	if d == nil || d.SQL == nil {
-		return nil, sql.ErrConnDone
-	}
-	const q = `
-SELECT id::text, plane_workspace_id::text, app_installation_id, token_type, access_token, refresh_token, expires_at, workspace_slug, app_bot, created_at, updated_at
-FROM workspaces
-WHERE workspace_slug=$1 AND token_type='bot'
-ORDER BY updated_at DESC
-LIMIT 1`
-	var w Workspace
-	if err := d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&w.ID, &w.PlaneWorkspaceID, &w.AppInstallationID, &w.TokenType, &w.AccessToken, &w.RefreshToken, &w.ExpiresAt, &w.WorkspaceSlug, &w.AppBot, &w.CreatedAt, &w.UpdatedAt); err != nil {
-		return nil, err
-	}
-	return &w, nil
-}
-
-func (d *DB) UpsertWorkspaceToken(ctx context.Context, planeWorkspaceID, appInstallationID, tokenType, accessToken, refreshToken, expiresAt, workspaceSlug, appBot string) error {
-	if d == nil || d.SQL == nil {
-		return nil
-	}
-	// Try update existing row of same plane_workspace_id & token_type, else insert
-	const upd = `
-UPDATE workspaces SET app_installation_id=$2, access_token=$3, refresh_token=$4, expires_at=$5::timestamptz, workspace_slug=$6, app_bot=$7, updated_at=now()
-WHERE plane_workspace_id=$1::uuid AND token_type=$8
-`
-	res, err := d.SQL.ExecContext(ctx, upd, planeWorkspaceID, appInstallationID, accessToken, nullIfEmpty(refreshToken), nullTime(expiresAt), nullIfEmpty(workspaceSlug), nullIfEmpty(appBot), tokenType)
-	if err != nil {
-		return err
-	}
-	rows, _ := res.RowsAffected()
-	if rows > 0 {
-		return nil
-	}
-	const ins = `
-INSERT INTO workspaces (plane_workspace_id, app_installation_id, token_type, access_token, refresh_token, expires_at, workspace_slug, app_bot, created_at, updated_at)
-VALUES ($1::uuid,$2,$3,$4,$5,$6::timestamptz,$7,$8,now(),now())`
-	_, err = d.SQL.ExecContext(ctx, ins, planeWorkspaceID, appInstallationID, tokenType, accessToken, nullIfEmpty(refreshToken), nullTime(expiresAt), nullIfEmpty(workspaceSlug), nullIfEmpty(appBot))
-	return err
-}
-
+// FindBotTokenByWorkspaceID returns Service Token from plane_credentials (webhook-only refactor)
 func (d *DB) FindBotTokenByWorkspaceID(ctx context.Context, planeWorkspaceID string) (accessToken string, workspaceSlug string, err error) {
 	if d == nil || d.SQL == nil {
 		return "", "", sql.ErrConnDone
 	}
 	const q = `
-SELECT access_token, COALESCE(workspace_slug, '') FROM workspaces
-WHERE plane_workspace_id=$1::uuid AND token_type='bot'
+SELECT token_enc, workspace_slug FROM plane_credentials
+WHERE plane_workspace_id=$1::uuid AND kind='service'
 ORDER BY updated_at DESC
 LIMIT 1`
 	err = d.SQL.QueryRowContext(ctx, q, planeWorkspaceID).Scan(&accessToken, &workspaceSlug)
+	// TODO: decrypt token_enc when transparent encryption is implemented
 	return
 }
 

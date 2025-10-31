@@ -234,6 +234,9 @@ func readAndDigest(c echo.Context) (body []byte, sum string, deliveryID string, 
 // === processors ===
 func (h *Handler) processCNBIssue(p cnbIssuePayload, deliveryID, sum string) {
 	// Only handle a few core events for now: issue.open, issue.close
+	if !h.cfg.PlaneOutboundEnabled {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if !hHasDB(h) {
@@ -424,6 +427,9 @@ func mapCNBPriorityToPlane(cnb string) (string, bool) {
 }
 
 func (h *Handler) processCNBPR(p cnbPRPayload, evt, deliveryID, sum string) {
+	if !h.cfg.PlaneOutboundEnabled {
+		return
+	}
 	if !hHasDB(h) {
 		return
 	}
@@ -495,6 +501,9 @@ func (h *Handler) processCNBPR(p cnbPRPayload, evt, deliveryID, sum string) {
 }
 
 func (h *Handler) processCNBBranch(p cnbBranchPayload, evt, deliveryID, sum string) {
+	if !h.cfg.PlaneOutboundEnabled {
+		return
+	}
 	if !hHasDB(h) {
 		return
 	}
