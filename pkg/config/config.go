@@ -13,12 +13,10 @@ type Config struct {
     Timezone          string
 
     // Plane
-    PlaneBaseURL      string
-    PlaneClientID     string
-    PlaneClientSecret string
-    PlaneRedirectURI  string
+    PlaneBaseURL       string
     PlaneWebhookSecret string
-    PlaneAppBaseURL   string
+    PlaneOAuthEnabled  bool
+    PlaneOutboundEnabled bool
 
     // Feishu (Lark)
     LarkAppID         string
@@ -63,12 +61,10 @@ func FromEnv() Config {
         DatabaseURL:        os.Getenv("DATABASE_URL"),
         Timezone:           strFromEnv("TIMEZONE", "Local"),
 
-        PlaneBaseURL:       strFromEnv("PLANE_BASE_URL", "https://api.plane.so"),
-        PlaneClientID:      os.Getenv("PLANE_CLIENT_ID"),
-        PlaneClientSecret:  os.Getenv("PLANE_CLIENT_SECRET"),
-        PlaneRedirectURI:   strFromEnv("PLANE_REDIRECT_URI", "http://localhost:8080/plane/oauth/callback"),
-        PlaneWebhookSecret: os.Getenv("PLANE_WEBHOOK_SECRET"),
-        PlaneAppBaseURL:    os.Getenv("PLANE_APP_BASE_URL"),
+        PlaneBaseURL:         strFromEnv("PLANE_BASE_URL", "https://api.plane.so"),
+        PlaneWebhookSecret:   os.Getenv("PLANE_WEBHOOK_SECRET"),
+        PlaneOAuthEnabled:    boolFromEnv("PLANE_OAUTH_ENABLED", false),
+        PlaneOutboundEnabled: boolFromEnv("PLANE_OUTBOUND_ENABLED", false),
 
         LarkAppID:              os.Getenv("LARK_APP_ID"),
         LarkAppSecret:          os.Getenv("LARK_APP_SECRET"),

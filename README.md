@@ -26,7 +26,7 @@
 ## 架构概览
 - 技术栈：Go 1.24+、Echo Web、Postgres 16。
 - 模块分层
-  - Connectors：`plane-connector`（OAuth/Webhook/API）、`cnb-connector`（API + `.cnb.yml` 回调）、`lark-connector`（飞书事件/卡片/命令）、`ai-connector`（提交摘要）。
+  - Connectors：`plane-connector`（Webhook/API）、`cnb-connector`（API + `.cnb.yml` 回调）、`lark-connector`（飞书事件/卡片/命令）、`ai-connector`（提交摘要）。
   - Sync Core：字段/状态映射、方向控制、防回环与去重、评论与线程编排。
   - Storage：凭据、映射、链接与事件日志（令牌透明加密）。
   - Jobs/Scheduler：入站重试队列、每日提交摘要 CRON。
@@ -44,7 +44,11 @@
 
 常用变量（完整列表见 `.env.example`）：
 - 通用：`PORT`、`DATABASE_URL`、`TIMEZONE`、`ENCRYPTION_KEY`
-- Plane：`PLANE_BASE_URL`、`PLANE_CLIENT_ID`、`PLANE_CLIENT_SECRET`、`PLANE_REDIRECT_URI`、`PLANE_WEBHOOK_SECRET`、`PLANE_APP_BASE_URL`
+- Plane（Webhook-only 模式）：
+  - `PLANE_BASE_URL`（默认 `https://api.plane.so`）
+  - `PLANE_WEBHOOK_SECRET`（必需，用于验证 Webhook 签名）
+  - `PLANE_OAUTH_ENABLED`（默认 `false`，自托管版不支持 OAuth）
+  - `PLANE_OUTBOUND_ENABLED`（默认 `false`，开启后支持向 Plane 写回，需配合 Service Token）
 - 飞书：`LARK_APP_ID`、`LARK_APP_SECRET`、`LARK_ENCRYPT_KEY`、`LARK_VERIFICATION_TOKEN`
 - CNB：`CNB_APP_TOKEN`、`INTEGRATION_TOKEN`
 - 管理后台：`ADMIN_SESSION_COOKIE`、`ADMIN_SESSION_TTL_HOURS`、`ADMIN_SESSION_SECURE`、`ADMIN_BOOTSTRAP_EMAIL`、`ADMIN_BOOTSTRAP_PASSWORD`
@@ -343,10 +347,8 @@ docker run --rm -p 8080:8080 \
 ## API 与端点（脚手架）
 - 健康检查
   - `GET /healthz`
-- Plane（OAuth/Webhook）
-  - `GET /plane/oauth/start`（重定向到 Plane 授权页）
-  - `GET /plane/oauth/callback`（处理 app_installation_id 或 code，换取 Token 并回传安装信息摘要）
-  - `POST /webhooks/plane`（支持 `X-Plane-Signature` HMAC-SHA256 验签，支持幂等与异步处理）
+- Plane（Webhook-only 模式）
+  - `POST /webhooks/plane`（支持 `X-Plane-Signature` HMAC-SHA256 验签，支持幂等与异步处理，自动写入事件快照）
 - CNB（来自 `.cnb.yml` 的回调）
   - `POST /ingest/cnb/issue`
   - `POST /ingest/cnb/pr`
@@ -454,23 +456,27 @@ curl -X POST "$INTEGRATION_URL/ingest/cnb/issue" \
   -d '{"event":"issue.open","repo":"group/repo","issue_iid":"42"}'
 ```
 
-### 示例：Plane OAuth
-- 启动安装/同意（浏览器访问，支持可选 `state`）：
-```
-open "http://localhost:8080/plane/oauth/start?state=dev"
+### 示例：Plane Webhook
+- 测试 Webhook 投递（需手动计算 HMAC 签名）：
+```bash
+# 1. 生成签名
+PAYLOAD='{"event":"issue","action":"created","workspace_id":"<uuid>","data":{"id":"<issue-uuid>","name":"Test"}}'
+SECRET="your-webhook-secret"
+SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
+
+# 2. 发送请求
+curl -X POST http://localhost:8080/webhooks/plane \
+  -H "Content-Type: application/json" \
+  -H "X-Plane-Signature: sha256=$SIGNATURE" \
+  -H "X-Plane-Delivery: test-delivery-001" \
+  -H "X-Plane-Event: issue" \
+  -d "$PAYLOAD"
 ```
 
-- 回调（Plane 完成安装后将携带 `app_installation_id` 与 `code` 调用）：
-```
-# 示例：本地手动验证（模拟 Plane 回调）
-curl "http://localhost:8080/plane/oauth/callback?app_installation_id=<uuid>&code=<code>&state=dev"
-```
-
-可选参数
-- `return_to`：指定回跳 URL（需与 Plane 主机一致，否则忽略）。
-- `format=json`：强制以 JSON 返回（默认浏览器为 HTML 自动跳转）。
-
-注意：服务端会调用 Plane 的 `/auth/o/token/` 与 `/auth/o/app-installation/` 完成 Token 交换与安装信息查询；当前仅返回摘要 JSON，不回显敏感 Token。令牌持久化与加密存储将在接入数据库后启用。
+注意：
+- Webhook Secret 需在 Plane 和本服务的 `PLANE_WEBHOOK_SECRET` 中保持一致
+- 签名基于原始请求体（不包含任何修改或格式化）
+- 事件数据会自动写入 `plane_issue_snapshots` 表供后续查询
 
 ## 安全与鉴权
 - Plane Webhook：校验 `X-Plane-Signature`（HMAC-SHA256(secret, raw_body)）。

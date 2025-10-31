@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // EventDeliveries repo
@@ -1031,6 +1033,88 @@ func (d *DB) FindDisplayNameByPlaneUserID(ctx context.Context, planeUserID strin
 		return name.String, nil
 	}
 	return "", sql.ErrNoRows
+}
+
+// ===== Plane Snapshots (webhook-only refactor) =====
+
+// UpsertPlaneIssueSnapshot inserts or updates an issue snapshot from Plane webhook events.
+func (d *DB) UpsertPlaneIssueSnapshot(ctx context.Context, planeIssueID, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, descriptionHTML, stateName, priority string, labels []string, assigneeIDs []string) error {
+	if d == nil || d.SQL == nil {
+		return nil
+	}
+	const q = `
+INSERT INTO plane_issue_snapshots (plane_issue_id, plane_project_id, plane_workspace_id, workspace_slug, project_slug, name, description_html, state_name, priority, labels, assignee_ids, updated_at)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, now())
+ON CONFLICT (plane_issue_id) DO UPDATE SET
+  plane_project_id = EXCLUDED.plane_project_id,
+  plane_workspace_id = EXCLUDED.plane_workspace_id,
+  workspace_slug = EXCLUDED.workspace_slug,
+  project_slug = EXCLUDED.project_slug,
+  name = EXCLUDED.name,
+  description_html = EXCLUDED.description_html,
+  state_name = EXCLUDED.state_name,
+  priority = EXCLUDED.priority,
+  labels = EXCLUDED.labels,
+  assignee_ids = EXCLUDED.assignee_ids,
+  updated_at = now()
+`
+	_, err := d.SQL.ExecContext(ctx, q, planeIssueID, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, descriptionHTML, nullIfEmpty(stateName), nullIfEmpty(priority), pq.Array(labels), pq.Array(assigneeIDs))
+	return err
+}
+
+// UpsertPlaneProjectSnapshot inserts or updates a project snapshot from Plane webhook events.
+func (d *DB) UpsertPlaneProjectSnapshot(ctx context.Context, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, identifier string) error {
+	if d == nil || d.SQL == nil {
+		return nil
+	}
+	const q = `
+INSERT INTO plane_project_snapshots (plane_project_id, plane_workspace_id, workspace_slug, project_slug, name, identifier, updated_at)
+VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, now())
+ON CONFLICT (plane_project_id) DO UPDATE SET
+  plane_workspace_id = EXCLUDED.plane_workspace_id,
+  workspace_slug = EXCLUDED.workspace_slug,
+  project_slug = EXCLUDED.project_slug,
+  name = EXCLUDED.name,
+  identifier = EXCLUDED.identifier,
+  updated_at = now()
+`
+	_, err := d.SQL.ExecContext(ctx, q, planeProjectID, planeWorkspaceID, workspaceSlug, projectSlug, name, identifier)
+	return err
+}
+
+// GetPlaneIssueSnapshot retrieves an issue snapshot by plane_issue_id.
+func (d *DB) GetPlaneIssueSnapshot(ctx context.Context, planeIssueID string) (map[string]any, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT plane_issue_id::text, plane_project_id::text, plane_workspace_id::text, workspace_slug, project_slug, name, 
+       COALESCE(description_html, ''), COALESCE(state_name, ''), COALESCE(priority, ''), 
+       COALESCE(labels, '{}'), COALESCE(assignee_ids, '{}'), updated_at
+FROM plane_issue_snapshots WHERE plane_issue_id=$1::uuid LIMIT 1`
+	var (
+		issueID, projectID, workspaceID, wsSlug, projSlug, name, desc, state, pri string
+		labels, assignees                                                         pq.StringArray
+		updatedAt                                                                 time.Time
+	)
+	err := d.SQL.QueryRowContext(ctx, q, planeIssueID).Scan(&issueID, &projectID, &workspaceID, &wsSlug, &projSlug, &name, &desc, &state, &pri, &labels, &assignees, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"plane_issue_id":     issueID,
+		"plane_project_id":   projectID,
+		"plane_workspace_id": workspaceID,
+		"workspace_slug":     wsSlug,
+		"project_slug":       projSlug,
+		"name":               name,
+		"description_html":   desc,
+		"state_name":         state,
+		"priority":           pri,
+		"labels":             []string(labels),
+		"assignee_ids":       []string(assignees),
+		"updated_at":         updatedAt,
+	}, nil
 }
 
 // helpers

@@ -462,8 +462,15 @@ func extractCommandArg(text, cmd string) string {
 // planeIssueURL builds an app URL for the issue when enough context is available.
 func (h *Handler) planeIssueURL(slug, projectID, issueID string) string {
     if slug == "" || projectID == "" || issueID == "" { return "" }
-    base := strings.TrimRight(h.cfg.PlaneAppBaseURL, "/")
+    // Derive app URL from base URL (api.plane.so -> app.plane.so)
+    base := h.cfg.PlaneBaseURL
+    if strings.Contains(base, "api.plane.so") {
+        base = strings.Replace(base, "api.plane.so", "app.plane.so", 1)
+    } else if base != "" {
+        base = strings.Replace(base, "//api.", "//app.", 1)
+    }
     if base == "" { base = "https://app.plane.so" }
+    base = strings.TrimRight(base, "/")
     var b strings.Builder
     b.WriteString(base)
     b.WriteString("/")
@@ -489,36 +496,23 @@ func nsToString(ns sql.NullString) string {
     return ""
 }
 
-// ensurePlaneBotToken returns a valid Plane bot token for the workspace slug.
-// If the stored token is near expiry or expired and installation id is available,
-// it refreshes the token via client_credentials and persists it.
+// ensurePlaneBotToken returns a Plane token for the workspace slug (webhook-only mode).
+// With PLANE_OUTBOUND_ENABLED=false (default), returns empty.
+// With PLANE_OUTBOUND_ENABLED=true, returns Service Token from plane_credentials (TODO: implement).
 func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string) (string, error) {
+    if !h.cfg.PlaneOutboundEnabled {
+        return "", nil
+    }
     if !hHasDB(h) || strings.TrimSpace(workspaceSlug) == "" {
         return "", nil
     }
+    // TODO: Query plane_credentials table for Service Token by workspace_slug
+    // For now, fallback to legacy bot token from workspaces table (if exists)
     ws, err := h.db.GetWorkspaceBySlug(ctx, workspaceSlug)
     if err != nil || ws == nil {
         return "", err
     }
     token := strings.TrimSpace(ws.AccessToken)
-    // Consider refresh if expires_at is set and within 60s of expiry
-    needRefresh := false
-    if ws.ExpiresAt.Valid {
-        if time.Now().After(ws.ExpiresAt.Time.Add(-60 * time.Second)) {
-            needRefresh = true
-        }
-    }
-    if needRefresh && ws.AppInstallationID.Valid && ws.AppInstallationID.String != "" {
-        if tr, err := h.getBotToken(ctx, ws.AppInstallationID.String); err == nil && tr != nil && tr.AccessToken != "" {
-            exp := ""
-            if tr.ExpiresIn > 0 {
-                exp = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
-            }
-            // Persist refreshed token
-            _ = h.db.UpsertWorkspaceToken(ctx, ws.PlaneWorkspaceID, ws.AppInstallationID.String, "bot", tr.AccessToken, tr.RefreshToken, exp, workspaceSlug, nsToString(ws.AppBot))
-            token = tr.AccessToken
-        }
-    }
     return token, nil
 }
 

@@ -37,9 +37,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	// Root redirect to frontend (optional)
 	e.GET("/", h.Root)
 
-	// Plane OAuth + Webhook
-	e.GET("/plane/oauth/start", h.PlaneOAuthStart)
-	e.GET("/plane/oauth/callback", h.PlaneOAuthCallback)
+	// Plane Webhook (OAuth fully removed per webhook-only refactor)
 	e.POST("/webhooks/plane", h.PlaneWebhook)
 
 	// CNB ingest callbacks via .cnb.yml
