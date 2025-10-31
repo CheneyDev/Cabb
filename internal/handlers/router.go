@@ -47,6 +47,11 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	e.POST("/ingest/cnb/pr", h.CNBIngestPR)
 	e.POST("/ingest/cnb/branch", h.CNBIngestBranch)
 
+	// CNB API v1
+	api := e.Group("/api/v1")
+	api.POST("/issues/label-notify", h.IssueLabelNotify)     // 完整版（11 个字段）
+	api.POST("/issues/label-sync", h.IssueLabelNotifySimple) // 简化版（3 个字段）
+
 	// Feishu (Lark)
 	e.POST("/webhooks/lark/events", h.LarkEvents)
 	e.POST("/webhooks/lark/interactivity", h.LarkInteractivity)
@@ -65,16 +70,16 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.POST("/mappings/pr-states", h.AdminPRStates)
 	admin.GET("/mappings/users", h.AdminUsersList)
 	admin.POST("/mappings/users", h.AdminUsers)
-    admin.POST("/mappings/labels", h.AdminLabels)
-    admin.POST("/mappings", h.AdminMappings)
-    admin.GET("/mappings", h.AdminMappingsList)
-        admin.POST("/mappings/channel-project", h.AdminChannelProject)
-        admin.GET("/links/issues", h.AdminIssueLinksList)
-        admin.POST("/links/issues", h.AdminIssueLinksUpsert)
-        admin.DELETE("/links/issues", h.AdminIssueLinksDelete)
-        admin.GET("/links/lark-threads", h.AdminLarkThreadLinksList)
-        admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
-        admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
+	admin.POST("/mappings/labels", h.AdminLabels)
+	admin.POST("/mappings", h.AdminMappings)
+	admin.GET("/mappings", h.AdminMappingsList)
+	admin.POST("/mappings/channel-project", h.AdminChannelProject)
+	admin.GET("/links/issues", h.AdminIssueLinksList)
+	admin.POST("/links/issues", h.AdminIssueLinksUpsert)
+	admin.DELETE("/links/issues", h.AdminIssueLinksDelete)
+	admin.GET("/links/lark-threads", h.AdminLarkThreadLinksList)
+	admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
+	admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
 
 	access := admin.Group("/access")
 	access.GET("/users", h.AdminAccessList)

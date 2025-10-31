@@ -231,6 +231,45 @@ func (c *Client) GetIssueName(ctx context.Context, bearer, workspaceSlug, projec
 	return "", fmt.Errorf("empty name")
 }
 
+// GetIssueLabels fetches current label IDs of an issue
+// GET /api/v1/workspaces/{workspace-slug}/projects/{project_id}/issues/{issue_id}/
+func (c *Client) GetIssueLabels(ctx context.Context, bearer, workspaceSlug, projectID, issueID string) ([]string, error) {
+	path := fmt.Sprintf("/api/v1/workspaces/%s/projects/%s/issues/%s/", url.PathEscape(workspaceSlug), url.PathEscape(projectID), url.PathEscape(issueID))
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("plane get issue status=%d", resp.StatusCode)
+	}
+	var m map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		return nil, err
+	}
+
+	var labelIDs []string
+	if labels, ok := m["labels"].([]interface{}); ok {
+		for _, label := range labels {
+			if labelID, ok := label.(string); ok && labelID != "" {
+				labelIDs = append(labelIDs, labelID)
+			}
+		}
+	}
+	return labelIDs, nil
+}
+
 // GetWorkspace fetches metadata of a workspace by slug.
 func (c *Client) GetWorkspace(ctx context.Context, bearer, workspaceSlug string) (*Workspace, error) {
 	if strings.TrimSpace(workspaceSlug) == "" {

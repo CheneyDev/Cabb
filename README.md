@@ -352,6 +352,49 @@ docker run --rm -p 8080:8080 \
   - `POST /ingest/cnb/pr`
   - `POST /ingest/cnb/branch`
   - 安全：`Authorization: Bearer $INTEGRATION_TOKEN`
+- CNB API v1（来自 CNB Job 的标签通知）
+  - `POST /api/v1/issues/label-notify` - **完整版**（推荐用于完整事件记录）
+  - `POST /api/v1/issues/label-sync` - **简化版**（只需 3 个字段）
+  - 用途：接收 CNB job-get-issues-info 发送的 issue 标签变更通知
+  - 安全：`Authorization: Bearer $INTEGRATION_TOKEN`
+  - **完整版**请求体示例（11 个字段）：
+    ```json
+    {
+      "repo_slug": "1024hub/Demo",
+      "issue_number": 74,
+      "issue_url": "https://cnb.cool/1024hub/Demo/-/issues/74",
+      "title": "实现用户登录功能",
+      "state": "open",
+      "author": {"username": "zhangsan", "nickname": "张三"},
+      "description": "需要实现用户登录功能...",
+      "labels": ["🚧 处理中_CNB", "🧑🏻‍💻 进行中：前端_CNB"],
+      "label_trigger": "🚧 处理中_CNB",
+      "updated_at": "2025-10-29T03:25:06Z",
+      "event_context": {"event_type": "push", "branch": "feature/74-user-login"}
+    }
+    ```
+  - **简化版**请求体示例（3 个字段）：
+    ```json
+    {
+      "repo_slug": "1024hub/Demo",
+      "issue_number": 74,
+      "labels": ["🚧 处理中_CNB", "🧑🏻‍💻 进行中：前端_CNB"]
+    }
+    ```
+  - 响应体：`{"code": 0, "message": "success", "data": {"issue_number": 74, "processed_at": "2025-10-29T03:25:10Z"}}`
+  - **业务逻辑**：
+    1. 过滤 `_CNB` 后缀标签
+    2. 查询 repo-project 映射
+    3. 查找对应的 Plane Issue
+    4. 映射标签到 Plane Label ID
+    5. **增量更新 Plane Issue 标签**（只替换 CNB 管理的标签，保留其他标签）
+    6. 发送飞书通知（如配置了 channel-project 映射）
+  - **标签更新策略**：
+    - ✅ 从 Plane 读取当前所有标签
+    - ✅ 识别哪些标签是 CNB 管理的（查询 `label_mappings` 表）
+    - ✅ 保留非 CNB 管理的标签（如 Plane 手动添加的 `priority:high`）
+    - ✅ 合并：保留标签 + 新的 CNB 标签
+    - ✅ 去重后更新到 Plane
 - 飞书（Feishu/Lark）
   - `POST /webhooks/lark/events`（支持 challenge 握手）
   - `POST /webhooks/lark/interactivity`

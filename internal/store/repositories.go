@@ -554,6 +554,28 @@ func (d *DB) MapCNBLabelsToPlane(ctx context.Context, planeProjectID, cnbRepoID 
 	return out, nil
 }
 
+// GetCNBManagedLabelIDs returns all Plane Label IDs that are managed by CNB
+func (d *DB) GetCNBManagedLabelIDs(ctx context.Context, planeProjectID, cnbRepoID string) (map[string]bool, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `SELECT plane_label_id::text FROM label_mappings WHERE plane_project_id=$1::uuid AND cnb_repo_id=$2`
+	rows, err := d.SQL.QueryContext(ctx, q, planeProjectID, cnbRepoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	managedIDs := make(map[string]bool)
+	for rows.Next() {
+		var labelID string
+		if err := rows.Scan(&labelID); err == nil && labelID != "" {
+			managedIDs[labelID] = true
+		}
+	}
+	return managedIDs, rows.Err()
+}
+
 // User mappings
 type UserMapping struct {
 	PlaneUserID string
@@ -1045,4 +1067,38 @@ func nullTime(s string) any {
 		return nil
 	}
 	return s
+}
+
+// ChannelProjectLink represents a channel-project mapping
+type ChannelProjectLink struct {
+	LarkChatID     string
+	PlaneProjectID string
+	NotifyOnCreate bool
+}
+
+// GetChannelsByPlaneProject retrieves all Lark chat IDs mapped to a Plane project
+func (d *DB) GetChannelsByPlaneProject(ctx context.Context, planeProjectID string) ([]ChannelProjectLink, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT lark_chat_id, plane_project_id::text, notify_on_create
+FROM channel_project_mappings
+WHERE plane_project_id=$1::uuid
+ORDER BY created_at DESC`
+	rows, err := d.SQL.QueryContext(ctx, q, planeProjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []ChannelProjectLink
+	for rows.Next() {
+		var link ChannelProjectLink
+		if err := rows.Scan(&link.LarkChatID, &link.PlaneProjectID, &link.NotifyOnCreate); err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, rows.Err()
 }
