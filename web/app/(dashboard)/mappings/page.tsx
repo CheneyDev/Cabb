@@ -58,37 +58,60 @@ function trimValue(value?: string | null) {
 }
 
 function formatWorkspaceLabel(item: Mapping) {
-  return trimValue(item.plane_workspace_name) || trimValue(item.plane_workspace_slug) || item.plane_workspace_id
+  // 优先显示 slug，如果没有则显示 name，最后才显示 ID 的前8位
+  const slug = trimValue(item.plane_workspace_slug)
+  const name = trimValue(item.plane_workspace_name)
+  const id = item.plane_workspace_id
+  
+  if (slug) return slug
+  if (name) return name
+  // ID 太长时显示前8位，便于识别
+  return id.length > 8 ? `${id.slice(0, 8)}...` : id
 }
 
 function formatWorkspaceDetails(item: Mapping) {
   const details: string[] = []
   const slug = trimValue(item.plane_workspace_slug)
+  const name = trimValue(item.plane_workspace_name)
+  
   if (slug) {
     details.push(`Slug: ${slug}`)
+  }
+  if (name && name !== slug) {
+    details.push(`名称: ${name}`)
   }
   details.push(`ID: ${item.plane_workspace_id}`)
   return details.join(' · ')
 }
 
 function formatProjectLabel(item: Mapping) {
-  return (
-    trimValue(item.plane_project_name) ||
-    trimValue(item.plane_project_identifier) ||
-    trimValue(item.plane_project_slug) ||
-    item.plane_project_id
-  )
+  // 优先显示 identifier（最短的项目标识），然后是 name、slug，最后是 ID 的前8位
+  const identifier = trimValue(item.plane_project_identifier)
+  const name = trimValue(item.plane_project_name)
+  const slug = trimValue(item.plane_project_slug)
+  const id = item.plane_project_id
+  
+  if (identifier) return identifier
+  if (name) return name
+  if (slug) return slug
+  // ID 太长时显示前8位，便于识别
+  return id.length > 8 ? `${id.slice(0, 8)}...` : id
 }
 
 function formatProjectDetails(item: Mapping) {
   const details: string[] = []
   const identifier = trimValue(item.plane_project_identifier)
   const slug = trimValue(item.plane_project_slug)
+  const name = trimValue(item.plane_project_name)
+  
   if (identifier) {
     details.push(`标识符: ${identifier}`)
   }
   if (slug && slug !== identifier) {
     details.push(`Slug: ${slug}`)
+  }
+  if (name && name !== slug && name !== identifier) {
+    details.push(`名称: ${name}`)
   }
   details.push(`ID: ${item.plane_project_id}`)
   return details.join(' · ')
