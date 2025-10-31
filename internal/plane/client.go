@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -69,7 +70,7 @@ func (c *Client) CreateIssue(ctx context.Context, bearer, workspaceSlug, project
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	req.Header.Set("Content-Type", "application/json")
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
@@ -79,7 +80,8 @@ func (c *Client) CreateIssue(ctx context.Context, bearer, workspaceSlug, project
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("plane create issue status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("plane create issue status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	var out struct {
 		ID string `json:"id"`
@@ -106,7 +108,7 @@ func (c *Client) PatchIssue(ctx context.Context, bearer, workspaceSlug, projectI
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	req.Header.Set("Content-Type", "application/json")
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
@@ -116,7 +118,8 @@ func (c *Client) PatchIssue(ctx context.Context, bearer, workspaceSlug, projectI
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("plane patch issue status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("plane patch issue status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	return nil
 }
@@ -135,7 +138,7 @@ func (c *Client) AddComment(ctx context.Context, bearer, workspaceSlug, projectI
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	req.Header.Set("Content-Type", "application/json")
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
@@ -145,7 +148,8 @@ func (c *Client) AddComment(ctx context.Context, bearer, workspaceSlug, projectI
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("plane add comment status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("plane add comment status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	return nil
 }
@@ -163,7 +167,7 @@ func (c *Client) GetIssueBySequence(ctx context.Context, bearer, workspaceSlug, 
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
 	resp, err := hc.Do(req)
@@ -172,7 +176,8 @@ func (c *Client) GetIssueBySequence(ctx context.Context, bearer, workspaceSlug, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("plane get issue by sequence status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return "", "", fmt.Errorf("plane get issue by sequence status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	// Try decode with flexible fields
 	var m map[string]any
@@ -210,7 +215,7 @@ func (c *Client) GetIssueName(ctx context.Context, bearer, workspaceSlug, projec
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
 	resp, err := hc.Do(req)
@@ -219,7 +224,8 @@ func (c *Client) GetIssueName(ctx context.Context, bearer, workspaceSlug, projec
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("plane get issue status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("plane get issue status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	var m map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
@@ -245,7 +251,7 @@ func (c *Client) GetWorkspace(ctx context.Context, bearer, workspaceSlug string)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
 	resp, err := hc.Do(req)
@@ -254,7 +260,8 @@ func (c *Client) GetWorkspace(ctx context.Context, bearer, workspaceSlug string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("plane get workspace status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane get workspace status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	var out Workspace
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -284,7 +291,7 @@ func (c *Client) GetProject(ctx context.Context, bearer, workspaceSlug, projectI
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
 	resp, err := hc.Do(req)
@@ -293,43 +300,14 @@ func (c *Client) GetProject(ctx context.Context, bearer, workspaceSlug, projectI
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("plane get project status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane get project status=%d, body=%s", resp.StatusCode, string(body))
 	}
 	var out Project
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
 	return &out, nil
-}
-
-// ListWorkspaces fetches all workspaces accessible by the bearer token.
-// GET /api/v1/workspaces/
-func (c *Client) ListWorkspaces(ctx context.Context, bearer string) ([]map[string]any, error) {
-	path := "/api/v1/workspaces/"
-	ep, err := c.join(path)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
-	hc := c.httpClient()
-	hc.Timeout = 10 * time.Second
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("plane list workspaces status=%d", resp.StatusCode)
-	}
-	var results []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return nil, err
-	}
-	return results, nil
 }
 
 // ListProjects fetches all projects within a workspace.
@@ -347,7 +325,7 @@ func (c *Client) ListProjects(ctx context.Context, bearer, workspaceSlug string)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
 	resp, err := hc.Do(req)
@@ -356,11 +334,15 @@ func (c *Client) ListProjects(ctx context.Context, bearer, workspaceSlug string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("plane list projects status=%d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane list projects status=%d, body=%s", resp.StatusCode, string(body))
 	}
-	var results []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+	// Plane API 返回分页响应，解析 results 字段
+	var response struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
-	return results, nil
+	return response.Results, nil
 }

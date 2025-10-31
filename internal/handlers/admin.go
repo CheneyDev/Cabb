@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"cabb/internal/lark"
 	"cabb/internal/plane"
 	"cabb/internal/store"
+	"github.com/labstack/echo/v4"
 )
 
 // POST /admin/mappings/repo-project
@@ -311,7 +311,7 @@ func (h *Handler) AdminPlaneWorkspaces(c echo.Context) error {
 		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
 	}
 	ctx := c.Request().Context()
-	
+
 	// Get all bot tokens from DB
 	rows, err := h.db.SQL.QueryContext(ctx, `
 		SELECT DISTINCT plane_workspace_id, plane_workspace_slug, plane_bot_token 
@@ -323,7 +323,7 @@ func (h *Handler) AdminPlaneWorkspaces(c echo.Context) error {
 		return writeError(c, http.StatusInternalServerError, "query_failed", "查询失败", map[string]any{"error": err.Error()})
 	}
 	defer rows.Close()
-	
+
 	type wsToken struct {
 		workspaceID string
 		slug        string
@@ -340,11 +340,11 @@ func (h *Handler) AdminPlaneWorkspaces(c echo.Context) error {
 		}
 		tokens = append(tokens, wt)
 	}
-	
+
 	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
 	results := []map[string]any{}
 	seen := make(map[string]bool)
-	
+
 	for _, wt := range tokens {
 		if wt.slug == "" || wt.token == "" {
 			continue
@@ -353,11 +353,11 @@ func (h *Handler) AdminPlaneWorkspaces(c echo.Context) error {
 			continue
 		}
 		seen[wt.workspaceID] = true
-		
+
 		wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		ws, err := planeClient.GetWorkspace(wctx, wt.token, wt.slug)
 		cancel()
-		
+
 		if err == nil && ws != nil {
 			name := strings.TrimSpace(ws.Name)
 			if name == "" {
@@ -373,7 +373,7 @@ func (h *Handler) AdminPlaneWorkspaces(c echo.Context) error {
 			})
 		}
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]any{"items": results})
 }
 
@@ -383,29 +383,35 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 	if !hHasDB(h) {
 		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
 	}
-	
+
 	workspaceSlug := strings.TrimSpace(c.QueryParam("workspace_slug"))
 	if workspaceSlug == "" {
 		return writeError(c, http.StatusBadRequest, "missing_workspace_slug", "缺少 workspace_slug 参数", nil)
 	}
-	
+
 	ctx := c.Request().Context()
-	
+
 	// Use global service token from config
 	accessToken := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	if accessToken == "" {
 		return writeError(c, http.StatusServiceUnavailable, "token_not_configured", "PLANE_SERVICE_TOKEN 未配置", nil)
 	}
-	
+
 	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
 	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	
+
 	projects, err := planeClient.ListProjects(pctx, accessToken, workspaceSlug)
 	if err != nil {
-		return writeError(c, http.StatusBadGateway, "plane_api_failed", "调用 Plane API 失败", map[string]any{"error": err.Error()})
+		// 记录更详细的错误信息用于调试
+		c.Logger().Errorf("Failed to list projects from Plane API: workspace_slug=%s, base_url=%s, error=%v", workspaceSlug, h.cfg.PlaneBaseURL, err)
+		return writeError(c, http.StatusBadGateway, "plane_api_failed", "调用 Plane API 失败", map[string]any{
+			"workspace_slug": workspaceSlug,
+			"base_url":       h.cfg.PlaneBaseURL,
+			"error":          err.Error(),
+		})
 	}
-	
+
 	// Normalize project data
 	results := []map[string]any{}
 	for _, proj := range projects {
@@ -417,7 +423,7 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 		if workspaceID == "" {
 			workspaceID, _ = proj["workspace_id"].(string)
 		}
-		
+
 		displayName := strings.TrimSpace(name)
 		if displayName == "" {
 			displayName = identifier
@@ -428,7 +434,7 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 		if displayName == "" || id == "" {
 			continue
 		}
-		
+
 		results = append(results, map[string]any{
 			"id":           id,
 			"name":         displayName,
@@ -437,7 +443,7 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 			"workspace_id": workspaceID,
 		})
 	}
-	
+
 	return c.JSON(http.StatusOK, map[string]any{"items": results})
 }
 
@@ -613,7 +619,7 @@ func (h *Handler) AdminIssueLinksList(c echo.Context) error {
 	// Use global service token from config
 	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	tokens := make(map[string]workspaceToken, len(items))
-	
+
 	// Get workspace slugs from repo_project_mappings
 	for _, it := range items {
 		wsID := trimNull(it.PlaneWorkspaceID)
