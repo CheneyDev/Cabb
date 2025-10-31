@@ -29,6 +29,6 @@ branch:
         event: web_trigger_test
         env:
           RUNNER_ARCH: cnb:arch:arm64:v8
-          ENV_URL: "https://cnb.cool/cymirror/MatchEngine/ConfigFiles/-/blob/develop/env.yml"
+          ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneIntergrateConf/-/blob/main/env.yml"
         inputs:
           SERVICES_LIST: *services_list_input
