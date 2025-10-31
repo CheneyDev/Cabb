@@ -182,8 +182,6 @@ Issue：#74 - 实现用户登录功能
 
 ### 1. 标签更新策略（增量更新）
 
-**设计者：** CheneyDev（commit `549b8c2`，2025-10-14）
-
 **核心原则：** ✅ **只更新 CNB 管理的标签，保留其他系统的标签**
 
 #### 工作原理
@@ -240,7 +238,6 @@ finalLabelIDs := append(preservedLabelIDs, planeLabelIDs...)
 
 #### 配置要求
 
-**必需表：** `label_mappings`（由 CheneyDev 设计，在 `db/migrations/0004_label_mappings.sql`）
 
 ```sql
 CREATE TABLE IF NOT EXISTS label_mappings (
