@@ -31,7 +31,7 @@ flowchart LR
   SVC --> LA
 
   PWH --> SVC
-  SVC -.->|PLANE_OUTBOUND_ENABLED=true| PAPI
+  SVC -.->|credential exists (configured via admin)| PAPI
 
   SVC --- DB
 
@@ -107,7 +107,7 @@ classDiagram
 ```bash
 PLANE_BASE_URL=https://api.plane.so
 PLANE_WEBHOOK_SECRET=<your-webhook-secret>
-PLANE_OUTBOUND_ENABLED=false  # 设为 true 启用飞书→Plane 写回
+no credential (default)  # 设为 true 启用飞书→Plane 写回
 ```
 
 ### 飞书配置
@@ -161,7 +161,7 @@ LARK_VERIFICATION_TOKEN=<your-verification-token>  # 备用
 
 行为：
 - 检查当前线程是否已绑定 Issue
-- 当 `PLANE_OUTBOUND_ENABLED=true` 时，调用 Plane API 追加评论
+- 当 `credential exists (configured via admin)` 时，调用 Plane API 追加评论
 - 回复操作结果
 
 #### 查询 Issue 状态
@@ -193,7 +193,7 @@ sequenceDiagram
   User->>Lark: 在已绑定线程回复
   Lark->>SVC: POST /webhooks/lark/events
   SVC->>DB: 查询 thread_links
-  alt PLANE_OUTBOUND_ENABLED=true
+  alt credential exists (configured via admin)
     SVC->>DB: 获取 plane_credentials
     SVC->>Plane: POST .../issues/{id}/comments/
     Plane-->>SVC: 201 Created
@@ -290,7 +290,7 @@ sequenceDiagram
 
 ### 评论同步
 - ✅ Plane 添加评论后，绑定的飞书线程收到通知
-- ✅ 飞书线程回复后（当 `PLANE_OUTBOUND_ENABLED=true`），Plane Issue 收到评论
+- ✅ 飞书线程回复后（当 `credential exists (configured via admin)`），Plane Issue 收到评论
 - ✅ 飞书消息添加"已同步" reaction
 
 ### 项目通知

@@ -43,7 +43,7 @@
 **使用场景**：
 - 飞书 → Plane 评论同步
 - CNB → Plane Issue 创建/更新
-- 管理端查询 Plane 资源（当 `PLANE_OUTBOUND_ENABLED=true`）
+- 管理端查询 Plane 资源（当 `credential exists (configured via admin)`）
 
 **配置方式**：
 ```bash
@@ -113,7 +113,7 @@ flowchart TB
   SYNC --> LINKS
   SYNC --> SNAPS
   
-  SYNC -.->|PLANE_OUTBOUND_ENABLED| PAPI
+  SYNC -.->|credential check| PAPI
   SYNC -->|CNB_OUTBOUND_ENABLED| CNB
   SYNC --> Lark
   
@@ -145,7 +145,7 @@ flowchart TB
 - [ ] 透明加密/解密逻辑
 
 #### 配置开关
-- [x] `PLANE_OUTBOUND_ENABLED`（默认 false）
+- [x] 出站调用基于凭据存在性判断
 - [x] `CNB_OUTBOUND_ENABLED`（已有）
 - [x] 所有出站调用检查开关
 
@@ -159,7 +159,7 @@ flowchart TB
 - [x] 状态映射（open/closed）
 - [x] Label Selector 过滤
 
-#### CNB → Plane（需启用 PLANE_OUTBOUND_ENABLED）
+#### CNB → Plane（需配置 Service Token）
 - [x] CNB issue.open → Plane Issue 创建
 - [x] CNB issue.close → Plane Issue 状态变更
 - [x] 使用 `plane_credentials` 查询 Service Token
@@ -183,7 +183,7 @@ flowchart TB
 - [x] 使用快照数据生成预览
 
 #### 评论同步（飞书 → Plane）
-- [x] 飞书线程回复 → 检查 `PLANE_OUTBOUND_ENABLED`
+- [x] 飞书线程回复 → 检查凭据存在性
 - [ ] 调用 Plane API 追加评论（使用 Service Token）
 - [ ] 添加已同步 reaction
 
@@ -235,7 +235,7 @@ LARK_ENCRYPT_KEY=<your-encrypt-key>
 
 ```bash
 # Plane 出站（默认关闭）
-PLANE_OUTBOUND_ENABLED=false
+no credential (default)
 
 # CNB 出站（默认关闭）
 CNB_OUTBOUND_ENABLED=false
@@ -270,12 +270,12 @@ CLEANUP_THREAD_LINKS_DAYS=90
 
 ### 出站功能设计
 
-**默认关闭**（`PLANE_OUTBOUND_ENABLED=false`）：
+**默认关闭**（`no credential (default)`）：
 - 仅支持 Plane → CNB/飞书 的单向通知
 - 不调用 Plane API
 - 适合"Plane 作为真理源"的场景
 
-**启用后**（`PLANE_OUTBOUND_ENABLED=true`）：
+**启用后**（`credential exists (configured via admin)`）：
 - 支持 CNB/飞书 → Plane 的写回
 - 需要配置 Service Token
 - 适合双向协作场景
@@ -292,7 +292,7 @@ CLEANUP_THREAD_LINKS_DAYS=90
 ### 启用 Plane 出站
 - [ ] 在 Plane 生成 Service Token
 - [ ] 配置到 `plane_credentials` 表
-- [ ] 设置 `PLANE_OUTBOUND_ENABLED=true`
+- [ ] 设置 `credential exists (configured via admin)`
 - [ ] 测试 CNB → Plane Issue 创建
 - [ ] 测试飞书 → Plane 评论同步
 
@@ -319,7 +319,7 @@ CLEANUP_THREAD_LINKS_DAYS=90
 - 查询 `event_deliveries` 表的失败记录
 
 ### 出站调用失败
-- 检查 `PLANE_OUTBOUND_ENABLED` 是否启用
+- 检查凭据存在性 是否启用
 - 检查 `plane_credentials` 表是否有对应 Workspace 的 Token
 - 验证 Service Token 权限是否足够
 - 检查 Plane API 返回的错误码
@@ -357,7 +357,7 @@ unset PLANE_OAUTH_ENABLED  # 已删除
 
 # 保留/新增
 export PLANE_WEBHOOK_SECRET=<your-secret>
-export PLANE_OUTBOUND_ENABLED=false  # 按需启用
+export no credential (default)  # 按需启用
 ```
 
 ### 3. 配置 Service Token
@@ -365,7 +365,7 @@ export PLANE_OUTBOUND_ENABLED=false  # 按需启用
 如需保留 Plane 出站功能：
 - 在 Plane 中生成 Service Token
 - 通过管理端或 SQL 配置到 `plane_credentials` 表
-- 设置 `PLANE_OUTBOUND_ENABLED=true`
+- 设置 `credential exists (configured via admin)`
 
 ### 4. 重新部署
 

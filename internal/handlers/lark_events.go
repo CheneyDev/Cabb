@@ -497,12 +497,8 @@ func nsToString(ns sql.NullString) string {
 }
 
 // ensurePlaneBotToken returns a Plane token for the workspace slug (webhook-only mode).
-// With PLANE_OUTBOUND_ENABLED=false (default), returns empty.
-// With PLANE_OUTBOUND_ENABLED=true, queries plane_credentials for Service Token.
+// Queries plane_credentials for Service Token; returns empty if no credential exists.
 func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string) (string, error) {
-    if !h.cfg.PlaneOutboundEnabled {
-        return "", nil
-    }
     if !hHasDB(h) || strings.TrimSpace(workspaceSlug) == "" {
         return "", nil
     }
@@ -511,7 +507,8 @@ func (h *Handler) ensurePlaneBotToken(ctx context.Context, workspaceSlug string)
     var token string
     err := h.db.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&token)
     if err != nil {
-        return "", err
+        // No credential found - skip Plane outbound call
+        return "", nil
     }
     // TODO: decrypt token_enc when transparent encryption is implemented
     return strings.TrimSpace(token), nil

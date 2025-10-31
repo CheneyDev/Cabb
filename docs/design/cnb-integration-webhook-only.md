@@ -36,7 +36,7 @@ flowchart LR
   end
 
   SVC[集成服务 Webhook-only]
-  SVC -.->|PLANE_OUTBOUND_ENABLED=true| PAPI
+  SVC -.->|credential exists (configured via admin)| PAPI
   SVC --> CAPI
   PWH --> SVC
   PIPE -->|HTTP 回调| SVC
@@ -117,7 +117,7 @@ classDiagram
 ### 表说明
 
 - **plane_credentials**：存储 Plane Service Token（手动配置）
-  - `kind='service'`：用于 `PLANE_OUTBOUND_ENABLED=true` 时的 API 调用
+  - `kind='service'`：用于 `credential exists (configured via admin)` 时的 API 调用
   - 透明加密存储 `token_enc`
 
 - **plane_issue_snapshots**：Webhook 事件快照
@@ -142,7 +142,7 @@ PLANE_BASE_URL=https://api.plane.so  # 或自托管地址
 PLANE_WEBHOOK_SECRET=<your-webhook-secret>
 
 # Plane 出站开关（默认关闭）
-PLANE_OUTBOUND_ENABLED=false  # 设为 true 启用 CNB→Plane 写回功能
+no credential (default)  # 设为 true 启用 CNB→Plane 写回功能
 
 # 注意：不再需要 OAuth 相关配置
 # ❌ PLANE_CLIENT_ID（已移除）
@@ -190,7 +190,7 @@ sequenceDiagram
   SVC-->>Plane: 200 OK
 ```
 
-### CNB → Plane（需启用 PLANE_OUTBOUND_ENABLED）
+### CNB → Plane（需配置 Service Token）
 
 ```mermaid
 sequenceDiagram
@@ -205,13 +205,13 @@ sequenceDiagram
   
   SVC->>DB: 查询 repo_project_mappings
   
-  alt PLANE_OUTBOUND_ENABLED=true
+  alt credential exists (configured via admin)
     SVC->>DB: 获取 plane_credentials（Service Token）
     SVC->>Plane: POST /api/v1/workspaces/{slug}/projects/{id}/issues/
     Plane-->>SVC: 201 Created
     SVC->>DB: 写入 issue_links
     SVC->>CNB: 回写评论（附 Plane 链接）
-  else PLANE_OUTBOUND_ENABLED=false
+  else no credential (default)
     Note over SVC: 跳过出站调用，仅记录日志
   end
   
@@ -284,7 +284,7 @@ VALUES (
 ### 3. 启用出站功能
 
 ```bash
-PLANE_OUTBOUND_ENABLED=true
+credential exists (configured via admin)
 ```
 
 ## 同步策略
@@ -417,7 +417,7 @@ $:
 ### CNB → Plane（需启用）
 - ✅ `.cnb.yml` 触发回调到 `/ingest/cnb/issue`
 - ✅ 验证 `Bearer Token` 成功
-- ✅ 当 `PLANE_OUTBOUND_ENABLED=true` 时，Plane 创建对应 Work Item
+- ✅ 当 `credential exists (configured via admin)` 时，Plane 创建对应 Work Item
 - ✅ 使用 `plane_credentials` 表中的 Service Token
 - ✅ CNB Issue 收到包含 Plane 链接的评论
 
@@ -475,7 +475,7 @@ $:
    
    # 新增/保留
    export PLANE_WEBHOOK_SECRET=your-secret
-   export PLANE_OUTBOUND_ENABLED=false  # 按需启用
+   export no credential (default)  # 按需启用
    ```
 
 4. **测试 Webhook**

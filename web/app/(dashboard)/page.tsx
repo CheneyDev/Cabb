@@ -11,6 +11,30 @@ export default function Page() {
         <Card className="flex h-full flex-col">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
+              <CardTitle>Plane Service Token 凭据管理</CardTitle>
+              <CardDescription>配置 Workspace 的 Service Token，启用向 Plane 写回功能（CNB/飞书 → Plane）。</CardDescription>
+            </div>
+            <Badge variant="destructive">必需</Badge>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3 text-sm text-muted-foreground">
+            <p>默认情况下，Plane 出站调用被禁用。配置凭据后可启用：</p>
+            <ul className="space-y-1">
+              <li>• CNB PR 状态 → Plane Issue 状态自动同步。</li>
+              <li>• 飞书线程评论 → Plane Issue 评论双向同步。</li>
+              <li>• 管理端实时查询 Workspace/Project 列表。</li>
+            </ul>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <span>删除凭据可随时禁用该 Workspace 的出站功能。</span>
+            <Link href="/plane-credentials" className={buttonVariants({ variant: 'primary' })}>
+              管理凭据
+            </Link>
+          </CardFooter>
+        </Card>
+
+        <Card className="flex h-full flex-col">
+          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1">
               <CardTitle>Plane ↔ CNB 集成配置</CardTitle>
               <CardDescription>建立仓库与项目之间的映射关系，配置同步方向与标签过滤策略。</CardDescription>
             </div>
@@ -26,12 +50,14 @@ export default function Page() {
           </CardContent>
           <CardFooter className="flex flex-col gap-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <span>工作区、项目、同步策略均可在一处集中管理。</span>
-            <Link href="/mappings" className={buttonVariants({ variant: 'primary' })}>
+            <Link href="/mappings" className={buttonVariants({ variant: 'secondary' })}>
               打开映射面板
             </Link>
           </CardFooter>
         </Card>
+      </section>
 
+      <section className="grid items-stretch gap-4 md:grid-cols-2">
         <Card className="flex h-full flex-col">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
