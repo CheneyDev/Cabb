@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"plane-integration/pkg/config"
+	"cabb/pkg/config"
 )
 
 // TestIssueLabelNotify_Success 测试成功案例

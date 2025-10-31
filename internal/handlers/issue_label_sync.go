@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	larkapi "plane-integration/internal/lark"
-	planeapi "plane-integration/internal/plane"
-	"plane-integration/internal/store"
+	larkapi "cabb/internal/lark"
+	planeapi "cabb/internal/plane"
+	"cabb/internal/store"
 
 	"github.com/labstack/echo/v4"
 )
@@ -143,12 +143,22 @@ func (h *Handler) processLabelSyncSimple(p issueLabelNotifySimplePayload, delive
 		return
 	}
 
-	// 5. 获取 token
-	token, workspaceSlug, err := h.db.FindBotTokenByWorkspaceID(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || token == "" {
+	// 5. 获取 Plane Service Token
+	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
+	if token == "" {
 		LogStructured("error", map[string]any{
 			"event": "label.sync.simple",
-			"error": "bot_token_not_found",
+			"error": "plane_service_token_not_configured",
+		})
+		return
+	}
+
+	// 5.1 获取 workspace_slug
+	workspaceSlug := strings.TrimSpace(mapping.WorkspaceSlug.String)
+	if !mapping.WorkspaceSlug.Valid || workspaceSlug == "" {
+		LogStructured("error", map[string]any{
+			"event": "label.sync.simple",
+			"error": "workspace_slug_not_configured",
 		})
 		return
 	}

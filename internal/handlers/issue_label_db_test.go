@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"plane-integration/internal/store"
-	"plane-integration/pkg/config"
+	"cabb/internal/store"
+	"cabb/pkg/config"
 )
 
 // TestWithDatabase 测试数据库集成（需要 DATABASE_URL 环境变量）
