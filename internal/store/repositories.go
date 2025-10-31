@@ -115,7 +115,7 @@ func (d *DB) ListRepoProjectMappingsByPlaneProject(ctx context.Context, planePro
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE plane_project_id=$1::uuid AND active=true`
 	rows, err := d.SQL.QueryContext(ctx, q, planeProjectID)
