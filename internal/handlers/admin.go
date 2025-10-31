@@ -856,9 +856,10 @@ func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
 		return ""
 	}
 	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+	// Use global service token from config
+	globalToken := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	type workspaceMeta struct {
-		token string
-		name  string
+		name string
 	}
 	workspaceInfos := make(map[string]workspaceMeta, len(items))
 	for _, it := range items {
@@ -870,12 +871,9 @@ func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
 			continue
 		}
 		meta := workspaceMeta{}
-		if token, err := h.db.FindBotTokenByWorkspaceSlug(ctx, slug); err == nil {
-			meta.token = strings.TrimSpace(token)
-		}
-		if meta.token != "" {
+		if globalToken != "" {
 			wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			ws, err := planeClient.GetWorkspace(wctx, meta.token, slug)
+			ws, err := planeClient.GetWorkspace(wctx, globalToken, slug)
 			cancel()
 			if err == nil && ws != nil {
 				name := strings.TrimSpace(ws.Name)
@@ -904,9 +902,9 @@ func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
 			continue
 		}
 		meta := projectMeta{}
-		if wm, ok := workspaceInfos[slug]; ok && wm.token != "" {
+		if globalToken != "" {
 			pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			proj, err := planeClient.GetProject(pctx, wm.token, slug, projectID)
+			proj, err := planeClient.GetProject(pctx, globalToken, slug, projectID)
 			cancel()
 			if err == nil && proj != nil {
 				if name := strings.TrimSpace(proj.Name); name != "" {
@@ -934,9 +932,9 @@ func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
 		if _, exists := issueNames[key]; exists {
 			continue
 		}
-		if wm, ok := workspaceInfos[slug]; ok && wm.token != "" {
+		if globalToken != "" {
 			ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			name, ierr := planeClient.GetIssueName(ictx, wm.token, slug, projectID, issueID)
+			name, ierr := planeClient.GetIssueName(ictx, globalToken, slug, projectID, issueID)
 			cancel()
 			if ierr == nil {
 				trimmed := strings.TrimSpace(name)

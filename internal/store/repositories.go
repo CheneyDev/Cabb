@@ -905,15 +905,7 @@ func (d *DB) DeleteLarkThreadLink(ctx context.Context, larkThreadID string) (boo
 	return false, nil
 }
 
-// Find bot token by workspace slug
-func (d *DB) FindBotTokenByWorkspaceSlug(ctx context.Context, workspaceSlug string) (accessToken string, err error) {
-	if d == nil || d.SQL == nil {
-		return "", sql.ErrConnDone
-	}
-	const q = `SELECT access_token FROM workspaces WHERE workspace_slug=$1 AND token_type='bot' ORDER BY updated_at DESC LIMIT 1`
-	err = d.SQL.QueryRowContext(ctx, q, workspaceSlug).Scan(&accessToken)
-	return
-}
+// NOTE: FindBotTokenByWorkspaceSlug removed - use global PLANE_SERVICE_TOKEN from config
 
 // CleanupStaleThreadLinks deletes thread links that are not sync-enabled and not updated since before the cutoff.
 func (d *DB) CleanupStaleThreadLinks(ctx context.Context, cutoff time.Time) (int64, error) {
