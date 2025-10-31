@@ -4,11 +4,6 @@
 
 本指南面向 Plane-Integration 开发者，介绍架构设计、业务逻辑与实现细节。
 
-**前置阅读：**
-- 配置说明：`.vscode/ConfigNote.md`
-- API 规范：`.vscode/API-REFERENCE.md`
-- 测试指南：`.vscode/LOCAL-TESTING-GUIDE.md`
-
 ---
 
 ## 💡 架构特性
@@ -419,12 +414,11 @@ VALUES
 
 ## 🎯 下一步
 
-1. **本地测试** - 参考 `docs/LOCAL-TESTING-GUIDE.md`
-2. **配置数据库** - 创建必需的映射表
-3. **配置 Plane Bot Token** - 启用标签同步
-4. **配置飞书群组映射** - 启用飞书通知
-5. **修改 CNB Job** - 参考 `.vscode/API-REFERENCE.md`
-6. **端到端测试** - 在测试环境验证完整流程
+1. **配置数据库** - 创建必需的映射表
+2. **配置 Plane Bot Token** - 启用标签同步
+3. **配置飞书群组映射** - 启用飞书通知
+4. **修改 CNB Job** - 参考 `.vscode/API-REFERENCE.md`
+5. **端到端测试** - 在测试环境验证完整流程
 
 ---
 

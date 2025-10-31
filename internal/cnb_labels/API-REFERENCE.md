@@ -171,12 +171,3 @@ job-get-issues-info:
 在 CNB 仓库"设置 → 流水线密钥"中添加：
 - `INTEGRATION_TOKEN`：与 Go 后端 `.env` 中的值一致
 - `GO_BACKEND_URL`：Go 后端地址（如 `https://api.example.com`）
-
----
-
-## 📚 相关文档
-
-- **配置说明**：`.vscode/ConfigNote.md`
-- **开发指南**：`.vscode/DEVELOPER-GUIDE.md`
-- **测试指南**：`.vscode/LOCAL-TESTING-GUIDE.md`
-- **架构文档**：`docs/ARCHITECTURE.md`

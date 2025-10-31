@@ -169,10 +169,6 @@ docker logs plane-postgres    # 查看日志
 ## 部署检查清单
 
 - [ ] 生产环境重新生成所有密钥 (ENCRYPTION_KEY/INTEGRATION_TOKEN/LARK_ENCRYPT_KEY)
-- [ ] 在 Plane 中创建 OAuth 应用并填入线上域名
-- [ ] 配置生产数据库连接串 (建议启用 SSL: `sslmode=require`)
-- [ ] 设置 `ADMIN_SESSION_SECURE=true` (需 HTTPS)
-- [ ] 修改 `ADMIN_BOOTSTRAP_PASSWORD` 为强密码
 - [ ] 在 CNB 仓库流水线密钥中注入 `INTEGRATION_TOKEN`
 - [ ] 在飞书开发者后台配置事件订阅 URL
 - [ ] 验证健康检查: `curl https://<your-domain>/healthz`

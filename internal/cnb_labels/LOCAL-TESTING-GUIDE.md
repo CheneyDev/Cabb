@@ -163,12 +163,3 @@ echo $INTEGRATION_TOKEN
   "result": "success"
 }
 ```
-
----
-
-## 📚 相关文档
-
-- **配置说明**：`.vscode/ConfigNote.md`
-- **API 规范**：`.vscode/API-REFERENCE.md`
-- **开发指南**：`.vscode/DEVELOPER-GUIDE.md`
-- **架构文档**：`docs/ARCHITECTURE.md`
