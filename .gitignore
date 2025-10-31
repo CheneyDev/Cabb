@@ -12,7 +12,7 @@
 .env
 .env.*
 !.env.example
-
+deploy/
 # Go build artifacts
 bin/
 *.exe
