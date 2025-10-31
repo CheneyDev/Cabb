@@ -29,7 +29,7 @@ branch:
         description: 构建到测试环境
         event: web_trigger_test
         env:
-          RUNNER_ARCH: cnb:arch:arm64:v8
+          RUNNER_ARCH: cnb:arch:amd64
           ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/develop/env.yml"
           BRANCH: "develop"
         inputs:
