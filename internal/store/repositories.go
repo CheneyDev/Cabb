@@ -67,6 +67,7 @@ type RepoProjectMapping struct {
 	PlaneProjectID     string
 	PlaneWorkspaceID   string
 	CNBRepoID          string
+	WorkspaceSlug      sql.NullString
 	IssueOpenStateID   sql.NullString
 	IssueClosedStateID sql.NullString
 	Active             bool
@@ -79,12 +80,12 @@ func (d *DB) GetRepoProjectMapping(ctx context.Context, cnbRepoID string) (*Repo
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE cnb_repo_id=$1 AND active=true
 LIMIT 1`
 	var m RepoProjectMapping
-	err := d.SQL.QueryRowContext(ctx, q, cnbRepoID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
+	err := d.SQL.QueryRowContext(ctx, q, cnbRepoID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +97,12 @@ func (d *DB) GetRepoProjectMappingByPlaneProject(ctx context.Context, planeProje
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
+SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector
 FROM repo_project_mappings
 WHERE plane_project_id=$1::uuid AND active=true
 LIMIT 1`
 	var m RepoProjectMapping
-	err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
+	err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ WHERE plane_project_id=$1::uuid AND active=true`
 	var out []RepoProjectMapping
 	for rows.Next() {
 		var m RepoProjectMapping
-		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
+		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -176,7 +177,7 @@ func (d *DB) ListRepoProjectMappings(ctx context.Context, planeProjectID, cnbRep
 		args = append(args, activeParam == "true")
 		idx++
 	}
-	q := "SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector FROM repo_project_mappings " + where
+	q := "SELECT plane_project_id::text, plane_workspace_id::text, cnb_repo_id, workspace_slug, issue_open_state_id::text, issue_closed_state_id::text, active, sync_direction::text, label_selector FROM repo_project_mappings " + where
 	rows, err := d.SQL.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -185,7 +186,7 @@ func (d *DB) ListRepoProjectMappings(ctx context.Context, planeProjectID, cnbRep
 	var out []RepoProjectMapping
 	for rows.Next() {
 		var m RepoProjectMapping
-		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
+		if err := rows.Scan(&m.PlaneProjectID, &m.PlaneWorkspaceID, &m.CNBRepoID, &m.WorkspaceSlug, &m.IssueOpenStateID, &m.IssueClosedStateID, &m.Active, &m.SyncDirection, &m.LabelSelector); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -408,18 +409,8 @@ type Workspace struct {
 	UpdatedAt         time.Time
 }
 
-// NOTE: FindBotTokenByWorkspaceID removed - using global PLANE_SERVICE_TOKEN from config instead
-
-// GetWorkspaceSlug returns workspace_slug by plane_workspace_id from workspaces table
-func (d *DB) GetWorkspaceSlug(ctx context.Context, planeWorkspaceID string) (string, error) {
-	if d == nil || d.SQL == nil {
-		return "", sql.ErrConnDone
-	}
-	const q = `SELECT workspace_slug FROM workspaces WHERE plane_workspace_id=$1::uuid LIMIT 1`
-	var slug string
-	err := d.SQL.QueryRowContext(ctx, q, planeWorkspaceID).Scan(&slug)
-	return strings.TrimSpace(slug), err
-}
+// NOTE: FindBotTokenByWorkspaceID and GetWorkspaceSlug removed - using global PLANE_SERVICE_TOKEN from config
+// and storing workspace_slug directly in repo_project_mappings table
 
 // ===== Lark (Feishu) chat-level binding =====
 

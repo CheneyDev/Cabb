@@ -96,6 +96,7 @@ function formatProjectDetails(item: Mapping) {
 
 const initialForm = {
   cnb_repo_id: '',
+  workspace_slug: '',
   plane_workspace_id: '',
   plane_project_id: '',
   issue_open_state_id: '',
@@ -118,6 +119,7 @@ type ProjectOption = {
   name: string
   identifier: string
   slug: string
+  workspace_id?: string
 }
 
 export default function MappingsPage() {
@@ -132,9 +134,7 @@ export default function MappingsPage() {
   const [form, setForm] = useState<FormState>(initialForm)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [actionKey, setActionKey] = useState<string | null>(null)
-  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([])
   const [projects, setProjects] = useState<ProjectOption[]>([])
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(false)
 
   const querySuffix = useMemo(() => {
@@ -172,31 +172,15 @@ export default function MappingsPage() {
   }, [load])
 
   useEffect(() => {
-    async function loadWorkspaces() {
-      setLoadingWorkspaces(true)
-      try {
-        const res = await fetch('/api/admin/plane/workspaces', { cache: 'no-store' })
-        if (!res.ok) throw new Error('加载 workspaces 失败')
-        const json = await res.json()
-        setWorkspaces(Array.isArray(json.items) ? json.items : [])
-      } catch (err) {
-        console.error('Failed to load workspaces:', err)
-      } finally {
-        setLoadingWorkspaces(false)
-      }
-    }
-    loadWorkspaces()
-  }, [])
-
-  useEffect(() => {
     async function loadProjects() {
-      if (!form.plane_workspace_id) {
+      const slug = form.workspace_slug.trim()
+      if (!slug) {
         setProjects([])
         return
       }
       setLoadingProjects(true)
       try {
-        const res = await fetch(`/api/admin/plane/projects?workspace_id=${encodeURIComponent(form.plane_workspace_id)}`, { cache: 'no-store' })
+        const res = await fetch(`/api/admin/plane/projects?workspace_slug=${encodeURIComponent(slug)}`, { cache: 'no-store' })
         if (!res.ok) throw new Error('加载 projects 失败')
         const json = await res.json()
         setProjects(Array.isArray(json.items) ? json.items : [])
@@ -208,7 +192,7 @@ export default function MappingsPage() {
       }
     }
     loadProjects()
-  }, [form.plane_workspace_id])
+  }, [form.workspace_slug])
 
   const activeCount = items.filter(item => item.active).length
   const inactiveCount = items.length - activeCount
@@ -223,6 +207,7 @@ export default function MappingsPage() {
   function mappingToForm(item: Mapping): FormState {
     return {
       cnb_repo_id: item.cnb_repo_id,
+      workspace_slug: item.plane_workspace_slug ?? '',
       plane_workspace_id: item.plane_workspace_id,
       plane_project_id: item.plane_project_id,
       issue_open_state_id: item.issue_open_state_id ?? '',
@@ -236,6 +221,7 @@ export default function MappingsPage() {
   function buildPayloadFromForm(state: FormState) {
     return {
       cnb_repo_id: state.cnb_repo_id.trim(),
+      workspace_slug: state.workspace_slug.trim(),
       plane_workspace_id: state.plane_workspace_id.trim(),
       plane_project_id: state.plane_project_id.trim(),
       issue_open_state_id: state.issue_open_state_id.trim(),
@@ -311,9 +297,9 @@ export default function MappingsPage() {
   }
 
   function handleResetForm() {
-    const workspace = form.plane_workspace_id
+    const slug = form.workspace_slug
     const project = form.plane_project_id
-    setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+    setForm({ ...initialForm, workspace_slug: slug, plane_project_id: project })
     setEditingKey(null)
     setFeedback(null)
   }
@@ -334,12 +320,12 @@ export default function MappingsPage() {
         const message = await readErrorMessage(res, `保存失败（${res.status}）`)
         throw new Error(message)
       }
-      const workspace = form.plane_workspace_id
+      const slug = form.workspace_slug
       const project = form.plane_project_id
       setFeedback({ kind: 'success', message: isEditing ? '映射已更新。' : '映射已保存并刷新。' })
       if (isEditing) {
         setEditingKey(null)
-        setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+        setForm({ ...initialForm, workspace_slug: slug, plane_project_id: project })
       } else {
         setForm(prev => ({ ...prev, cnb_repo_id: '' }))
       }
@@ -396,10 +382,10 @@ export default function MappingsPage() {
         throw new Error(message)
       }
       if (editingKey === key) {
-        const workspace = form.plane_workspace_id
+        const slug = form.workspace_slug
         const project = form.plane_project_id
         setEditingKey(null)
-        setForm({ ...initialForm, plane_workspace_id: workspace, plane_project_id: project })
+        setForm({ ...initialForm, workspace_slug: slug, plane_project_id: project })
       }
       setFeedback({ kind: 'success', message: '映射已删除（标记为停用）。' })
       await load()
@@ -440,23 +426,18 @@ export default function MappingsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="plane_workspace_id">Plane Workspace</Label>
-              <Select
-                id="plane_workspace_id"
+              <Label htmlFor="workspace_slug">Workspace Slug</Label>
+              <Input
+                id="workspace_slug"
                 required
-                value={form.plane_workspace_id}
+                placeholder="your-workspace-slug"
+                value={form.workspace_slug}
                 onChange={event => {
-                  setForm(prev => ({ ...prev, plane_workspace_id: event.target.value, plane_project_id: '' }))
+                  setForm(prev => ({ ...prev, workspace_slug: event.target.value, plane_project_id: '', plane_workspace_id: '' }))
                 }}
-                disabled={loadingWorkspaces}
-              >
-                <option value="">选择 Workspace</option>
-                {workspaces.map(ws => (
-                  <option key={ws.id} value={ws.id}>
-                    {ws.name}
-                  </option>
-                ))}
-              </Select>
+                disabled={isEditing}
+              />
+              <p className="text-xs text-gray-500">请手动输入 Plane workspace 的 slug（Plane 暂不提供 workspace 列表 API）</p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="plane_project_id">Plane Project</Label>
@@ -464,10 +445,17 @@ export default function MappingsPage() {
                 id="plane_project_id"
                 required
                 value={form.plane_project_id}
-                onChange={event => setForm(prev => ({ ...prev, plane_project_id: event.target.value }))}
-                disabled={isEditing || !form.plane_workspace_id || loadingProjects}
+                onChange={event => {
+                  const selectedProject = projects.find(p => p.id === event.target.value)
+                  setForm(prev => ({
+                    ...prev,
+                    plane_project_id: event.target.value,
+                    plane_workspace_id: selectedProject?.workspace_id || prev.plane_workspace_id
+                  }))
+                }}
+                disabled={isEditing || !form.workspace_slug.trim() || loadingProjects}
               >
-                <option value="">{loadingProjects ? '加载中...' : form.plane_workspace_id ? '选择 Project' : '请先选择 Workspace'}</option>
+                <option value="">{loadingProjects ? '加载中...' : form.workspace_slug.trim() ? '选择 Project' : '请先输入 Workspace Slug'}</option>
                 {projects.map(proj => (
                   <option key={proj.id} value={proj.id}>
                     {proj.name}
@@ -543,7 +531,7 @@ export default function MappingsPage() {
                     variant="ghost"
                     onClick={() => {
                       setEditingKey(null)
-                      setForm(prev => ({ ...initialForm, plane_workspace_id: prev.plane_workspace_id, plane_project_id: prev.plane_project_id }))
+                      setForm(prev => ({ ...initialForm, workspace_slug: prev.workspace_slug, plane_project_id: prev.plane_project_id }))
                     }}
                   >
                     取消编辑

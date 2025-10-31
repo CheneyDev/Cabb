@@ -248,10 +248,10 @@ func (h *Handler) processCNBIssue(p cnbIssuePayload, deliveryID, sum string) {
 	if token == "" {
 		return // No token configured, skip Plane outbound call
 	}
-	// Get workspace slug for Plane API calls
-	slug, err := h.db.GetWorkspaceSlug(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || slug == "" {
-		return
+	// Get workspace slug from mapping
+	slug := strings.TrimSpace(mapping.WorkspaceSlug.String)
+	if !mapping.WorkspaceSlug.Valid || slug == "" {
+		return // No workspace slug configured
 	}
 	cl := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
 
@@ -444,10 +444,10 @@ func (h *Handler) processCNBPR(p cnbPRPayload, evt, deliveryID, sum string) {
 	if token == "" {
 		return // No token configured, skip Plane outbound call
 	}
-	// Get workspace slug for Plane API calls
-	slug, err := h.db.GetWorkspaceSlug(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || slug == "" {
-		return
+	// Get workspace slug from mapping
+	slug := strings.TrimSpace(mapping.WorkspaceSlug.String)
+	if !mapping.WorkspaceSlug.Valid || slug == "" {
+		return // No workspace slug configured
 	}
 	cl := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
 
@@ -521,10 +521,10 @@ func (h *Handler) processCNBBranch(p cnbBranchPayload, evt, deliveryID, sum stri
 	if token == "" {
 		return // No token configured, skip Plane outbound call
 	}
-	// Get workspace slug for Plane API calls
-	slug, err := h.db.GetWorkspaceSlug(ctx, mapping.PlaneWorkspaceID)
-	if err != nil || slug == "" {
-		return
+	// Get workspace slug from mapping
+	slug := strings.TrimSpace(mapping.WorkspaceSlug.String)
+	if !mapping.WorkspaceSlug.Valid || slug == "" {
+		return // No workspace slug configured
 	}
 	cl := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
 

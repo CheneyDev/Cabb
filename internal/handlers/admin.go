@@ -94,8 +94,8 @@ func (h *Handler) AdminRepoProjectList(c echo.Context) error {
 		if _, exists := tokens[m.PlaneWorkspaceID]; exists {
 			continue
 		}
-		slug, err := h.db.GetWorkspaceSlug(ctx, m.PlaneWorkspaceID)
-		if err != nil || slug == "" {
+		slug := strings.TrimSpace(m.WorkspaceSlug.String)
+		if !m.WorkspaceSlug.Valid || slug == "" {
 			tokens[m.PlaneWorkspaceID] = workspaceToken{}
 			continue
 		}
@@ -384,9 +384,9 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
 	}
 	
-	workspaceID := strings.TrimSpace(c.QueryParam("workspace_id"))
-	if workspaceID == "" {
-		return writeError(c, http.StatusBadRequest, "missing_workspace_id", "缺少 workspace_id 参数", nil)
+	workspaceSlug := strings.TrimSpace(c.QueryParam("workspace_slug"))
+	if workspaceSlug == "" {
+		return writeError(c, http.StatusBadRequest, "missing_workspace_slug", "缺少 workspace_slug 参数", nil)
 	}
 	
 	ctx := c.Request().Context()
@@ -396,17 +396,12 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 	if accessToken == "" {
 		return writeError(c, http.StatusServiceUnavailable, "token_not_configured", "PLANE_SERVICE_TOKEN 未配置", nil)
 	}
-	// Get workspace slug
-	slug, err := h.db.GetWorkspaceSlug(ctx, workspaceID)
-	if err != nil || slug == "" {
-		return writeError(c, http.StatusNotFound, "workspace_not_found", "未找到该 workspace", nil)
-	}
 	
 	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
 	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	
-	projects, err := planeClient.ListProjects(pctx, accessToken, slug)
+	projects, err := planeClient.ListProjects(pctx, accessToken, workspaceSlug)
 	if err != nil {
 		return writeError(c, http.StatusBadGateway, "plane_api_failed", "调用 Plane API 失败", map[string]any{"error": err.Error()})
 	}
@@ -418,6 +413,10 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 		name, _ := proj["name"].(string)
 		identifier, _ := proj["identifier"].(string)
 		slug, _ := proj["slug"].(string)
+		workspaceID, _ := proj["workspace"].(string)
+		if workspaceID == "" {
+			workspaceID, _ = proj["workspace_id"].(string)
+		}
 		
 		displayName := strings.TrimSpace(name)
 		if displayName == "" {
@@ -431,10 +430,11 @@ func (h *Handler) AdminPlaneProjects(c echo.Context) error {
 		}
 		
 		results = append(results, map[string]any{
-			"id":         id,
-			"name":       displayName,
-			"identifier": identifier,
-			"slug":       slug,
+			"id":           id,
+			"name":         displayName,
+			"identifier":   identifier,
+			"slug":         slug,
+			"workspace_id": workspaceID,
 		})
 	}
 	
@@ -613,16 +613,25 @@ func (h *Handler) AdminIssueLinksList(c echo.Context) error {
 	// Use global service token from config
 	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	tokens := make(map[string]workspaceToken, len(items))
+	
+	// Get workspace slugs from repo_project_mappings
 	for _, it := range items {
 		wsID := trimNull(it.PlaneWorkspaceID)
-		if wsID == "" {
+		projID := trimNull(it.PlaneProjectID)
+		if wsID == "" || projID == "" {
 			continue
 		}
 		if _, exists := tokens[wsID]; exists {
 			continue
 		}
-		slug, terr := h.db.GetWorkspaceSlug(ctx, wsID)
-		if terr != nil || slug == "" {
+		// Get mapping to retrieve workspace_slug
+		mapping, terr := h.db.GetRepoProjectMappingByPlaneProject(ctx, projID)
+		if terr != nil || mapping == nil {
+			tokens[wsID] = workspaceToken{}
+			continue
+		}
+		slug := strings.TrimSpace(mapping.WorkspaceSlug.String)
+		if !mapping.WorkspaceSlug.Valid || slug == "" {
 			tokens[wsID] = workspaceToken{}
 			continue
 		}
