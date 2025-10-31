@@ -1,0 +1,2 @@
+include:
+  - https://cnb.cool/1024hub/workflow/-/blob/master/pipeline/deploy/be-go-single.yml

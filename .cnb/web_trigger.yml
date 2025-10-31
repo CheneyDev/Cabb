@@ -1,0 +1,35 @@
+# .cnb/web_trigger.yml
+# 复用服务选项
+service_options: &service_options
+  - name: server
+    value: server
+
+# 复用服务列表配置
+services_list_input: &services_list_input
+  description: 需要构建的服务列表
+  required: true
+  type: select
+  multiple: true
+  options: *service_options
+
+branch:
+  - reg: "^master"
+    buttons:
+      - name: <!!!生产-开始构建!!!>
+        description: 构建到生产环境
+        event: web_trigger_release
+        env:
+          RUNNER_ARCH: cnb:arch:arm64:v8
+          ENV_URL: "https://cnb.cool/cymirror/MatchEngine/ConfigFiles/-/blob/develop/env.yml"
+        inputs:
+          SERVICES_LIST: *services_list_input
+  - reg: "^develop"
+    buttons:
+      - name: <!!!测试-开始构建!!!>
+        description: 构建到测试环境
+        event: web_trigger_test
+        env:
+          RUNNER_ARCH: cnb:arch:arm64:v8
+          ENV_URL: "https://cnb.cool/cymirror/MatchEngine/ConfigFiles/-/blob/develop/env.yml"
+        inputs:
+          SERVICES_LIST: *services_list_input
