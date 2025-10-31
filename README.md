@@ -127,6 +127,60 @@ make build
 - `POST /ingest/cnb/pr` - CNB PR 回调
 - `POST /ingest/cnb/branch` - CNB 分支回调
 
+### CNB API v1
+
+- `POST /api/v1/issues/label-notify` - **完整版** Issue 标签通知（11 个字段）
+- `POST /api/v1/issues/label-sync` - **简化版** Issue 标签同步（3 个字段）
+
+#### 用途
+接收 CNB job-get-issues-info 发送的 Issue 标签变更通知，自动同步标签到 Plane Issue。
+
+#### 请求示例
+
+**完整版**（推荐用于完整事件记录）：
+```json
+{
+  "repo_slug": "1024hub/Demo",
+  "issue_number": 74,
+  "issue_url": "https://cnb.cool/1024hub/Demo/-/issues/74",
+  "title": "实现用户登录功能",
+  "state": "open",
+  "author": {"username": "zhangsan", "nickname": "张三"},
+  "description": "需要实现用户登录功能...",
+  "labels": ["🚧 处理中_CNB", "🧑🏻‍💻 进行中：前端_CNB"],
+  "label_trigger": "🚧 处理中_CNB",
+  "updated_at": "2025-10-29T03:25:06Z",
+  "event_context": {"event_type": "push", "branch": "feature/74-user-login"}
+}
+```
+
+**简化版**（最小字段）：
+```json
+{
+  "repo_slug": "1024hub/Demo",
+  "issue_number": 74,
+  "labels": ["🚧 处理中_CNB", "🧑🏻‍💻 进行中：前端_CNB"]
+}
+```
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "issue_number": 74,
+    "processed_at": "2025-10-29T03:25:10Z"
+  }
+}
+```
+
+#### 业务逻辑
+- 根据 `repo_slug` 查找映射的 Plane 项目
+- 根据 `issue_number` 查找对应的 Plane Issue
+- 同步 CNB labels 到 Plane Issue（自动创建不存在的标签）
+- 记录同步事件到数据库
+
 ### 管理端点
 
 - `GET /admin` - 管理控制台首页
