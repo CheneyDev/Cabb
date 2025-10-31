@@ -622,15 +622,13 @@ export default function MappingsPage() {
                       <span className="font-medium text-foreground">{item.cnb_repo_id}</span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-2">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-foreground">Workspace: {formatWorkspaceLabel(item)}</span>
-                          <span className="text-xs text-muted-foreground">{formatWorkspaceDetails(item)}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-foreground">Project: {formatProjectLabel(item)}</span>
-                          <span className="text-xs text-muted-foreground">{formatProjectDetails(item)}</span>
-                        </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium text-foreground">
+                          {formatWorkspaceLabel(item)}/{formatProjectLabel(item)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatWorkspaceDetails(item)} · {formatProjectDetails(item)}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
