@@ -85,11 +85,15 @@ jobs:
           if [ -n "$SERVER_PID" ]; then
             kill $SERVER_PID 2>/dev/null || true
           fi
-          # verify some core tables exist
+# verify some core tables exist
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.workspaces')" | grep -q workspaces
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.repo_project_mappings')" | grep -q repo_project_mappings
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.thread_links')" | grep -q thread_links
-          kill $(cat server.pid)
+          # Clean up any remaining server process
+          if [ -f server.pid ]; then
+            kill $(cat server.pid 2>/dev/null) 2>/dev/null || true
+            rm -f server.pid
+          fi
 
       - name: Optional migration against external DATABASE_URL (disabled by default)
         if: ${{ env.ACTION_MIGRATE_TARGET == 'true' && env.DATABASE_URL != '' }}
@@ -99,4 +103,5 @@ jobs:
           echo "Running migrations against external DATABASE_URL (be careful!)"
           PORT=18083 ./bin/server & echo $! > server.pid
           sleep 5
-          kill $(cat server.pid)
+          kill $(cat server.pid 2>/dev/null) 2>/dev/null || true
+          rm -f server.pid
