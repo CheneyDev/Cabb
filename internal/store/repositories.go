@@ -138,16 +138,16 @@ func (d *DB) UpsertRepoProjectMapping(ctx context.Context, m RepoProjectMapping)
 	if d == nil || d.SQL == nil {
 		return sql.ErrConnDone
 	}
-	const upd = `UPDATE repo_project_mappings SET plane_workspace_id=$2::uuid, issue_open_state_id=$4::uuid, issue_closed_state_id=$5::uuid, active=$6, sync_direction=COALESCE($7::sync_direction, sync_direction), label_selector=COALESCE($8,label_selector), updated_at=now() WHERE plane_project_id=$1::uuid AND cnb_repo_id=$3`
-	res, err := d.SQL.ExecContext(ctx, upd, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
+	const upd = `UPDATE repo_project_mappings SET plane_workspace_id=$2::uuid, workspace_slug=$4, issue_open_state_id=$5::uuid, issue_closed_state_id=$6::uuid, active=$7, sync_direction=COALESCE($8::sync_direction, sync_direction), label_selector=COALESCE($9,label_selector), updated_at=now() WHERE plane_project_id=$1::uuid AND cnb_repo_id=$3`
+	res, err := d.SQL.ExecContext(ctx, upd, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullIfEmpty(m.WorkspaceSlug.String), nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
 		return nil
 	}
-	const ins = `INSERT INTO repo_project_mappings (plane_project_id, plane_workspace_id, cnb_repo_id, issue_open_state_id, issue_closed_state_id, active, sync_direction, label_selector, created_at, updated_at) VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5::uuid,$6,COALESCE($7::sync_direction,'cnb_to_plane'),$8,now(),now())`
-	_, err = d.SQL.ExecContext(ctx, ins, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
+	const ins = `INSERT INTO repo_project_mappings (plane_project_id, plane_workspace_id, cnb_repo_id, workspace_slug, issue_open_state_id, issue_closed_state_id, active, sync_direction, label_selector, created_at, updated_at) VALUES ($1::uuid,$2::uuid,$3,$4,$5::uuid,$6::uuid,$7,COALESCE($8::sync_direction,'cnb_to_plane'),$9,now(),now())`
+	_, err = d.SQL.ExecContext(ctx, ins, m.PlaneProjectID, m.PlaneWorkspaceID, m.CNBRepoID, nullIfEmpty(m.WorkspaceSlug.String), nullableUUID(m.IssueOpenStateID), nullableUUID(m.IssueClosedStateID), m.Active, nullableText(m.SyncDirection), nullIfEmpty(m.LabelSelector.String))
 	return err
 }
 

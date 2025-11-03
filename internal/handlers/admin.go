@@ -23,6 +23,7 @@ func (h *Handler) AdminRepoProject(c echo.Context) error {
 	}
 	var req struct {
 		CNBRepoID          string `json:"cnb_repo_id"`
+		WorkspaceSlug      string `json:"workspace_slug"`
 		PlaneWorkspaceID   string `json:"plane_workspace_id"`
 		PlaneProjectID     string `json:"plane_project_id"`
 		IssueOpenStateID   string `json:"issue_open_state_id"`
@@ -41,6 +42,7 @@ func (h *Handler) AdminRepoProject(c echo.Context) error {
 		PlaneProjectID:     req.PlaneProjectID,
 		PlaneWorkspaceID:   req.PlaneWorkspaceID,
 		CNBRepoID:          req.CNBRepoID,
+		WorkspaceSlug:      sql.NullString{String: req.WorkspaceSlug, Valid: req.WorkspaceSlug != ""},
 		IssueOpenStateID:   sql.NullString{String: req.IssueOpenStateID, Valid: req.IssueOpenStateID != ""},
 		IssueClosedStateID: sql.NullString{String: req.IssueClosedStateID, Valid: req.IssueClosedStateID != ""},
 		Active:             true,
