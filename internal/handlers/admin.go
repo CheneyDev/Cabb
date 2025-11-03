@@ -305,76 +305,75 @@ func (h *Handler) AdminChannelProject(c echo.Context) error {
 }
 
 // GET /admin/plane/workspaces
-// Returns all workspaces accessible via stored Plane bot tokens
+// Returns all workspaces discoverable via repo_project_mappings using the global PLANE_SERVICE_TOKEN
 func (h *Handler) AdminPlaneWorkspaces(c echo.Context) error {
-	if !hHasDB(h) {
-		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
-	}
-	ctx := c.Request().Context()
+    if !hHasDB(h) {
+        return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+    }
+    ctx := c.Request().Context()
 
-	// Get all bot tokens from DB
-	rows, err := h.db.SQL.QueryContext(ctx, `
-		SELECT DISTINCT plane_workspace_id, plane_workspace_slug, plane_bot_token 
-		FROM plane_workspace_tokens 
-		WHERE plane_bot_token IS NOT NULL AND plane_bot_token != ''
-		ORDER BY plane_workspace_slug
-	`)
-	if err != nil {
-		return writeError(c, http.StatusInternalServerError, "query_failed", "查询失败", map[string]any{"error": err.Error()})
-	}
-	defer rows.Close()
+    // Use global Plane service token
+    accessToken := strings.TrimSpace(h.cfg.PlaneServiceToken)
+    if accessToken == "" {
+        return writeError(c, http.StatusServiceUnavailable, "token_not_configured", "PLANE_SERVICE_TOKEN 未配置", nil)
+    }
 
-	type wsToken struct {
-		workspaceID string
-		slug        string
-		token       string
-	}
-	tokens := []wsToken{}
-	for rows.Next() {
-		var wt wsToken
-		if err := rows.Scan(&wt.workspaceID, &wt.slug, &wt.token); err != nil {
-			continue
-		}
-		if strings.TrimSpace(wt.token) == "" {
-			continue
-		}
-		tokens = append(tokens, wt)
-	}
+    // Discover distinct workspaces from repo_project_mappings
+    rows, err := h.db.SQL.QueryContext(ctx, `
+        SELECT DISTINCT plane_workspace_id::text, workspace_slug
+        FROM repo_project_mappings
+        WHERE workspace_slug IS NOT NULL AND TRIM(workspace_slug) != ''
+        ORDER BY workspace_slug
+    `)
+    if err != nil {
+        return writeError(c, http.StatusInternalServerError, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+    }
+    defer rows.Close()
 
-	planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
-	results := []map[string]any{}
-	seen := make(map[string]bool)
+    type rec struct {
+        id   string
+        slug string
+    }
+    workspaces := []rec{}
+    for rows.Next() {
+        var id, slug string
+        if err := rows.Scan(&id, &slug); err != nil {
+            continue
+        }
+        if strings.TrimSpace(slug) == "" || strings.TrimSpace(id) == "" {
+            continue
+        }
+        workspaces = append(workspaces, rec{id: id, slug: slug})
+    }
 
-	for _, wt := range tokens {
-		if wt.slug == "" || wt.token == "" {
-			continue
-		}
-		if seen[wt.workspaceID] {
-			continue
-		}
-		seen[wt.workspaceID] = true
+    // Fetch metadata from Plane API
+    planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+    results := []map[string]any{}
+    seen := make(map[string]bool)
+    for _, ws := range workspaces {
+        if seen[ws.id] {
+            continue
+        }
+        seen[ws.id] = true
+        wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+        meta, err := planeClient.GetWorkspace(wctx, accessToken, ws.slug)
+        cancel()
+        name := ws.slug
+        if err == nil && meta != nil {
+            if s := strings.TrimSpace(meta.Name); s != "" {
+                name = s
+            } else if s := strings.TrimSpace(meta.Title); s != "" {
+                name = s
+            }
+        }
+        results = append(results, map[string]any{
+            "id":   ws.id,
+            "name": name,
+            "slug": ws.slug,
+        })
+    }
 
-		wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		ws, err := planeClient.GetWorkspace(wctx, wt.token, wt.slug)
-		cancel()
-
-		if err == nil && ws != nil {
-			name := strings.TrimSpace(ws.Name)
-			if name == "" {
-				name = strings.TrimSpace(ws.Title)
-			}
-			if name == "" {
-				name = wt.slug
-			}
-			results = append(results, map[string]any{
-				"id":   wt.workspaceID,
-				"name": name,
-				"slug": wt.slug,
-			})
-		}
-	}
-
-	return c.JSON(http.StatusOK, map[string]any{"items": results})
+    return c.JSON(http.StatusOK, map[string]any{"items": results})
 }
 
 // GET /admin/plane/projects?workspace_id=xxx
