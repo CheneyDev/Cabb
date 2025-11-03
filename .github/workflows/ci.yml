@@ -26,7 +26,7 @@ jobs:
           ./scripts/start-server-for-ci.sh 18080 20 2
           SERVER_PID=$(cat server.pid 2>/dev/null || echo "")
           if [ -n "$SERVER_PID" ]; then
-            kill $SERVER_PID
+            kill $SERVER_PID 2>/dev/null || true
           fi
 
       - name: Docker build
@@ -85,7 +85,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then
             kill $SERVER_PID 2>/dev/null || true
           fi
-# verify some core tables exist
+          # verify some core tables exist
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.workspaces')" | grep -q workspaces
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.repo_project_mappings')" | grep -q repo_project_mappings
           psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.thread_links')" | grep -q thread_links
