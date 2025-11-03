@@ -573,10 +573,10 @@ func (h *Handler) generateTitleWithParent(ctx context.Context, originalTitle, pa
 	}
 
 	if cnbIssueID == "" || cnbIssueID == "unknown" {
-		return fmt.Sprintf("[Parent: unknown] %s", originalTitle)
+		return fmt.Sprintf("[Parent: unknown ] %s", originalTitle)
 	}
 
-	return fmt.Sprintf("[Parent: #%s] %s", cnbIssueID, originalTitle)
+	return fmt.Sprintf("[Parent: #%s ] %s", cnbIssueID, originalTitle)
 }
 
 func dataGetString(m map[string]any, key string) (string, bool) {
