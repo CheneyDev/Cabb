@@ -515,67 +515,6 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
 
 func hHasDB(h *Handler) bool { return h != nil && h.db != nil && h.db.SQL != nil }
 
-// analyzeParentStructure 分析并打印父工作项的完整数据结构
-func analyzeParentStructure(data map[string]any, deliveryID, action, planeIssueID string) {
-	analysis := map[string]any{
-		"event":          "plane.issue.parent_structure_analysis",
-		"delivery_id":    deliveryID,
-		"action":         action,
-		"plane_issue_id": planeIssueID,
-	}
-
-	// 检查所有可能的父工作项相关字段
-	parentFields := []string{"parent", "parent_issue", "parent_id", "parent_detail", "parent_name", "parent_identifier"}
-	for _, field := range parentFields {
-		if value, exists := data[field]; exists {
-			analysis[field+"_exists"] = true
-			analysis[field+"_value"] = value
-			analysis[field+"_type"] = fmt.Sprintf("%T", value)
-
-			// 如果是 map 类型，进一步分析其内部结构
-			if m, ok := value.(map[string]any); ok {
-				analysis[field+"_keys"] = getMapKeys(m)
-				analysis[field+"_id"] = getNestedStringValue(m, "id")
-				analysis[field+"_name"] = getNestedStringValue(m, "name")
-				analysis[field+"_identifier"] = getNestedStringValue(m, "identifier")
-			}
-		} else {
-			analysis[field+"_exists"] = false
-		}
-	}
-
-	// 检查是否有任何父工作项相关的数据
-	hasAnyParentData := false
-	for _, field := range parentFields {
-		if exists, ok := analysis[field+"_exists"].(bool); ok && exists {
-			hasAnyParentData = true
-			break
-		}
-	}
-	analysis["has_any_parent_data"] = hasAnyParentData
-
-	LogStructured("info", analysis)
-}
-
-// getMapKeys 获取 map 的所有键
-func getMapKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// getNestedStringValue 从嵌套 map 中获取字符串值
-func getNestedStringValue(m map[string]any, key string) string {
-	if v, ok := m[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
 // syncParentIssueIfNeeded 同步父工作项到 CNB 并返回 CNB Issue 编号
 func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cnbRepoID string, cn *cnb.Client) (string, error) {
 	if parentPlaneID == "" {
