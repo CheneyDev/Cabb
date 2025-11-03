@@ -38,6 +38,14 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	name, _ := dataGetString(data, "name")
 	descHTML, _ := dataGetString(data, "description_html")
 
+	// 打印完整的 Plane webhook 数据用于分析父工作项结构
+	LogStructured("info", map[string]any{
+		"event":             "plane.webhook.raw_data",
+		"delivery_id":       deliveryID,
+		"action":            action,
+		"full_webhook_data": data,
+	})
+
 	// Extract workspace_slug and project_slug for snapshot (may be in workspace/project nested objects)
 	workspaceSlug, _ := dataGetString(data, "workspace_slug")
 	projectSlug, _ := dataGetString(data, "project_slug")
@@ -82,6 +90,46 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	assigneePlaneIDs := dataGetAssigneeIDs(data)
 
 	labels := dataGetLabels(data)
+
+	// 提取父工作项相关数据
+	parentIssueID, _ := dataGetString(data, "parent")
+	parentIssue, _ := dataGetString(data, "parent_issue")
+	parentName, _ := dataGetString(data, "parent_name")
+
+	// 尝试从嵌套对象中提取父工作项信息
+	var parentDetail map[string]any
+	if p, ok := data["parent_detail"].(map[string]any); ok {
+		parentDetail = p
+		parentIssueID, _ = dataGetString(p, "id")
+		parentName, _ = dataGetString(p, "name")
+	}
+
+	// 尝试从 parent 对象中提取
+	if parentIssueID == "" {
+		if p, ok := data["parent"].(map[string]any); ok {
+			parentIssueID, _ = dataGetString(p, "id")
+			parentName, _ = dataGetString(p, "name")
+		}
+	}
+
+	// 分析父工作项的完整数据结构
+	analyzeParentStructure(data, deliveryID, action, planeIssueID)
+
+	// 打印父工作项相关的详细信息
+	LogStructured("info", map[string]any{
+		"event":                "plane.issue.parent_analysis",
+		"delivery_id":          deliveryID,
+		"action":               action,
+		"plane_issue_id":       planeIssueID,
+		"parent_issue_id":      parentIssueID,
+		"parent_issue":         parentIssue,
+		"parent_name":          parentName,
+		"parent_detail":        parentDetail,
+		"has_parent":           parentIssueID != "",
+		"parent_field_exists":  data["parent"] != nil,
+		"parent_detail_exists": data["parent_detail"] != nil,
+	})
+
 	mappings, err := h.db.ListRepoProjectMappingsByPlaneProject(ctx, planeProjectID)
 
 	// Write issue snapshot (webhook-only refactor: cache metadata for preview/notification)
@@ -104,6 +152,9 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 		"assignees_plane":  len(assigneePlaneIDs),
 		"mappings_count":   len(mappings),
 		"outbound_enabled": h.cfg.CNBOutboundEnabled,
+		"parent_issue_id":  parentIssueID,
+		"parent_name":      parentName,
+		"has_parent":       parentIssueID != "",
 	})
 
 	if err == nil && len(mappings) > 0 && h.cfg.CNBOutboundEnabled {
@@ -384,6 +435,20 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
 	commentHTML, _ := dataGetString(data, "comment_html")
 	commentID, _ := dataGetString(data, "id")
 	action := strings.ToLower(strings.TrimSpace(env.Action))
+
+	// 打印完整的 Plane 评论 webhook 数据用于分析
+	LogStructured("info", map[string]any{
+		"event":              "plane.webhook.comment.raw_data",
+		"delivery_id":        deliveryID,
+		"action":             action,
+		"plane_issue_id":     planeIssueID,
+		"comment_id":         commentID,
+		"full_webhook_data":  data,
+		"activity_field":     env.Activity.Field,
+		"activity_actor":     env.Activity.Actor,
+		"activity_new_value": env.Activity.NewValue,
+		"activity_old_value": env.Activity.OldValue,
+	})
 	// Only process newly created comments to avoid duplicates from subsequent updates
 	if action != "create" && action != "created" {
 		if deliveryID != "" {
@@ -444,6 +509,67 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
 // ==== helpers (issue) ====
 
 func hHasDB(h *Handler) bool { return h != nil && h.db != nil && h.db.SQL != nil }
+
+// analyzeParentStructure 分析并打印父工作项的完整数据结构
+func analyzeParentStructure(data map[string]any, deliveryID, action, planeIssueID string) {
+	analysis := map[string]any{
+		"event":          "plane.issue.parent_structure_analysis",
+		"delivery_id":    deliveryID,
+		"action":         action,
+		"plane_issue_id": planeIssueID,
+	}
+
+	// 检查所有可能的父工作项相关字段
+	parentFields := []string{"parent", "parent_issue", "parent_id", "parent_detail", "parent_name", "parent_identifier"}
+	for _, field := range parentFields {
+		if value, exists := data[field]; exists {
+			analysis[field+"_exists"] = true
+			analysis[field+"_value"] = value
+			analysis[field+"_type"] = fmt.Sprintf("%T", value)
+
+			// 如果是 map 类型，进一步分析其内部结构
+			if m, ok := value.(map[string]any); ok {
+				analysis[field+"_keys"] = getMapKeys(m)
+				analysis[field+"_id"] = getNestedStringValue(m, "id")
+				analysis[field+"_name"] = getNestedStringValue(m, "name")
+				analysis[field+"_identifier"] = getNestedStringValue(m, "identifier")
+			}
+		} else {
+			analysis[field+"_exists"] = false
+		}
+	}
+
+	// 检查是否有任何父工作项相关的数据
+	hasAnyParentData := false
+	for _, field := range parentFields {
+		if exists, ok := analysis[field+"_exists"].(bool); ok && exists {
+			hasAnyParentData = true
+			break
+		}
+	}
+	analysis["has_any_parent_data"] = hasAnyParentData
+
+	LogStructured("info", analysis)
+}
+
+// getMapKeys 获取 map 的所有键
+func getMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// getNestedStringValue 从嵌套 map 中获取字符串值
+func getNestedStringValue(m map[string]any, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
 
 func dataGetString(m map[string]any, key string) (string, bool) {
 	if m == nil {
