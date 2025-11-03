@@ -42,10 +42,57 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	// Extract workspace_slug and project_slug for snapshot (may be in workspace/project nested objects)
 	workspaceSlug, _ := dataGetString(data, "workspace_slug")
 	projectSlug, _ := dataGetString(data, "project_slug")
+
+	// Debug: 记录可用的 workspace 相关字段
+	var dataKeys []string
+	for k := range data {
+		dataKeys = append(dataKeys, k)
+	}
+	LogStructured("info", map[string]any{
+		"event":          "plane.workspace.debug",
+		"delivery_id":    deliveryID,
+		"workspace_id":   env.WorkspaceID,
+		"workspace_slug": workspaceSlug,
+		"data_keys":      dataKeys,
+	})
+
+	// 尝试多种方式获取 workspace slug
 	if workspaceSlug == "" {
 		if ws, ok := data["workspace"].(map[string]any); ok {
 			workspaceSlug, _ = dataGetString(ws, "slug")
+			LogStructured("info", map[string]any{
+				"event":          "plane.workspace.from_nested",
+				"delivery_id":    deliveryID,
+				"workspace_obj":  ws,
+				"extracted_slug": workspaceSlug,
+			})
 		}
+	}
+
+	// 如果还是没有，尝试从其他字段获取
+	if workspaceSlug == "" {
+		// 检查是否有 workspace_name 或其他相关字段
+		if wsName, ok := dataGetString(data, "workspace_name"); ok && wsName != "" {
+			// 可能需要将 workspace_name 转换为 slug
+			workspaceSlug = strings.ToLower(strings.ReplaceAll(wsName, " ", "-"))
+			LogStructured("info", map[string]any{
+				"event":          "plane.workspace.from_name",
+				"delivery_id":    deliveryID,
+				"workspace_name": wsName,
+				"converted_slug": workspaceSlug,
+			})
+		}
+	}
+
+	// 最后的兜底方案：如果仍然没有 workspace_slug，记录警告并使用一个占位符
+	if workspaceSlug == "" {
+		LogStructured("warn", map[string]any{
+			"event":        "plane.workspace.missing",
+			"delivery_id":  deliveryID,
+			"workspace_id": env.WorkspaceID,
+			"message":      "workspace_slug not found in webhook data, parent issue sync will be skipped",
+		})
+		// 注意：我们不设置 workspace_slug，让后续逻辑处理缺失的情况
 	}
 	if projectSlug == "" {
 		if proj, ok := data["project_detail"].(map[string]any); ok {
@@ -531,6 +578,17 @@ func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cn
 			"cnb_issue_id":    cnbIssueID,
 		})
 		return cnbIssueID, nil
+	}
+
+	// 检查是否有有效的 workspace_slug
+	if workspaceSlug == "" {
+		LogStructured("warn", map[string]any{
+			"event":           "plane.parent_issue.skipped",
+			"parent_plane_id": parentPlaneID,
+			"cnb_repo_id":     cnbRepoID,
+			"reason":          "workspace_slug_empty",
+		})
+		return "unknown", nil
 	}
 
 	// 父工作项未同步，需要获取父工作项信息并同步

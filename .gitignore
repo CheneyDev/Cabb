@@ -15,6 +15,7 @@
 deploy/
 # Go build artifacts
 bin/
+server
 *.exe
 *.dll
 *.so
