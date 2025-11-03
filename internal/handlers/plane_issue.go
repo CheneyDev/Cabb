@@ -230,9 +230,20 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 				// 生成带有父工作项信息的标题
 				// 优先使用 mapping 中的 workspace_slug，因为 webhook 中可能缺失
 				effectiveWorkspaceSlug := workspaceSlug
+				workspaceSlugSource := "webhook"
 				if effectiveWorkspaceSlug == "" && m.WorkspaceSlug.Valid {
 					effectiveWorkspaceSlug = m.WorkspaceSlug.String
+					workspaceSlugSource = "mapping"
 				}
+				
+				LogStructured("info", map[string]any{
+					"event":                "plane.issue.workspace_slug_resolution",
+					"delivery_id":          deliveryID,
+					"plane_issue_id":       planeIssueID,
+					"workspace_slug":       effectiveWorkspaceSlug,
+					"workspace_slug_source": workspaceSlugSource,
+				})
+				
 				titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, m.CNBRepoID, effectiveWorkspaceSlug, planeProjectID, cn)
 
 				LogStructured("info", map[string]any{
@@ -586,17 +597,31 @@ func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cn
 	}
 
 	// 检查是否有有效的 workspace_slug
-	// 如果为空，尝试从数据库快照中获取
+	// 多层回退策略：webhook -> mapping -> 父issue快照 -> 项目快照 -> workspaces表
 	if workspaceSlug == "" {
+		// 尝试从父 issue 快照获取
 		if snapshot, err := h.db.GetPlaneIssueSnapshot(ctx, parentPlaneID); err == nil {
 			if wsSlug, ok := snapshot["workspace_slug"].(string); ok && wsSlug != "" {
 				workspaceSlug = wsSlug
 				LogStructured("info", map[string]any{
-					"event":           "plane.parent_issue.workspace_from_snapshot",
+					"event":           "plane.parent_issue.workspace_from_parent_snapshot",
 					"parent_plane_id": parentPlaneID,
 					"workspace_slug":  workspaceSlug,
 				})
 			}
+		}
+	}
+
+	if workspaceSlug == "" && planeProjectID != "" {
+		// 尝试从当前项目的快照获取
+		if wsSlug, err := h.db.GetWorkspaceSlugByProjectID(ctx, planeProjectID); err == nil && wsSlug != "" {
+			workspaceSlug = wsSlug
+			LogStructured("info", map[string]any{
+				"event":           "plane.parent_issue.workspace_from_project_snapshot",
+				"parent_plane_id": parentPlaneID,
+				"plane_project_id": planeProjectID,
+				"workspace_slug":  workspaceSlug,
+			})
 		}
 	}
 
@@ -606,7 +631,8 @@ func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cn
 			"event":           "plane.parent_issue.skipped",
 			"parent_plane_id": parentPlaneID,
 			"cnb_repo_id":     cnbRepoID,
-			"reason":          "workspace_slug_unavailable",
+			"plane_project_id": planeProjectID,
+			"reason":          "workspace_slug_unavailable_after_all_fallbacks",
 		})
 		return "unknown", nil
 	}

@@ -1081,6 +1081,37 @@ FROM plane_issue_snapshots WHERE plane_issue_id=$1::uuid LIMIT 1`
 	}, nil
 }
 
+// GetWorkspaceSlugByProjectID retrieves workspace_slug from plane_project_snapshots by plane_project_id.
+func (d *DB) GetWorkspaceSlugByProjectID(ctx context.Context, planeProjectID string) (string, error) {
+	if d == nil || d.SQL == nil {
+		return "", sql.ErrConnDone
+	}
+	const q = `SELECT workspace_slug FROM plane_project_snapshots WHERE plane_project_id=$1::uuid LIMIT 1`
+	var wsSlug string
+	err := d.SQL.QueryRowContext(ctx, q, planeProjectID).Scan(&wsSlug)
+	if err != nil {
+		return "", err
+	}
+	return wsSlug, nil
+}
+
+// GetWorkspaceSlugByWorkspaceID retrieves workspace_slug from workspaces table by plane_workspace_id.
+func (d *DB) GetWorkspaceSlugByWorkspaceID(ctx context.Context, planeWorkspaceID string) (string, error) {
+	if d == nil || d.SQL == nil {
+		return "", sql.ErrConnDone
+	}
+	const q = `SELECT workspace_slug FROM workspaces WHERE plane_workspace_id=$1::uuid LIMIT 1`
+	var wsSlug sql.NullString
+	err := d.SQL.QueryRowContext(ctx, q, planeWorkspaceID).Scan(&wsSlug)
+	if err != nil {
+		return "", err
+	}
+	if !wsSlug.Valid || wsSlug.String == "" {
+		return "", sql.ErrNoRows
+	}
+	return wsSlug.String, nil
+}
+
 // helpers
 func nullIfEmpty(s string) any {
 	if s == "" {
