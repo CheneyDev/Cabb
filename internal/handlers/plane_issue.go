@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cabb/internal/cnb"
+	"cabb/internal/plane"
 )
 
 // acquireCreateLock locks on a (repo|planeIssueID) key to serialize CNB issue creation in-process
@@ -180,7 +181,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					continue
 				}
 				// 生成带有父工作项信息的标题
-				titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, m.CNBRepoID, cn)
+				titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, m.CNBRepoID, workspaceSlug, planeProjectID, cn)
 
 				LogStructured("info", map[string]any{
 					"event":             "plane.issue.title_generation",
@@ -270,7 +271,7 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 						cnbRepoID = links[0].Repo
 					}
 
-					titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, cnbRepoID, cn)
+					titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, cnbRepoID, workspaceSlug, planeProjectID, cn)
 					fields["title"] = titleWithParent
 
 					LogStructured("info", map[string]any{
@@ -516,7 +517,7 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
 func hHasDB(h *Handler) bool { return h != nil && h.db != nil && h.db.SQL != nil }
 
 // syncParentIssueIfNeeded 同步父工作项到 CNB 并返回 CNB Issue 编号
-func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cnbRepoID string, cn *cnb.Client) (string, error) {
+func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cnbRepoID, workspaceSlug, planeProjectID string, cn *cnb.Client) (string, error) {
 	if parentPlaneID == "" {
 		return "", nil
 	}
@@ -539,29 +540,91 @@ func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cn
 		"cnb_repo_id":     cnbRepoID,
 	})
 
-	// TODO: 这里需要调用 Plane API 获取父工作项的详细信息，然后使用 cn 客户端同步到 CNB
-	// 目前返回 "unknown" 作为兜底方案
-	LogStructured("warn", map[string]any{
-		"event":           "plane.parent_issue.sync_not_implemented",
-		"parent_plane_id": parentPlaneID,
-		"cnb_repo_id":     cnbRepoID,
-		"message":         "Parent issue sync not yet implemented, using unknown as fallback",
+	// 创建 Plane 客户端
+	planeClient := &plane.Client{
+		BaseURL: h.cfg.PlaneBaseURL,
+	}
+
+	// 尝试获取父工作项的详细信息
+	var parentDetail *plane.IssueDetail
+	var err error
+
+	// 首先尝试在当前项目中查找
+	parentDetail, err = planeClient.GetIssueDetail(ctx, h.cfg.PlaneServiceToken, workspaceSlug, planeProjectID, parentPlaneID)
+	if err != nil {
+		// 如果在当前项目中找不到，尝试在整个工作区中搜索
+		LogStructured("info", map[string]any{
+			"event":           "plane.parent_issue.search_workspace",
+			"parent_plane_id": parentPlaneID,
+			"workspace_slug":  workspaceSlug,
+			"current_project": planeProjectID,
+			"search_reason":   "not_found_in_current_project",
+		})
+
+		parentDetail, err = planeClient.FindIssueInWorkspace(ctx, h.cfg.PlaneServiceToken, workspaceSlug, parentPlaneID)
+		if err != nil {
+			LogStructured("error", map[string]any{
+				"event":           "plane.parent_issue.fetch_failed",
+				"parent_plane_id": parentPlaneID,
+				"workspace_slug":  workspaceSlug,
+				"error":           err.Error(),
+			})
+			return "unknown", fmt.Errorf("failed to fetch parent issue %s: %w", parentPlaneID, err)
+		}
+	}
+
+	LogStructured("info", map[string]any{
+		"event":              "plane.parent_issue.fetched",
+		"parent_plane_id":    parentDetail.ID,
+		"parent_name":        parentDetail.Name,
+		"parent_project":     parentDetail.Project,
+		"parent_sequence_id": parentDetail.SequenceID,
 	})
 
-	// 避免未使用参数的警告
-	_ = cn
+	// 创建 CNB Issue
+	cnbIssueID, err := cn.CreateIssue(ctx, cnbRepoID, parentDetail.Name, parentDetail.DescriptionStripped)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event":           "plane.parent_issue.cnb_create_failed",
+			"parent_plane_id": parentPlaneID,
+			"cnb_repo_id":     cnbRepoID,
+			"error":           err.Error(),
+		})
+		return "unknown", fmt.Errorf("failed to create CNB issue for parent %s: %w", parentPlaneID, err)
+	}
 
-	return "unknown", nil
+	// 保存映射关系到数据库
+	_, err = h.db.CreateIssueLink(ctx, parentPlaneID, cnbRepoID, cnbIssueID)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event":           "plane.parent_issue.db_store_failed",
+			"parent_plane_id": parentPlaneID,
+			"cnb_repo_id":     cnbRepoID,
+			"cnb_issue_id":    cnbIssueID,
+			"error":           err.Error(),
+		})
+		// 即使数据库存储失败，我们也返回 CNB Issue ID，因为 CNB 中已经创建了
+	} else {
+		LogStructured("info", map[string]any{
+			"event":           "plane.parent_issue.synced",
+			"parent_plane_id": parentPlaneID,
+			"cnb_repo_id":     cnbRepoID,
+			"cnb_issue_id":    cnbIssueID,
+			"parent_name":     parentDetail.Name,
+		})
+	}
+
+	return cnbIssueID, nil
 }
 
 // generateTitleWithParent 生成带有父工作项信息的标题
-func (h *Handler) generateTitleWithParent(ctx context.Context, originalTitle, parentPlaneID, cnbRepoID string, cn *cnb.Client) string {
+func (h *Handler) generateTitleWithParent(ctx context.Context, originalTitle, parentPlaneID, cnbRepoID, workspaceSlug, planeProjectID string, cn *cnb.Client) string {
 	if parentPlaneID == "" {
 		return originalTitle
 	}
 
 	// 尝试获取父工作项的 CNB Issue 编号
-	cnbIssueID, err := h.syncParentIssueIfNeeded(ctx, parentPlaneID, cnbRepoID, cn)
+	cnbIssueID, err := h.syncParentIssueIfNeeded(ctx, parentPlaneID, cnbRepoID, workspaceSlug, planeProjectID, cn)
 	if err != nil {
 		LogStructured("error", map[string]any{
 			"event":           "plane.parent_issue.sync_error",

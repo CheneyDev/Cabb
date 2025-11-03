@@ -237,6 +237,94 @@ func (c *Client) GetIssueName(ctx context.Context, bearer, workspaceSlug, projec
 	return "", fmt.Errorf("empty name")
 }
 
+// IssueDetail represents the complete issue details from Plane API
+type IssueDetail struct {
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	DescriptionHTML     string   `json:"description_html"`
+	DescriptionStripped string   `json:"description_stripped"`
+	Priority            string   `json:"priority"`
+	SequenceID          int      `json:"sequence_id"`
+	Project             string   `json:"project"`
+	Workspace           string   `json:"workspace"`
+	Parent              *string  `json:"parent"`
+	State               string   `json:"state"`
+	Assignees           []string `json:"assignees"`
+	Labels              []string `json:"labels"`
+	CreatedAt           string   `json:"created_at"`
+	UpdatedAt           string   `json:"updated_at"`
+}
+
+// GetIssueDetail fetches complete issue details from Plane API.
+// GET /api/v1/workspaces/{workspace-slug}/projects/{project_id}/issues/{issue_id}/
+func (c *Client) GetIssueDetail(ctx context.Context, bearer, workspaceSlug, projectID, issueID string) (*IssueDetail, error) {
+	path := fmt.Sprintf("/api/v1/workspaces/%s/projects/%s/issues/%s/", url.PathEscape(workspaceSlug), url.PathEscape(projectID), url.PathEscape(issueID))
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-API-Key", bearer)
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane get issue detail status=%d, body=%s", resp.StatusCode, string(body))
+	}
+
+	var detail IssueDetail
+	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+		return nil, err
+	}
+
+	if detail.ID == "" {
+		return nil, fmt.Errorf("empty issue id")
+	}
+
+	return &detail, nil
+}
+
+// FindIssueInWorkspace searches for an issue by ID across all projects in a workspace.
+// This is useful when we have an issue ID but don't know which project it belongs to.
+func (c *Client) FindIssueInWorkspace(ctx context.Context, bearer, workspaceSlug, issueID string) (*IssueDetail, error) {
+	// First, get all projects in the workspace
+	projects, err := c.ListProjects(ctx, bearer, workspaceSlug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects: %w", err)
+	}
+
+	// Search for the issue in each project
+	for _, project := range projects {
+		projectID, ok := project["id"].(string)
+		if !ok || projectID == "" {
+			continue
+		}
+
+		detail, err := c.GetIssueDetail(ctx, bearer, workspaceSlug, projectID, issueID)
+		if err != nil {
+			// If issue not found in this project, continue to next one
+			if strings.Contains(err.Error(), "status=404") {
+				continue
+			}
+			// For other errors, log but continue searching
+			continue
+		}
+
+		// Found the issue
+		return detail, nil
+	}
+
+	return nil, fmt.Errorf("issue %s not found in any project of workspace %s", issueID, workspaceSlug)
+}
+
 // GetIssueLabels fetches current label IDs of an issue
 // GET /api/v1/workspaces/{workspace-slug}/projects/{project_id}/issues/{issue_id}/
 func (c *Client) GetIssueLabels(ctx context.Context, bearer, workspaceSlug, projectID, issueID string) ([]string, error) {
