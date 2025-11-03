@@ -86,9 +86,29 @@ jobs:
             kill $SERVER_PID 2>/dev/null || true
           fi
           # verify some core tables exist
-          psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.workspaces')" | grep -q workspaces
-          psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.repo_project_mappings')" | grep -q repo_project_mappings
-          psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.thread_links')" | grep -q thread_links
+          set +e  # temporarily disable exit on error
+          echo "Checking workspaces table..."
+          workspaces_exists=$(psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.workspaces')" | grep -c workspaces || echo "0")
+          echo "Checking repo_project_mappings table..."
+          repo_mappings_exists=$(psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.repo_project_mappings')" | grep -c repo_project_mappings || echo "0")
+          echo "Checking thread_links table..."
+          thread_links_exists=$(psql "$DATABASE_URL" -Atc "SELECT to_regclass('public.thread_links')" | grep -c thread_links || echo "0")
+          set -e  # re-enable exit on error
+          
+          if [ "$workspaces_exists" = "0" ]; then
+            echo "❌ workspaces table not found"
+            exit 1
+          fi
+          if [ "$repo_mappings_exists" = "0" ]; then
+            echo "❌ repo_project_mappings table not found"
+            exit 1
+          fi
+          if [ "$thread_links_exists" = "0" ]; then
+            echo "❌ thread_links table not found"
+            exit 1
+          fi
+          
+          echo "✅ All tables verified successfully"
           # Clean up any remaining server process
           if [ -f server.pid ]; then
             kill $(cat server.pid 2>/dev/null) 2>/dev/null || true
