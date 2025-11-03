@@ -38,14 +38,6 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	name, _ := dataGetString(data, "name")
 	descHTML, _ := dataGetString(data, "description_html")
 
-	// 打印完整的 Plane webhook 数据用于分析父工作项结构
-	LogStructured("info", map[string]any{
-		"event":             "plane.webhook.raw_data",
-		"delivery_id":       deliveryID,
-		"action":            action,
-		"full_webhook_data": data,
-	})
-
 	// Extract workspace_slug and project_slug for snapshot (may be in workspace/project nested objects)
 	workspaceSlug, _ := dataGetString(data, "workspace_slug")
 	projectSlug, _ := dataGetString(data, "project_slug")
@@ -93,13 +85,10 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 
 	// 提取父工作项相关数据
 	parentIssueID, _ := dataGetString(data, "parent")
-	parentIssue, _ := dataGetString(data, "parent_issue")
 	parentName, _ := dataGetString(data, "parent_name")
 
 	// 尝试从嵌套对象中提取父工作项信息
-	var parentDetail map[string]any
 	if p, ok := data["parent_detail"].(map[string]any); ok {
-		parentDetail = p
 		parentIssueID, _ = dataGetString(p, "id")
 		parentName, _ = dataGetString(p, "name")
 	}
@@ -111,24 +100,6 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 			parentName, _ = dataGetString(p, "name")
 		}
 	}
-
-	// 分析父工作项的完整数据结构
-	analyzeParentStructure(data, deliveryID, action, planeIssueID)
-
-	// 打印父工作项相关的详细信息
-	LogStructured("info", map[string]any{
-		"event":                "plane.issue.parent_analysis",
-		"delivery_id":          deliveryID,
-		"action":               action,
-		"plane_issue_id":       planeIssueID,
-		"parent_issue_id":      parentIssueID,
-		"parent_issue":         parentIssue,
-		"parent_name":          parentName,
-		"parent_detail":        parentDetail,
-		"has_parent":           parentIssueID != "",
-		"parent_field_exists":  data["parent"] != nil,
-		"parent_detail_exists": data["parent_detail"] != nil,
-	})
 
 	mappings, err := h.db.ListRepoProjectMappingsByPlaneProject(ctx, planeProjectID)
 
@@ -208,7 +179,20 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					LogStructured("info", map[string]any{"event": "plane.issue.cnbrpc", "op": "create_issue", "delivery_id": deliveryID, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "decision": "skip", "skip_reason": "already_linked"})
 					continue
 				}
-				iid, err := cn.CreateIssue(ctx, m.CNBRepoID, name, descHTML)
+				// 生成带有父工作项信息的标题
+				titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, m.CNBRepoID, cn)
+
+				LogStructured("info", map[string]any{
+					"event":             "plane.issue.title_generation",
+					"delivery_id":       deliveryID,
+					"plane_issue_id":    planeIssueID,
+					"repo":              m.CNBRepoID,
+					"original_title":    name,
+					"parent_plane_id":   parentIssueID,
+					"title_with_parent": titleWithParent,
+				})
+
+				iid, err := cn.CreateIssue(ctx, m.CNBRepoID, titleWithParent, descHTML)
 				if err != nil || iid == "" {
 					LogStructured("error", map[string]any{"event": "plane.issue.cnbrpc", "delivery_id": deliveryID, "action": action, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "op": "create_issue", "error": map[string]any{"code": "cnb_create_failed", "message": truncate(fmt.Sprintf("%v", err), 200)}})
 					unlock()
@@ -274,9 +258,30 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 			}
 		case "update", "updated":
 			if links, _ := h.db.ListCNBIssuesByPlaneIssue(ctx, planeIssueID); len(links) > 0 {
+				// 初始化 CNB 客户端
+				cn := &cnb.Client{BaseURL: h.cfg.CNBBaseURL, Token: h.cfg.CNBAppToken, IssueCreatePath: h.cfg.CNBIssueCreatePath, IssueUpdatePath: h.cfg.CNBIssueUpdatePath, IssueCommentPath: h.cfg.CNBIssueCommentPath}
+
 				fields := map[string]any{}
 				if name != "" {
-					fields["title"] = name
+					// 对于更新，我们需要获取对应的 CNB 仓库信息来生成标题
+					// 由于可能有多个映射，我们暂时使用第一个映射的仓库
+					var cnbRepoID string
+					if len(links) > 0 {
+						cnbRepoID = links[0].Repo
+					}
+
+					titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, cnbRepoID, cn)
+					fields["title"] = titleWithParent
+
+					LogStructured("info", map[string]any{
+						"event":             "plane.issue.title_update",
+						"delivery_id":       deliveryID,
+						"plane_issue_id":    planeIssueID,
+						"cnb_repo_id":       cnbRepoID,
+						"original_title":    name,
+						"parent_plane_id":   parentIssueID,
+						"title_with_parent": titleWithParent,
+					})
 				}
 				if descHTML != "" {
 					fields["body"] = descHTML
@@ -569,6 +574,70 @@ func getNestedStringValue(m map[string]any, key string) string {
 		}
 	}
 	return ""
+}
+
+// syncParentIssueIfNeeded 同步父工作项到 CNB 并返回 CNB Issue 编号
+func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cnbRepoID string, cn *cnb.Client) (string, error) {
+	if parentPlaneID == "" {
+		return "", nil
+	}
+
+	// 首先检查父工作项是否已经同步到 CNB
+	if repoID, cnbIssueID, err := h.db.FindCNBIssueByPlaneIssue(ctx, parentPlaneID); err == nil && cnbIssueID != "" {
+		LogStructured("info", map[string]any{
+			"event":           "plane.parent_issue.already_synced",
+			"parent_plane_id": parentPlaneID,
+			"cnb_repo_id":     repoID,
+			"cnb_issue_id":    cnbIssueID,
+		})
+		return cnbIssueID, nil
+	}
+
+	// 父工作项未同步，需要获取父工作项信息并同步
+	LogStructured("info", map[string]any{
+		"event":           "plane.parent_issue.sync_needed",
+		"parent_plane_id": parentPlaneID,
+		"cnb_repo_id":     cnbRepoID,
+	})
+
+	// TODO: 这里需要调用 Plane API 获取父工作项的详细信息，然后使用 cn 客户端同步到 CNB
+	// 目前返回 "unknown" 作为兜底方案
+	LogStructured("warn", map[string]any{
+		"event":           "plane.parent_issue.sync_not_implemented",
+		"parent_plane_id": parentPlaneID,
+		"cnb_repo_id":     cnbRepoID,
+		"message":         "Parent issue sync not yet implemented, using unknown as fallback",
+	})
+
+	// 避免未使用参数的警告
+	_ = cn
+
+	return "unknown", nil
+}
+
+// generateTitleWithParent 生成带有父工作项信息的标题
+func (h *Handler) generateTitleWithParent(ctx context.Context, originalTitle, parentPlaneID, cnbRepoID string, cn *cnb.Client) string {
+	if parentPlaneID == "" {
+		return originalTitle
+	}
+
+	// 尝试获取父工作项的 CNB Issue 编号
+	cnbIssueID, err := h.syncParentIssueIfNeeded(ctx, parentPlaneID, cnbRepoID, cn)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event":           "plane.parent_issue.sync_error",
+			"parent_plane_id": parentPlaneID,
+			"cnb_repo_id":     cnbRepoID,
+			"error":           err.Error(),
+		})
+		return originalTitle
+	}
+
+	if cnbIssueID == "" || cnbIssueID == "unknown" {
+		return fmt.Sprintf("[Parent: unknown] %s", originalTitle)
+	}
+
+	return fmt.Sprintf("[Parent: #%s] %s", cnbIssueID, originalTitle)
 }
 
 func dataGetString(m map[string]any, key string) (string, bool) {
