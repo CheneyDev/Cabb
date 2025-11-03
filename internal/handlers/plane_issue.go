@@ -228,7 +228,12 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					continue
 				}
 				// 生成带有父工作项信息的标题
-				titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, m.CNBRepoID, workspaceSlug, planeProjectID, cn)
+				// 优先使用 mapping 中的 workspace_slug，因为 webhook 中可能缺失
+				effectiveWorkspaceSlug := workspaceSlug
+				if effectiveWorkspaceSlug == "" && m.WorkspaceSlug.Valid {
+					effectiveWorkspaceSlug = m.WorkspaceSlug.String
+				}
+				titleWithParent := h.generateTitleWithParent(ctx, name, parentIssueID, m.CNBRepoID, effectiveWorkspaceSlug, planeProjectID, cn)
 
 				LogStructured("info", map[string]any{
 					"event":             "plane.issue.title_generation",
@@ -581,12 +586,27 @@ func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cn
 	}
 
 	// 检查是否有有效的 workspace_slug
+	// 如果为空，尝试从数据库快照中获取
+	if workspaceSlug == "" {
+		if snapshot, err := h.db.GetPlaneIssueSnapshot(ctx, parentPlaneID); err == nil {
+			if wsSlug, ok := snapshot["workspace_slug"].(string); ok && wsSlug != "" {
+				workspaceSlug = wsSlug
+				LogStructured("info", map[string]any{
+					"event":           "plane.parent_issue.workspace_from_snapshot",
+					"parent_plane_id": parentPlaneID,
+					"workspace_slug":  workspaceSlug,
+				})
+			}
+		}
+	}
+
+	// 如果还是无法获取 workspace_slug，跳过同步
 	if workspaceSlug == "" {
 		LogStructured("warn", map[string]any{
 			"event":           "plane.parent_issue.skipped",
 			"parent_plane_id": parentPlaneID,
 			"cnb_repo_id":     cnbRepoID,
-			"reason":          "workspace_slug_empty",
+			"reason":          "workspace_slug_unavailable",
 		})
 		return "unknown", nil
 	}
