@@ -337,7 +337,7 @@ func (c *Client) GetIssueLabels(ctx context.Context, bearer, workspaceSlug, proj
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("X-API-Key", bearer)
 	hc := c.httpClient()
 	hc.Timeout = 10 * time.Second
 	resp, err := hc.Do(req)
@@ -362,6 +362,81 @@ func (c *Client) GetIssueLabels(ctx context.Context, bearer, workspaceSlug, proj
 		}
 	}
 	return labelIDs, nil
+}
+
+// Label represents a Plane label
+type Label struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// ListProjectLabels fetches all labels in a project
+// GET /api/v1/workspaces/{workspace-slug}/projects/{project_id}/labels/
+func (c *Client) ListProjectLabels(ctx context.Context, bearer, workspaceSlug, projectID string) ([]Label, error) {
+	path := fmt.Sprintf("/api/v1/workspaces/%s/projects/%s/labels/", url.PathEscape(workspaceSlug), url.PathEscape(projectID))
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-API-Key", bearer)
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane list labels status=%d, body=%s", resp.StatusCode, string(body))
+	}
+	var labels []Label
+	if err := json.NewDecoder(resp.Body).Decode(&labels); err != nil {
+		return nil, err
+	}
+	return labels, nil
+}
+
+// CreateLabel creates a new label in a project
+// POST /api/v1/workspaces/{workspace-slug}/projects/{project_id}/labels/
+func (c *Client) CreateLabel(ctx context.Context, bearer, workspaceSlug, projectID, name, color string) (*Label, error) {
+	path := fmt.Sprintf("/api/v1/workspaces/%s/projects/%s/labels/", url.PathEscape(workspaceSlug), url.PathEscape(projectID))
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	payload := map[string]any{
+		"name":  name,
+		"color": color,
+	}
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-API-Key", bearer)
+	req.Header.Set("Content-Type", "application/json")
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane create label status=%d, body=%s", resp.StatusCode, string(body))
+	}
+	var label Label
+	if err := json.NewDecoder(resp.Body).Decode(&label); err != nil {
+		return nil, err
+	}
+	return &label, nil
 }
 
 // GetWorkspace fetches metadata of a workspace by slug.
