@@ -133,17 +133,7 @@ func (h *Handler) processLabelSyncSimple(p issueLabelNotifySimplePayload, delive
 		return
 	}
 
-	// 4. 映射标签
-	planeLabelIDs, err := h.db.MapCNBLabelsToPlane(ctx, mapping.PlaneProjectID, p.RepoSlug, cnbLabels)
-	if err != nil || len(planeLabelIDs) == 0 {
-		LogStructured("warn", map[string]any{
-			"event":  "label.sync.simple",
-			"reason": "label_mapping_failed",
-		})
-		return
-	}
-
-	// 5. 获取 Plane Service Token
+	// 4. 获取 Plane Service Token
 	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	if token == "" {
 		LogStructured("error", map[string]any{
@@ -153,12 +143,35 @@ func (h *Handler) processLabelSyncSimple(p issueLabelNotifySimplePayload, delive
 		return
 	}
 
-	// 5.1 获取 workspace_slug
+	// 4.1 获取 workspace_slug
 	workspaceSlug := strings.TrimSpace(mapping.WorkspaceSlug.String)
 	if !mapping.WorkspaceSlug.Valid || workspaceSlug == "" {
 		LogStructured("error", map[string]any{
 			"event": "label.sync.simple",
 			"error": "workspace_slug_not_configured",
+		})
+		return
+	}
+
+	// 5. 映射标签（自动创建）
+	planeLabelIDs := []string{}
+	for _, cnbLabel := range cnbLabels {
+		ids, _ := h.db.MapCNBLabelsToPlane(ctx, mapping.PlaneProjectID, p.RepoSlug, []string{cnbLabel})
+		if len(ids) > 0 {
+			planeLabelIDs = append(planeLabelIDs, ids[0])
+			continue
+		}
+		labelID, err := h.findOrCreatePlaneLabel(ctx, token, workspaceSlug, mapping.PlaneProjectID, p.RepoSlug, cnbLabel)
+		if err != nil {
+			continue
+		}
+		planeLabelIDs = append(planeLabelIDs, labelID)
+	}
+
+	if len(planeLabelIDs) == 0 {
+		LogStructured("warn", map[string]any{
+			"event":  "label.sync.simple",
+			"reason": "no_valid_label_mappings",
 		})
 		return
 	}

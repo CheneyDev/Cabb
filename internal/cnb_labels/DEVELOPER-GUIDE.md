@@ -271,12 +271,54 @@ VALUES
 - ✅ 可审计标签映射历史
 
 **限制：**
-- ⚠️ 需要预先配置映射关系（可通过管理后台或 SQL 配置）
-- ⚠️ 新增 CNB 标签需要手动维护映射（未来可考虑自动创建）
+- ⚠️ 首次使用时会自动创建标签（默认颜色 #808080）
+- ⚠️ 标签名称完全匹配或去 `_CNB` 后缀匹配
 
 ---
 
-### 2. 并发处理
+### 2. 标签自动创建（2025-01-04 新增）
+
+**设计改进：** 不再需要预先手动配置 `label_mappings`，系统会自动查找或创建标签。
+
+**工作流程：**
+```
+1. 收到 CNB 标签 "🚧 处理中_CNB"
+   ↓
+2. 查询 label_mappings 表
+   ↓
+3. 未找到 → 调用 Plane API 获取项目所有标签
+   ↓
+4. 按名称匹配（支持 "🚧 处理中_CNB" 或 "🚧 处理中"）
+   ↓
+5. 仍未找到 → 自动创建标签（默认颜色 #808080）
+   ↓
+6. 记录映射到 label_mappings
+   ↓
+7. 使用该标签 UUID 更新 Issue
+```
+
+**实现位置：**
+- `internal/plane/client.go`: `ListProjectLabels()`, `CreateLabel()`
+- `internal/handlers/issue_label_notify.go`: `findOrCreatePlaneLabel()`
+
+**日志示例：**
+```json
+// 匹配到已有标签
+{"event": "label.matched", "cnb_label": "🚧 处理中_CNB", "plane_name": "🚧 处理中", "label_id": "uuid"}
+
+// 自动创建新标签
+{"event": "label.created", "cnb_label": "新功能_CNB", "label_id": "uuid", "color": "#808080"}
+```
+
+**优点：**
+- ✅ 零配置，开箱即用
+- ✅ 自动适配 Plane 已有标签
+- ✅ 自动记录映射关系
+- ✅ 支持名称模糊匹配（带/不带 `_CNB` 后缀）
+
+---
+
+### 3. 并发处理
 
 **当前实现：**
 - 每个请求启动一个 goroutine 异步处理
