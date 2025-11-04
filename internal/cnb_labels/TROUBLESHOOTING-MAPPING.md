@@ -32,7 +32,7 @@ API: POST /api/v1/issues/label-sync
 
 ```bash
 # 需要 PLANE_SERVICE_TOKEN
-curl -H "x-api-key: $PLANE_SERVICE_TOKEN" \
+curl -H "X-API-Key: $PLANE_SERVICE_TOKEN" \
   "https://work.1024hub.org:4430/api/workspaces/my-test/projects/"
 ```
 
@@ -78,7 +78,7 @@ EOF
 
 ```bash
 # 查询 Plane 项目中的标签
-curl -H "x-api-key: $PLANE_SERVICE_TOKEN" \
+curl -H "X-API-Key: $PLANE_SERVICE_TOKEN" \
   "https://work.1024hub.org:4430/api/workspaces/my-test/projects/<project_id>/labels/" \
   | jq '.[] | {name, id}'
 ```

@@ -41,7 +41,7 @@ echo ""
 # 1. 获取所有 Workspaces
 echo "=== 1. 获取 Workspaces ==="
 WORKSPACE_RESPONSE=$(curl -s -X GET "$PLANE_BASE_URL/workspaces/" \
-    -H "x-api-key: $PLANE_SERVICE_TOKEN" 2>&1)
+    -H "X-API-Key: $PLANE_SERVICE_TOKEN" 2>&1)
 
 if echo "$WORKSPACE_RESPONSE" | grep -q "error\|Error\|<!DOCTYPE"; then
     echo "❌ 请求失败，响应："
@@ -60,7 +60,7 @@ WORKSPACE_SLUG="${1:-my-test}"
 echo "=== 2. 获取 Workspace '$WORKSPACE_SLUG' 的项目 ==="
 
 PROJECT_RESPONSE=$(curl -s -X GET "$PLANE_BASE_URL/workspaces/$WORKSPACE_SLUG/projects/" \
-    -H "x-api-key: $PLANE_SERVICE_TOKEN" 2>&1)
+    -H "X-API-Key: $PLANE_SERVICE_TOKEN" 2>&1)
 
 if echo "$PROJECT_RESPONSE" | grep -q "error\|Error\|<!DOCTYPE"; then
     echo "❌ 请求失败，可能的原因："
@@ -145,11 +145,11 @@ echo "=== 4. 获取标签 UUID ==="
 if [ -n "$PROJECT_ID" ] && [ "$PROJECT_ID" != "null" ]; then
     echo "查询项目标签..."
     LABEL_RESPONSE=$(curl -s -X GET "$PLANE_BASE_URL/workspaces/$WORKSPACE_SLUG/projects/$PROJECT_ID/labels/" \
-        -H "x-api-key: $PLANE_SERVICE_TOKEN" 2>&1)
+        -H "X-API-Key: $PLANE_SERVICE_TOKEN" 2>&1)
     
     echo "$LABEL_RESPONSE" | jq -r '.[] | "  • \(.name) (ID: \(.id))"' 2>/dev/null || {
         echo "需要手动查询标签，执行："
-        echo "  curl -H 'x-api-key: \$PLANE_SERVICE_TOKEN' \\"
+        echo "  curl -H 'X-API-Key: \$PLANE_SERVICE_TOKEN' \\"
         echo "    '$PLANE_BASE_URL/workspaces/$WORKSPACE_SLUG/projects/<project_id>/labels/'"
     }
 else
