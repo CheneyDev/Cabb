@@ -222,21 +222,7 @@ func (h *Handler) processIssueLabelNotify(p issueLabelNotifyPayload, deliveryID,
 		return
 	}
 
-	// 4. 映射 CNB 标签到 Plane 标签 ID
-	planeLabelIDs, err := h.db.MapCNBLabelsToPlane(ctx, mapping.PlaneProjectID, p.RepoSlug, cnbLabels)
-	if err != nil || len(planeLabelIDs) == 0 {
-		LogStructured("warn", map[string]any{
-			"event":       "issue.label.notify.process",
-			"delivery_id": deliveryID,
-			"cnb_labels":  cnbLabels,
-			"decision":    "skip",
-			"reason":      "label_mapping_failed",
-		})
-		return
-	}
-
-	// 5. 获取 bot token
-	// 5. 获取 Plane Service Token
+	// 4. 获取 Plane Service Token（需要在映射前获取）
 	token := strings.TrimSpace(h.cfg.PlaneServiceToken)
 	if token == "" {
 		LogStructured("error", map[string]any{
@@ -247,13 +233,48 @@ func (h *Handler) processIssueLabelNotify(p issueLabelNotifyPayload, deliveryID,
 		return
 	}
 
-	// 5.1 获取 workspace_slug
+	// 4.1 获取 workspace_slug
 	workspaceSlug := strings.TrimSpace(mapping.WorkspaceSlug.String)
 	if !mapping.WorkspaceSlug.Valid || workspaceSlug == "" {
 		LogStructured("error", map[string]any{
 			"event":       "issue.label.notify.process",
 			"delivery_id": deliveryID,
 			"error":       "workspace_slug_not_configured",
+		})
+		return
+	}
+
+	// 5. 映射 CNB 标签到 Plane 标签 ID（优先查询映射表，未找到则自动创建）
+	planeLabelIDs := []string{}
+	for _, cnbLabel := range cnbLabels {
+		// 5.1 先从映射表查询
+		ids, _ := h.db.MapCNBLabelsToPlane(ctx, mapping.PlaneProjectID, p.RepoSlug, []string{cnbLabel})
+		if len(ids) > 0 {
+			planeLabelIDs = append(planeLabelIDs, ids[0])
+			continue
+		}
+
+		// 5.2 映射表没有，尝试自动查找或创建
+		labelID, err := h.findOrCreatePlaneLabel(ctx, token, workspaceSlug, mapping.PlaneProjectID, p.RepoSlug, cnbLabel)
+		if err != nil {
+			LogStructured("warn", map[string]any{
+				"event":      "label.auto_create",
+				"cnb_label":  cnbLabel,
+				"project_id": mapping.PlaneProjectID,
+				"error":      err.Error(),
+			})
+			continue
+		}
+		planeLabelIDs = append(planeLabelIDs, labelID)
+	}
+
+	if len(planeLabelIDs) == 0 {
+		LogStructured("warn", map[string]any{
+			"event":       "issue.label.notify.process",
+			"delivery_id": deliveryID,
+			"cnb_labels":  cnbLabels,
+			"decision":    "skip",
+			"reason":      "no_valid_label_mappings",
 		})
 		return
 	}
@@ -340,6 +361,55 @@ func filterCNBLabels(labels []string) []string {
 		}
 	}
 	return cnbLabels
+}
+
+// findOrCreatePlaneLabel 查找或自动创建 Plane 标签
+func (h *Handler) findOrCreatePlaneLabel(ctx context.Context, token, workspaceSlug, projectID, repoSlug, cnbLabel string) (string, error) {
+	planeClient := &planeapi.Client{BaseURL: h.cfg.PlaneBaseURL}
+
+	// 1. 从 Plane API 获取项目所有标签
+	labels, err := planeClient.ListProjectLabels(ctx, token, workspaceSlug, projectID)
+	if err != nil {
+		return "", fmt.Errorf("list labels failed: %w", err)
+	}
+
+	// 2. 按名称匹配（支持带 _CNB 后缀和不带后缀）
+	labelName := strings.TrimSuffix(cnbLabel, "_CNB")
+	for _, label := range labels {
+		if label.Name == cnbLabel || label.Name == labelName {
+			// 找到匹配的标签，记录映射
+			if hHasDB(h) {
+				_ = h.db.UpsertLabelMapping(ctx, projectID, repoSlug, cnbLabel, label.ID)
+			}
+			LogStructured("info", map[string]any{
+				"event":      "label.matched",
+				"cnb_label":  cnbLabel,
+				"plane_name": label.Name,
+				"label_id":   label.ID,
+			})
+			return label.ID, nil
+		}
+	}
+
+	// 3. 未找到，自动创建标签
+	newLabel, err := planeClient.CreateLabel(ctx, token, workspaceSlug, projectID, cnbLabel, "#808080")
+	if err != nil {
+		return "", fmt.Errorf("create label failed: %w", err)
+	}
+
+	// 4. 记录映射到数据库
+	if hHasDB(h) {
+		_ = h.db.UpsertLabelMapping(ctx, projectID, repoSlug, cnbLabel, newLabel.ID)
+	}
+
+	LogStructured("info", map[string]any{
+		"event":     "label.created",
+		"cnb_label": cnbLabel,
+		"label_id":  newLabel.ID,
+		"color":     newLabel.Color,
+	})
+
+	return newLabel.ID, nil
 }
 
 // sendLarkNotificationForLabelChange 发送飞书标签变更通知

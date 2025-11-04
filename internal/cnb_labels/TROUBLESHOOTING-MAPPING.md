@@ -8,91 +8,85 @@ API: POST /api/v1/issues/label-sync
 日志: {"error": "mapping_not_found"}     ← 实际失败
 ```
 
-**原因：** 数据库缺少 CNB 仓库到 Plane 项目的映射。
+**原因：** 数据库缺少 CNB 仓库到 Plane 项目的映射（`repo_project_mappings` 与 `label_mappings`）。
 
 ## 修复步骤（5 分钟）
 
-### 1. 获取 Plane Project UUID
+### 步骤 1：打开项目页面
 
-**方法 A：自动获取（推荐）**
+访问：https://work.1024hub.org:4430/test/projects
 
-```bash
-# 需要先配置 PLANE_SERVICE_TOKEN（见下方说明）
-./scripts/get_plane_uuids.sh
+### 步骤 2：打开开发者工具
+
+- **Chrome/Edge**: `F12` 或 `Ctrl+Shift+I`
+- **Firefox**: `F12`
+- **Safari**: `Cmd+Option+I`
+
+### 步骤 3：查看 Network 请求获取项目 UUID
+
+1. 切换到 **Network** 标签（网络）
+2. 刷新页面（`F5` 或 `Ctrl+R`）
+3. 在过滤器中输入：`projects`
+4. 找到 `/api/users/me/workspaces/` 或 `/api/workspaces/test/projects/` 请求
+5. 点击请求 → **Response** 标签，复制 JSON 中的 UUID：
+
+```json
+{
+  "results": [
+    {
+      "id": "44848399-cae8-4ce6-b325-5bd913e7e1cb",      ← PROJECT_UUID
+      "workspace": "4ada216e-373d-4029-ad4a-dbdadaf8f1fe", ← WORKSPACE_UUID
+      "name": "test",
+      "identifier": "TEST"
+    }
+  ]
+}
 ```
 
-**方法 B：从浏览器手动查找**
+### 步骤 4：获取标签 UUID
 
-1. 访问 Plane 项目页面：`https://work.1024hub.org:4430/my-test/projects/test-notify/...`
-2. 打开开发者工具（F12）→ Network 标签
-3. 刷新页面，找到 `/api/workspaces/my-test/projects/` 请求
-4. 查看响应 JSON 中的 `id` 字段（项目 UUID）
+1. 访问项目设置 → 标签（Labels）页面
+2. Network 标签中找到 `/labels/` 请求
+3. 查看响应 JSON，复制标签 `id` 字段
 
-**方法 C：使用 curl 手动查询**
-
-```bash
-# 需要 PLANE_SERVICE_TOKEN
-curl -H "X-API-Key: $PLANE_SERVICE_TOKEN" \
-  "https://work.1024hub.org:4430/api/workspaces/my-test/projects/"
-```
-
-### 2. 配置 PLANE_SERVICE_TOKEN（如未配置）
-
-1. 访问 Plane：https://work.1024hub.org:4430
-2. 进入 **个人设置 → API Tokens**
-3. 点击 **"Create Token"** 或 **"新建令牌"**
-4. 权限至少选择：`project:read`, `issue:write`, `label:read`
-5. 复制生成的 Token，添加到 `.env`：
-   ```bash
-   PLANE_SERVICE_TOKEN=plane_api_xxxxxxxxxxxxx
-   ```
-
-### 3. 执行 SQL 插入映射
-
-获取到 UUID 后，执行以下 SQL（替换占位符）：
+### 步骤 5：执行 SQL 插入映射
 
 ```bash
 psql "$DATABASE_URL" << 'EOF'
--- 替换 <PROJECT_UUID>、<WORKSPACE_UUID>、<WORKSPACE_SLUG>
+-- 1. 插入项目映射（替换 UUID 为步骤 3 获取的值）
 INSERT INTO repo_project_mappings (
-  plane_project_id, plane_workspace_id, cnb_repo_id, 
-  workspace_slug, active, sync_direction, created_at, updated_at
+  plane_project_id,
+  plane_workspace_id,
+  cnb_repo_id,
+  workspace_slug,
+  active,
+  sync_direction,
+  created_at,
+  updated_at
 ) VALUES (
-  '<PROJECT_UUID>',              -- 从步骤 1 获取
-  '<WORKSPACE_UUID>',            -- 从步骤 1 获取
+  '44848399-cae8-4ce6-b325-5bd913e7e1cb',  -- PROJECT_UUID
+  '4ada216e-373d-4029-ad4a-dbdadaf8f1fe',  -- WORKSPACE_UUID
   '1024hub/Demo/BE-test-issue',
   'my-test',
-  true, 'cnb_to_plane', now(), now()
-)
-ON CONFLICT (plane_project_id, cnb_repo_id) DO UPDATE 
-SET active = true, updated_at = now();
+  true,
+  'cnb_to_plane',
+  now(),
+  now()
+);
 
--- 验证
-SELECT cnb_repo_id, plane_project_id::text, workspace_slug 
-FROM repo_project_mappings 
-WHERE cnb_repo_id = '1024hub/Demo/BE-test-issue';
+-- 2. 插入标签映射（替换 UUID 为步骤 4 获取的值）
+INSERT INTO label_mappings (plane_project_id, cnb_repo_id, cnb_label, plane_label_id)
+VALUES 
+  ('44848399-cae8-4ce6-b325-5bd913e7e1cb', '1024hub/Demo/BE-test-issue', '🚧 处理中_CNB', '<LABEL_UUID_1>'),
+  ('44848399-cae8-4ce6-b325-5bd913e7e1cb', '1024hub/Demo/BE-test-issue', '🧑🏻‍💻 进行中：后端_CNB', '<LABEL_UUID_2>');
+
+-- 3. 验证映射
+SELECT cnb_repo_id, plane_project_id::text, workspace_slug FROM repo_project_mappings;
+SELECT cnb_label, plane_label_id::text FROM label_mappings WHERE cnb_repo_id = '1024hub/Demo/BE-test-issue';
 EOF
 ```
 
-### 4. 创建标签映射
-
-```bash
-# 查询 Plane 项目中的标签
-curl -H "X-API-Key: $PLANE_SERVICE_TOKEN" \
-  "https://work.1024hub.org:4430/api/workspaces/my-test/projects/<project_id>/labels/" \
-  | jq '.[] | {name, id}'
-```
-
-获取标签 UUID 后，插入映射：
-
-```sql
-INSERT INTO label_mappings (plane_project_id, cnb_repo_id, cnb_label, plane_label_id)
-VALUES 
-  ('<PROJECT_UUID>', '1024hub/Demo/BE-test-issue', '🚧 处理中_CNB', '<LABEL_UUID_1>'),
-  ('<PROJECT_UUID>', '1024hub/Demo/BE-test-issue', '🧑🏻‍💻 进行中：后端_CNB', '<LABEL_UUID_2>');
-```
-
-### 5. 验证修复
+### 步骤 6：验证标签同步
 
 ```bash
 curl -X POST "https://hub.1024hub.org:8081/api/v1/issues/label-sync" \
@@ -101,18 +95,21 @@ curl -X POST "https://hub.1024hub.org:8081/api/v1/issues/label-sync" \
   -d '{"repo_slug": "1024hub/Demo/BE-test-issue", "issue_number": 36, "labels": ["🚧 处理中_CNB"]}'
 ```
 
-日志应无 `"error"` 字段。
+**预期结果：** 日志无 `"error"` 字段，Plane Issue 标签已更新。
 
 ## 常见问题
 
-**Q: 如何获取 Plane UUID？**  
-使用 `./scripts/get_plane_uuids.sh` 自动获取，或从浏览器开发者工具查看 API 响应。
+**Q: 找不到 `/projects/` 请求？**  
+清空 Network 标签，刷新页面。搜索包含 `workspace` 或 `project` 的请求。
 
-**Q: PLANE_SERVICE_TOKEN 在哪里获取？**  
-Plane 个人设置 → API Tokens → 创建新 Token（需要 `project:read` 权限）。
+**Q: 响应是 HTML 而非 JSON？**  
+确认请求 URL 以 `/api/` 开头，查看 **Response** 标签（非 Preview）。
 
-**Q: 为什么 200 但失败？**  
-异步处理设计，API 立即返回 200，实际处理在后台，失败仅记录日志。
+**Q: UUID 格式是什么？**  
+36 字符：`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
-**Q: 没有 jq 工具怎么办？**  
-安装：`apt install jq` 或 `brew install jq`，或手动从 JSON 响应中提取 `id` 字段。
+**Q: 为什么 API 返回 200 但失败？**  
+异步处理设计，失败仅记录日志不影响 HTTP 响应。需检查服务端日志确认实际结果。
+
+**Q: 标签映射失败怎么办？**  
+检查 `plane_label_id` 是否正确，确认标签在 Plane 项目中存在。使用浏览器 Network 工具获取准确 UUID。
