@@ -111,8 +111,8 @@ func (c *Client) SendTextToChat(ctx context.Context, tenantToken, chatID, text s
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("lark send message status!=2xx")
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return fmt.Errorf("lark send message status=%d", resp.StatusCode)
 	}
 	return nil
 }
@@ -144,8 +144,8 @@ func (c *Client) ReplyTextInThread(ctx context.Context, tenantToken, rootMessage
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("lark reply message status!=2xx")
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return fmt.Errorf("lark reply message status=%d", resp.StatusCode)
 	}
 	return nil
 }
@@ -251,8 +251,8 @@ func (c *Client) SendPostToChat(ctx context.Context, tenantToken, chatID string,
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("lark send post status!=2xx")
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return fmt.Errorf("lark send post status=%d", resp.StatusCode)
 	}
 	return nil
 }
@@ -282,8 +282,8 @@ func (c *Client) ReplyPostInThread(ctx context.Context, tenantToken, rootMessage
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("lark reply post status!=2xx")
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return fmt.Errorf("lark reply post status=%d", resp.StatusCode)
 	}
 	return nil
 }
@@ -315,7 +315,7 @@ func (c *Client) SendCardToChat(ctx context.Context, tenantToken, chatID string,
     }
     defer resp.Body.Close()
     if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-        return errors.New("lark send card status!=2xx")
+        return fmt.Errorf("lark send card status=%d", resp.StatusCode)
     }
     return nil
 }
@@ -347,7 +347,7 @@ func (c *Client) ReplyCardInThread(ctx context.Context, tenantToken, rootMessage
     }
     defer resp.Body.Close()
     if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-        return errors.New("lark reply card status!=2xx")
+        return fmt.Errorf("lark reply card status=%d", resp.StatusCode)
     }
     return nil
 }

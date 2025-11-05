@@ -155,6 +155,14 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			}
 
 			issueID, slug, projectID := parsePlaneIssueLink(text)
+			LogStructured("info", map[string]any{
+				"event":       "bind.parse",
+				"chat_id":     ev.Message.ChatID,
+				"thread_id":   threadID,
+				"has_issue_id": issueID != "",
+				"has_slug":     slug != "",
+				"has_project":  projectID != "",
+			})
 
 
 			// Resolve short link KEY-N via Plane API when possible
@@ -162,6 +170,7 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 				// Try resolving via workspace browse short link: /{slug}/browse/{KEY-N}
 				if slug != "" {
 					if seq := extractBrowseSequence(text); seq != "" && hHasDB(h) {
+						LogStructured("info", map[string]any{"event": "bind.resolve_shortlink.start", "chat_id": ev.Message.ChatID, "thread_id": threadID, "slug": slug, "seq": seq})
 						rctx, cancel := context.WithTimeout(c.Request().Context(), 8*time.Second)
 						defer cancel()
 						token, _ := h.ensurePlaneBotToken(rctx, slug)
@@ -169,7 +178,10 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 							pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
 							if iid, pid, err := pc.GetIssueBySequence(rctx, token, slug, seq); err == nil {
 								issueID, projectID = iid, pid
+								LogStructured("info", map[string]any{"event": "bind.resolve_shortlink.ok", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID, "project_id": projectID})
 							}
+						} else {
+							LogStructured("warn", map[string]any{"event": "bind.resolve_shortlink.no_token", "chat_id": ev.Message.ChatID, "thread_id": threadID, "slug": slug})
 						}
 					}
 				}
@@ -177,13 +189,16 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			if issueID == "" {
 				if seq := extractBrowseSequence(text); seq != "" {
 					go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：无法解析短链接 "+seq+"。请先在本服务完成 Plane 应用安装（获取 bot token），或改用完整链接：/bind https://app.plane.so/{slug}/projects/{project}/issues/{issue}")
+					LogStructured("warn", map[string]any{"event": "bind.error.shortlink_unresolved", "chat_id": ev.Message.ChatID, "thread_id": threadID, "slug": slug, "seq": seq})
 				} else {
 					go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：未检测到 Plane 工作项链接或 UUID。示例：/bind https://app.plane.so/{slug}/projects/{project}/issues/{issue}")
+					LogStructured("warn", map[string]any{"event": "bind.error.missing_issue_id", "chat_id": ev.Message.ChatID, "thread_id": threadID})
 				}
 				return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "error": "missing_issue_id"})
 			}
 			if !hHasDB(h) {
 				go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：服务未连接数据库，请稍后重试或联系管理员。")
+				LogStructured("error", map[string]any{"event": "bind.error.db_unavailable", "chat_id": ev.Message.ChatID, "thread_id": threadID})
 				return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "plane_issue_id": issueID, "error": "db_unavailable"})
 			}
 			// Prevent duplicate binding within the same chat
@@ -196,18 +211,21 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 						slugEff := nsToString(cl.WorkspaceSlug)
 						projEff := nsToString(cl.PlaneProjectID)
 						go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugEff, projEff, issueID) }()
+						LogStructured("info", map[string]any{"event": "bind.duplicate.same_issue", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID})
 						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate", "plane_issue_id": issueID})
 					}
 					// Different issue already bound → show confirm rebind card
 					slugCurr := nsToString(cl.WorkspaceSlug)
 					projCurr := nsToString(cl.PlaneProjectID)
 					go func() { _ = h.postRebindConfirmCard(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID, slug, projectID, issueID) }()
+					LogStructured("info", map[string]any{"event": "bind.different.show_card", "chat_id": ev.Message.ChatID, "thread_id": threadID, "current_issue_id": cl.PlaneIssueID, "new_issue_id": issueID})
 					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "confirm_rebind_shown", "current_plane_issue_id": cl.PlaneIssueID, "new_plane_issue_id": issueID})
 				}
 			}
 
 			// Persist link
 			if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, issueID, projectID, slug, false); err != nil {
+				LogStructured("error", map[string]any{"event": "bind.persist.thread_link.error", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID, "error": err.Error()})
 				go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：内部错误，请稍后重试。")
 				return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "plane_issue_id": issueID, "error": "upsert_failed"})
 			}
@@ -215,6 +233,7 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			_ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID, threadID, issueID, projectID, slug)
 			// Success ack with details; prefer rich post with anchor title when possible
 			go h.postBindAck(ev.Message.ChatID, threadID, slug, projectID, issueID)
+			LogStructured("info", map[string]any{"event": "bind.persist.ok", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID, "project_id": projectID, "slug": slug})
 			return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "plane_issue_id": issueID})
 		}
 		// Comment/sync commands and auto-sync in a bound thread
@@ -406,31 +425,38 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
     op, _ := val["op"].(string)
     chatID, _ := val["chat_id"].(string)
     threadID, _ := val["thread_id"].(string)
+    LogStructured("info", map[string]any{"event": "lark.card.action", "op": op, "chat_id": chatID, "thread_id": threadID})
     switch op {
     case "rebind_confirm":
         newIssue, _ := val["new_issue_id"].(string)
         newProj, _ := val["new_project_id"].(string)
         newSlug, _ := val["new_slug"].(string)
         if newIssue == "" || threadID == "" || chatID == "" {
+            LogStructured("error", map[string]any{"event": "lark.card.action.error", "op": op, "reason": "missing_fields"})
             return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "missing_fields"})
         }
         if !hHasDB(h) {
+            LogStructured("error", map[string]any{"event": "lark.card.action.error", "op": op, "reason": "db_unavailable"})
             return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "db_unavailable"})
         }
         // Persist new binding (idempotent)
         if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, newIssue, newProj, newSlug, false); err != nil {
+            LogStructured("error", map[string]any{"event": "lark.card.action.persist.error", "op": op, "error": err.Error()})
             return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "upsert_failed"})
         }
         _ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), chatID, threadID, newIssue, newProj, newSlug)
         // Ack success
         go h.postBindAck(chatID, threadID, newSlug, newProj, newIssue)
+        LogStructured("info", map[string]any{"event": "lark.card.action.persist.ok", "op": op, "chat_id": chatID, "thread_id": threadID, "new_issue_id": newIssue})
         return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_confirm"})
     case "rebind_cancel":
         if chatID != "" && threadID != "" {
             go h.sendLarkTextToThread(chatID, threadID, "已保留当前绑定")
         }
+        LogStructured("info", map[string]any{"event": "lark.card.action.ok", "op": op, "chat_id": chatID, "thread_id": threadID})
         return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_cancel"})
     default:
+        LogStructured("info", map[string]any{"event": "lark.card.action.ignored", "op": op})
         return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "noop"})
     }
 }
@@ -516,21 +542,31 @@ func (h *Handler) notifyLarkThreadBound(chatID, threadID, issueID string) {
 
 // sendLarkTextToThread sends a text to a specific thread; falls back to chat if reply fails.
 func (h *Handler) sendLarkTextToThread(chatID, threadID, text string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+    ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-	token, _, err := cli.TenantAccessToken(ctx)
+    LogStructured("info", map[string]any{"event": "lark.send.text.start", "chat_id": chatID, "thread_id": threadID})
+    token, _, err := cli.TenantAccessToken(ctx)
 	if err != nil {
+        LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
 		return err
 	}
 	// Prefer replying in thread
 	if threadID != "" {
-		if err := cli.ReplyTextInThread(ctx, token, threadID, text); err == nil {
+        if err := cli.ReplyTextInThread(ctx, token, threadID, text); err == nil {
+            LogStructured("info", map[string]any{"event": "lark.send.text.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
 			return nil
+        } else {
+            LogStructured("warn", map[string]any{"event": "lark.send.text.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
 		}
 	}
 	if chatID != "" {
-		return cli.SendTextToChat(ctx, token, chatID, text)
+        if err := cli.SendTextToChat(ctx, token, chatID, text); err != nil {
+            LogStructured("error", map[string]any{"event": "lark.send.text.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+            return err
+        }
+        LogStructured("info", map[string]any{"event": "lark.send.text.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
+        return nil
 	}
 	return nil
 }
@@ -703,8 +739,10 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffi
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-	token, _, err := cli.TenantAccessToken(ctx)
+    LogStructured("info", map[string]any{"event": "lark.send.post.start", "chat_id": chatID, "thread_id": threadID})
+    token, _, err := cli.TenantAccessToken(ctx)
 	if err != nil {
+        LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
 		return err
 	}
 	// build post content: ISSUE {anchor(title)} 绑定成功
@@ -720,15 +758,23 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffi
 		},
 	}
 	// Prefer thread reply
-	if threadID != "" {
-		if err := cli.ReplyPostInThread(ctx, token, threadID, post); err == nil {
-			return nil
-		}
-	}
-	if chatID != "" {
-		return cli.SendPostToChat(ctx, token, chatID, post)
-	}
-	return nil
+    if threadID != "" {
+        if err := cli.ReplyPostInThread(ctx, token, threadID, post); err == nil {
+            LogStructured("info", map[string]any{"event": "lark.send.post.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
+            return nil
+        } else {
+            LogStructured("warn", map[string]any{"event": "lark.send.post.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+        }
+    }
+    if chatID != "" {
+        if err := cli.SendPostToChat(ctx, token, chatID, post); err != nil {
+            LogStructured("error", map[string]any{"event": "lark.send.post.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+            return err
+        }
+        LogStructured("info", map[string]any{"event": "lark.send.post.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
+        return nil
+    }
+    return nil
 }
 
 // postRebindConfirmCard sends an interactive card to confirm switching binding to a new issue.
@@ -790,9 +836,16 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
     ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
     defer cancel()
     cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+    LogStructured("info", map[string]any{"event": "lark.send.card.start", "chat_id": chatID, "thread_id": threadID})
     token, _, err := cli.TenantAccessToken(ctx)
     if err != nil {
+        LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
         return err
     }
-    return cli.ReplyCardInThread(ctx, token, threadID, card)
+    if err := cli.ReplyCardInThread(ctx, token, threadID, card); err != nil {
+        LogStructured("error", map[string]any{"event": "lark.send.card.fail", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+        return err
+    }
+    LogStructured("info", map[string]any{"event": "lark.send.card.ok", "chat_id": chatID, "thread_id": threadID})
+    return nil
 }
