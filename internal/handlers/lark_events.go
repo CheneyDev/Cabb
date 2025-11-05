@@ -392,18 +392,20 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
     var env larkEventEnvelope
     if json.Unmarshal(body, &env) == nil && len(env.Event) > 0 {
         LogStructured("info", map[string]any{"event": "lark.interactivity.parsed", "event_type": env.Header.EventType})
-        // Minimal action struct
+        // Minimal action struct with callback token/context
         var act struct {
-            Action struct {
+            Token   string `json:"token"`
+            Action  struct {
                 Value         map[string]any `json:"value"`
                 OpenMessageID string         `json:"open_message_id"`
             } `json:"action"`
             Context struct {
-                OpenChatID string `json:"open_chat_id"`
+                OpenChatID   string `json:"open_chat_id"`
+                OpenMessageID string `json:"open_message_id"`
             } `json:"context"`
         }
         _ = json.Unmarshal(env.Event, &act)
-        return h.handleLarkCardAction(c, act.Action.Value)
+        return h.handleLarkCardAction(c, act.Action.Value, act.Token)
     }
     // Fallback: direct action payload
     var payload struct {
@@ -413,7 +415,7 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
     }
     if json.Unmarshal(body, &payload) == nil && payload.Action.Value != nil {
         LogStructured("info", map[string]any{"event": "lark.interactivity.value_only"})
-        return h.handleLarkCardAction(c, payload.Action.Value)
+        return h.handleLarkCardAction(c, payload.Action.Value, "")
     }
     LogStructured("warn", map[string]any{"event": "lark.interactivity.ignored"})
     return c.NoContent(http.StatusOK)
@@ -424,7 +426,7 @@ func (h *Handler) LarkCommands(c echo.Context) error {
 }
 
 // handleLarkCardAction processes a minimal value map with our custom fields.
-func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error {
+func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any, callbackToken string) error {
     if val == nil {
         return c.NoContent(http.StatusOK)
     }
@@ -457,7 +459,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
             })
         }
         _ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), chatID, threadID, newIssue, newProj, newSlug)
-        // Immediate card update: show rebind result
+        // Build new card
         newURL := h.planeIssueURL(newSlug, newProj, newIssue)
         display := newURL
         if display == "" {
@@ -467,6 +469,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
         }
         card := map[string]any{
             "schema": "2.0",
+            "config": map[string]any{"update_multi": true},
             "header": map[string]any{
                 "title":    map[string]any{"tag": "plain_text", "content": "绑定已更新"},
                 "template": "green",
@@ -478,11 +481,26 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
                 },
             },
         }
+        // Prefer delayed update with callback token, return toast immediately
+        if callbackToken != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
+            go func(token string, card map[string]any) {
+                ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+                defer cancel()
+                cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+                tkn, _, err := cli.TenantAccessToken(ctx)
+                if err != nil {
+                    LogStructured("error", map[string]any{"event": "lark.card.update.token_error", "error": err.Error()})
+                    return
+                }
+                if err := cli.UpdateInteractiveCard(ctx, tkn, token, card); err != nil {
+                    LogStructured("error", map[string]any{"event": "lark.card.update.fail", "error": err.Error()})
+                } else {
+                    LogStructured("info", map[string]any{"event": "lark.card.update.ok"})
+                }
+            }(callbackToken, card)
+        }
         LogStructured("info", map[string]any{"event": "lark.card.action.persist.ok", "op": op, "chat_id": chatID, "thread_id": threadID, "new_issue_id": newIssue})
-        return c.JSON(http.StatusOK, map[string]any{
-            "toast": map[string]any{"type": "success", "content": "已改绑"},
-            "card":  map[string]any{"type": "raw", "data": card},
-        })
+        return c.JSON(http.StatusOK, map[string]any{"toast": map[string]any{"type": "success", "content": "已改绑"}})
     case "rebind_cancel":
         currIssue, _ := val["curr_issue_id"].(string)
         currProj, _ := val["curr_project_id"].(string)
@@ -496,6 +514,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
         }
         card := map[string]any{
             "schema": "2.0",
+            "config": map[string]any{"update_multi": true},
             "header": map[string]any{
                 "title":    map[string]any{"tag": "plain_text", "content": "已取消改绑"},
                 "template": "yellow",
@@ -507,11 +526,25 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
                 },
             },
         }
+        if callbackToken != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
+            go func(token string, card map[string]any) {
+                ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+                defer cancel()
+                cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+                tkn, _, err := cli.TenantAccessToken(ctx)
+                if err != nil {
+                    LogStructured("error", map[string]any{"event": "lark.card.update.token_error", "error": err.Error()})
+                    return
+                }
+                if err := cli.UpdateInteractiveCard(ctx, tkn, token, card); err != nil {
+                    LogStructured("error", map[string]any{"event": "lark.card.update.fail", "error": err.Error()})
+                } else {
+                    LogStructured("info", map[string]any{"event": "lark.card.update.ok"})
+                }
+            }(callbackToken, card)
+        }
         LogStructured("info", map[string]any{"event": "lark.card.action.ok", "op": op, "chat_id": chatID, "thread_id": threadID})
-        return c.JSON(http.StatusOK, map[string]any{
-            "toast": map[string]any{"type": "info", "content": "已取消"},
-            "card":  map[string]any{"type": "raw", "data": card},
-        })
+        return c.JSON(http.StatusOK, map[string]any{"toast": map[string]any{"type": "info", "content": "已取消"}})
     default:
         LogStructured("info", map[string]any{"event": "lark.card.action.ignored", "op": op})
         return c.JSON(http.StatusOK, map[string]any{"toast": map[string]any{"type": "info", "content": "无操作"}})
