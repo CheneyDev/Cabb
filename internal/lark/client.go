@@ -368,3 +368,38 @@ func (c *Client) ReplyCardInThread(ctx context.Context, tenantToken, rootMessage
     }
     return nil
 }
+
+// UpdateInteractiveCard performs delayed update of a previously sent card via callback token.
+// POST /open-apis/interactive/v1/card/update with { token: c-xxxx, card: <card-json-object> }
+func (c *Client) UpdateInteractiveCard(ctx context.Context, tenantToken, callbackToken string, card map[string]any) error {
+    if tenantToken == "" {
+        return errors.New("missing tenant token")
+    }
+    if strings.TrimSpace(callbackToken) == "" {
+        return errors.New("missing callback token")
+    }
+    ep := strings.TrimRight(c.base(), "/") + "/open-apis/interactive/v1/card/update"
+    payload := map[string]any{
+        "token": callbackToken,
+        "card":  card,
+    }
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil {
+        return err
+    }
+    req.Header.Set("Authorization", "Bearer "+tenantToken)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        body, _ := io.ReadAll(resp.Body)
+        var er struct{ Code int `json:"code"`; Msg string `json:"msg"` }
+        _ = json.Unmarshal(body, &er)
+        return fmt.Errorf("lark update card status=%d code=%d msg=%s", resp.StatusCode, er.Code, strings.TrimSpace(er.Msg))
+    }
+    return nil
+}
