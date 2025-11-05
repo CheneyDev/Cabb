@@ -287,3 +287,67 @@ func (c *Client) ReplyPostInThread(ctx context.Context, tenantToken, rootMessage
 	}
 	return nil
 }
+
+// SendCardToChat sends an interactive card message to a chat.
+// POST /open-apis/im/v1/messages?receive_id_type=chat_id with msg_type=interactive and content={"card": <card>}
+func (c *Client) SendCardToChat(ctx context.Context, tenantToken, chatID string, card map[string]any) error {
+    if tenantToken == "" {
+        return errors.New("missing tenant token")
+    }
+    ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages?receive_id_type=chat_id"
+    wrapper := map[string]any{"card": card}
+    contentJSON, _ := json.Marshal(wrapper)
+    payload := map[string]any{
+        "receive_id": chatID,
+        "msg_type":   "interactive",
+        "content":    string(contentJSON),
+    }
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil {
+        return err
+    }
+    req.Header.Set("Authorization", "Bearer "+tenantToken)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return errors.New("lark send card status!=2xx")
+    }
+    return nil
+}
+
+// ReplyCardInThread replies to a thread with an interactive card message.
+// POST /open-apis/im/v1/messages/{message_id}/reply with msg_type=interactive
+func (c *Client) ReplyCardInThread(ctx context.Context, tenantToken, rootMessageID string, card map[string]any) error {
+    if tenantToken == "" {
+        return errors.New("missing tenant token")
+    }
+    if rootMessageID == "" {
+        return errors.New("missing root message id")
+    }
+    pathID := url.PathEscape(rootMessageID)
+    ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages/" + pathID + "/reply"
+    wrapper := map[string]any{"card": card}
+    contentJSON, _ := json.Marshal(wrapper)
+    payload := map[string]any{"msg_type": "interactive", "content": string(contentJSON)}
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil {
+        return err
+    }
+    req.Header.Set("Authorization", "Bearer "+tenantToken)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return errors.New("lark reply card status!=2xx")
+    }
+    return nil
+}
