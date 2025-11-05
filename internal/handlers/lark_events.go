@@ -790,43 +790,52 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
     if newURL == "" {
         newURL = newIssueID
     }
-    // Minimal interactive card
+    // Build Feishu Card JSON 2.0 (schema=2.0), buttons with behaviors.callback
     card := map[string]any{
-        "config": map[string]any{"wide_screen_mode": true},
+        "schema": "2.0",
         "header": map[string]any{
             "title": map[string]any{"tag": "plain_text", "content": "检测到换绑请求"},
+            "template": "blue",
         },
-        "elements": []any{
-            map[string]any{
-                "tag": "div",
-                "text": map[string]any{"tag": "lark_md", "content": "本群已绑定到当前 Issue：\n" + currURL + "\n\n新的绑定请求：\n" + newURL},
-            },
-            map[string]any{
-                "tag": "action",
-                "actions": []any{
-                    map[string]any{
-                        "tag":  "button",
-                        "type": "primary",
-                        "text": map[string]any{"tag": "plain_text", "content": "改绑为新 Issue"},
-                        "value": map[string]any{
-                            "op":               "rebind_confirm",
-                            "chat_id":          chatID,
-                            "thread_id":        threadID,
-                            "curr_issue_id":    currIssueID,
-                            "curr_project_id":  currProjectID,
-                            "curr_slug":        currSlug,
-                            "new_issue_id":     newIssueID,
-                            "new_project_id":   newProjectID,
-                            "new_slug":         newSlug,
+        "body": map[string]any{
+            "direction": "vertical",
+            "elements": []any{
+                map[string]any{
+                    "tag":     "markdown",
+                    "content": "本群已绑定到当前 Issue：\n" + currURL + "\n\n新的绑定请求：\n" + newURL,
+                },
+                map[string]any{
+                    "tag": "button",
+                    "type": "primary",
+                    "text": map[string]any{"tag": "plain_text", "content": "改绑为新 Issue"},
+                    "behaviors": []any{
+                        map[string]any{
+                            "type": "callback",
+                            "value": map[string]any{
+                                "op":               "rebind_confirm",
+                                "chat_id":          chatID,
+                                "thread_id":        threadID,
+                                "curr_issue_id":    currIssueID,
+                                "curr_project_id":  currProjectID,
+                                "curr_slug":        currSlug,
+                                "new_issue_id":     newIssueID,
+                                "new_project_id":   newProjectID,
+                                "new_slug":         newSlug,
+                            },
                         },
                     },
-                    map[string]any{
-                        "tag":  "button",
-                        "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"},
-                        "value": map[string]any{
-                            "op":        "rebind_cancel",
-                            "chat_id":   chatID,
-                            "thread_id": threadID,
+                },
+                map[string]any{
+                    "tag":  "button",
+                    "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"},
+                    "behaviors": []any{
+                        map[string]any{
+                            "type": "callback",
+                            "value": map[string]any{
+                                "op":        "rebind_cancel",
+                                "chat_id":   chatID,
+                                "thread_id": threadID,
+                            },
                         },
                     },
                 },
