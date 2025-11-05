@@ -783,12 +783,41 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
         return nil
     }
     currURL := h.planeIssueURL(currSlug, currProjectID, currIssueID)
-    if currURL == "" {
-        currURL = currIssueID
-    }
     newURL := h.planeIssueURL(newSlug, newProjectID, newIssueID)
-    if newURL == "" {
-        newURL = newIssueID
+    // Fetch issue titles for better readability
+    currTitle, newTitle := "", ""
+    if currSlug != "" && currProjectID != "" && currIssueID != "" && hHasDB(h) {
+        rctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+        defer cancel()
+        if token, _ := h.ensurePlaneBotToken(rctx, currSlug); token != "" {
+            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+            if name, err := pc.GetIssueName(rctx, token, currSlug, currProjectID, currIssueID); err == nil {
+                currTitle = name
+            }
+        }
+    }
+    if newSlug != "" && newProjectID != "" && newIssueID != "" && hHasDB(h) {
+        rctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+        defer cancel()
+        if token, _ := h.ensurePlaneBotToken(rctx, newSlug); token != "" {
+            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+            if name, err := pc.GetIssueName(rctx, token, newSlug, newProjectID, newIssueID); err == nil {
+                newTitle = name
+            }
+        }
+    }
+    // Build markdown lines with hyperlinks when possible
+    currDisplay := currIssueID
+    if currTitle != "" && currURL != "" {
+        currDisplay = "[" + escapeMD(currTitle) + "](" + currURL + ")"
+    } else if currURL != "" { // fallback to bare URL
+        currDisplay = currURL
+    }
+    newDisplay := newIssueID
+    if newTitle != "" && newURL != "" {
+        newDisplay = "[" + escapeMD(newTitle) + "](" + newURL + ")"
+    } else if newURL != "" {
+        newDisplay = newURL
     }
     // Build Feishu Card JSON 2.0 (schema=2.0), buttons with behaviors.callback
     card := map[string]any{
@@ -802,7 +831,7 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
             "elements": []any{
                 map[string]any{
                     "tag":     "markdown",
-                    "content": "本群已绑定到当前 Issue：\n" + currURL + "\n\n新的绑定请求：\n" + newURL,
+                    "content": "本群已绑定到当前 Issue：\n" + currDisplay + "\n\n新的绑定请求：\n" + newDisplay,
                 },
                 map[string]any{
                     "tag": "button",
@@ -867,4 +896,13 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
     }
     LogStructured("info", map[string]any{"event": "lark.send.card.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
     return nil
+}
+
+// escapeMD escapes square brackets and parentheses in markdown link text
+func escapeMD(s string) string {
+    s = strings.ReplaceAll(s, "[", "\\[")
+    s = strings.ReplaceAll(s, "]", "\\]")
+    s = strings.ReplaceAll(s, "(", "\\(")
+    s = strings.ReplaceAll(s, ")", "\\)")
+    return s
 }
