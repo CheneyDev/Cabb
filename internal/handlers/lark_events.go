@@ -156,15 +156,6 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 
 			issueID, slug, projectID := parsePlaneIssueLink(text)
 
-			// If this chat has already been bound, short-circuit as idempotent regardless of new link content
-			if hHasDB(h) && ev.Message.ChatID != "" {
-				if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
-					slugCurr := nsToString(cl.WorkspaceSlug)
-					projCurr := nsToString(cl.PlaneProjectID)
-					go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID) }()
-					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate_chat", "plane_issue_id": cl.PlaneIssueID})
-				}
-			}
 
 			// Resolve short link KEY-N via Plane API when possible
 			if issueID == "" {
@@ -207,12 +198,11 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 						go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugEff, projEff, issueID) }()
 						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate", "plane_issue_id": issueID})
 					}
-					// Different issue already bound → reject duplicate binding in same chat
-					// Reply with current binding info
+					// Different issue already bound → show confirm rebind card
 					slugCurr := nsToString(cl.WorkspaceSlug)
 					projCurr := nsToString(cl.PlaneProjectID)
-					go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID) }()
-					return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "error": "chat_already_bound_other", "plane_issue_id": cl.PlaneIssueID})
+					go func() { _ = h.postRebindConfirmCard(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID, slug, projectID, issueID) }()
+					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "confirm_rebind_shown", "current_plane_issue_id": cl.PlaneIssueID, "new_plane_issue_id": issueID})
 				}
 			}
 
@@ -356,11 +346,93 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 }
 
 func (h *Handler) LarkInteractivity(c echo.Context) error {
-	return c.NoContent(http.StatusOK)
+    body, err := io.ReadAll(c.Request().Body)
+    if err != nil {
+        return c.NoContent(http.StatusBadRequest)
+    }
+    // Challenge support
+    var probe struct {
+        Challenge string `json:"challenge"`
+        Type      string `json:"type"`
+    }
+    if json.Unmarshal(body, &probe) == nil && probe.Challenge != "" {
+        return c.JSON(http.StatusOK, map[string]string{"challenge": probe.Challenge})
+    }
+    if !h.verifyLarkSignature(c.Request().Header, body) {
+        var env larkEventEnvelope
+        if json.Unmarshal(body, &env) == nil {
+            if h.cfg.LarkVerificationToken != "" && env.Header.Token != h.cfg.LarkVerificationToken {
+                return c.NoContent(http.StatusUnauthorized)
+            }
+        }
+    }
+    // Try envelope form first (im.message.card.action.trigger)
+    var env larkEventEnvelope
+    if json.Unmarshal(body, &env) == nil && len(env.Event) > 0 {
+        // Minimal action struct
+        var act struct {
+            Action struct {
+                Value         map[string]any `json:"value"`
+                OpenMessageID string         `json:"open_message_id"`
+            } `json:"action"`
+            Context struct {
+                OpenChatID string `json:"open_chat_id"`
+            } `json:"context"`
+        }
+        _ = json.Unmarshal(env.Event, &act)
+        return h.handleLarkCardAction(c, act.Action.Value)
+    }
+    // Fallback: direct action payload
+    var payload struct {
+        Action struct {
+            Value map[string]any `json:"value"`
+        } `json:"action"`
+    }
+    if json.Unmarshal(body, &payload) == nil && payload.Action.Value != nil {
+        return h.handleLarkCardAction(c, payload.Action.Value)
+    }
+    return c.NoContent(http.StatusOK)
 }
 
 func (h *Handler) LarkCommands(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
+}
+
+// handleLarkCardAction processes a minimal value map with our custom fields.
+func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error {
+    if val == nil {
+        return c.NoContent(http.StatusOK)
+    }
+    op, _ := val["op"].(string)
+    chatID, _ := val["chat_id"].(string)
+    threadID, _ := val["thread_id"].(string)
+    switch op {
+    case "rebind_confirm":
+        newIssue, _ := val["new_issue_id"].(string)
+        newProj, _ := val["new_project_id"].(string)
+        newSlug, _ := val["new_slug"].(string)
+        if newIssue == "" || threadID == "" || chatID == "" {
+            return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "missing_fields"})
+        }
+        if !hHasDB(h) {
+            return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "db_unavailable"})
+        }
+        // Persist new binding (idempotent)
+        if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, newIssue, newProj, newSlug, false); err != nil {
+            return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "upsert_failed"})
+        }
+        _ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), chatID, threadID, newIssue, newProj, newSlug)
+        // Ack success
+        go h.postBindAck(chatID, threadID, newSlug, newProj, newIssue)
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_confirm"})
+    case "rebind_cancel":
+        if chatID != "" && threadID != "" {
+            go h.sendLarkTextToThread(chatID, threadID, "已保留当前绑定")
+        }
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_cancel"})
+    default:
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "noop"})
+    }
 }
 
 // verifyLarkSignature validates Feishu request signatures when headers are present.
@@ -576,16 +648,17 @@ func (h *Handler) postBoundAlready(chatID, threadID, slug, projectID, issueID st
 		}
 	}
 	if title != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
-		return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定")
+        return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定（无需重复绑定）")
 	}
 	// fallback text
-	msg := "已绑定："
+    msg := "已绑定："
 	if url != "" {
 		msg += url
 	} else {
 		msg += issueID
 	}
-	return h.sendLarkTextToThread(chatID, threadID, msg)
+    msg += "（无需重复绑定）"
+    return h.sendLarkTextToThread(chatID, threadID, msg)
 }
 
 // postBindAck best-effort sends a rich anchor link with issue title; fallback to plain text
@@ -656,4 +729,70 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffi
 		return cli.SendPostToChat(ctx, token, chatID, post)
 	}
 	return nil
+}
+
+// postRebindConfirmCard sends an interactive card to confirm switching binding to a new issue.
+func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectID, currIssueID, newSlug, newProjectID, newIssueID string) error {
+    if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
+        return nil
+    }
+    currURL := h.planeIssueURL(currSlug, currProjectID, currIssueID)
+    if currURL == "" {
+        currURL = currIssueID
+    }
+    newURL := h.planeIssueURL(newSlug, newProjectID, newIssueID)
+    if newURL == "" {
+        newURL = newIssueID
+    }
+    // Minimal interactive card
+    card := map[string]any{
+        "config": map[string]any{"wide_screen_mode": true},
+        "header": map[string]any{
+            "title": map[string]any{"tag": "plain_text", "content": "检测到换绑请求"},
+        },
+        "elements": []any{
+            map[string]any{
+                "tag": "div",
+                "text": map[string]any{"tag": "lark_md", "content": "本群已绑定到当前 Issue：\n" + currURL + "\n\n新的绑定请求：\n" + newURL},
+            },
+            map[string]any{
+                "tag": "action",
+                "actions": []any{
+                    map[string]any{
+                        "tag":  "button",
+                        "type": "primary",
+                        "text": map[string]any{"tag": "plain_text", "content": "改绑为新 Issue"},
+                        "value": map[string]any{
+                            "op":               "rebind_confirm",
+                            "chat_id":          chatID,
+                            "thread_id":        threadID,
+                            "curr_issue_id":    currIssueID,
+                            "curr_project_id":  currProjectID,
+                            "curr_slug":        currSlug,
+                            "new_issue_id":     newIssueID,
+                            "new_project_id":   newProjectID,
+                            "new_slug":         newSlug,
+                        },
+                    },
+                    map[string]any{
+                        "tag":  "button",
+                        "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"},
+                        "value": map[string]any{
+                            "op":        "rebind_cancel",
+                            "chat_id":   chatID,
+                            "thread_id": threadID,
+                        },
+                    },
+                },
+            },
+        },
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+    defer cancel()
+    cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+    token, _, err := cli.TenantAccessToken(ctx)
+    if err != nil {
+        return err
+    }
+    return cli.ReplyCardInThread(ctx, token, threadID, card)
 }
