@@ -369,18 +369,21 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
     if err != nil {
         return c.NoContent(http.StatusBadRequest)
     }
+    LogStructured("info", map[string]any{"event": "lark.interactivity.receive", "content_length": len(body)})
     // Challenge support
     var probe struct {
         Challenge string `json:"challenge"`
         Type      string `json:"type"`
     }
     if json.Unmarshal(body, &probe) == nil && probe.Challenge != "" {
+        LogStructured("info", map[string]any{"event": "lark.interactivity.challenge"})
         return c.JSON(http.StatusOK, map[string]string{"challenge": probe.Challenge})
     }
     if !h.verifyLarkSignature(c.Request().Header, body) {
         var env larkEventEnvelope
         if json.Unmarshal(body, &env) == nil {
             if h.cfg.LarkVerificationToken != "" && env.Header.Token != h.cfg.LarkVerificationToken {
+                LogStructured("warn", map[string]any{"event": "lark.interactivity.unauthorized", "reason": "token_mismatch"})
                 return c.NoContent(http.StatusUnauthorized)
             }
         }
@@ -388,6 +391,7 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
     // Try envelope form first (im.message.card.action.trigger)
     var env larkEventEnvelope
     if json.Unmarshal(body, &env) == nil && len(env.Event) > 0 {
+        LogStructured("info", map[string]any{"event": "lark.interactivity.parsed", "event_type": env.Header.EventType})
         // Minimal action struct
         var act struct {
             Action struct {
@@ -408,8 +412,10 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
         } `json:"action"`
     }
     if json.Unmarshal(body, &payload) == nil && payload.Action.Value != nil {
+        LogStructured("info", map[string]any{"event": "lark.interactivity.value_only"})
         return h.handleLarkCardAction(c, payload.Action.Value)
     }
+    LogStructured("warn", map[string]any{"event": "lark.interactivity.ignored"})
     return c.NoContent(http.StatusOK)
 }
 
