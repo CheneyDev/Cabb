@@ -156,54 +156,13 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 
 			issueID, slug, projectID := parsePlaneIssueLink(text)
 
-			// Check if this chat has already been bound
+			// If this chat has already been bound, short-circuit as idempotent regardless of new link content
 			if hHasDB(h) && ev.Message.ChatID != "" {
 				if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
-					// Same issue already bound for this chat
-					if strings.EqualFold(cl.PlaneIssueID, issueID) {
-						// Reply "ISSUE {title} 已绑定" and do not create duplicate thread link
-						slugEff := nsToString(cl.WorkspaceSlug)
-						projEff := nsToString(cl.PlaneProjectID)
-						go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugEff, projEff, issueID) }()
-						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate", "plane_issue_id": issueID})
-					}
-
-					// Different issue already bound → send rebind confirmation card
 					slugCurr := nsToString(cl.WorkspaceSlug)
 					projCurr := nsToString(cl.PlaneProjectID)
-
-					// Get current issue title
-					currentTitle := cl.PlaneIssueID
-					if slugCurr != "" && projCurr != "" && cl.PlaneIssueID != "" {
-						ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-						defer cancel()
-						if token, _ := h.ensurePlaneBotToken(ctx, slugCurr); token != "" {
-							pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
-							if name, err := pc.GetIssueName(ctx, token, slugCurr, projCurr, cl.PlaneIssueID); err == nil {
-								currentTitle = name
-							}
-						}
-					}
-					currentURL := h.planeIssueURL(slugCurr, projCurr, cl.PlaneIssueID)
-
-					// Get new issue title
-					newTitle := issueID
-					if slug != "" && projectID != "" && issueID != "" {
-						ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-						defer cancel()
-						if token, _ := h.ensurePlaneBotToken(ctx, slug); token != "" {
-							pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
-							if name, err := pc.GetIssueName(ctx, token, slug, projectID, issueID); err == nil {
-								newTitle = name
-							}
-						}
-					}
-					newURL := h.planeIssueURL(slug, projectID, issueID)
-
-					go func() {
-						_ = h.sendRebindConfirmationCard(ev.Message.ChatID, threadID, currentTitle, currentURL, newTitle, newURL, cl.PlaneIssueID, issueID, projectID, slug)
-					}()
-					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "rebind_confirmation", "current_issue_id": cl.PlaneIssueID, "new_issue_id": issueID})
+					go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID) }()
+					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate_chat", "plane_issue_id": cl.PlaneIssueID})
 				}
 			}
 
@@ -235,6 +194,26 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			if !hHasDB(h) {
 				go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：服务未连接数据库，请稍后重试或联系管理员。")
 				return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "plane_issue_id": issueID, "error": "db_unavailable"})
+			}
+			// Prevent duplicate binding within the same chat
+			if hHasDB(h) && ev.Message.ChatID != "" {
+				if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
+					// Same issue already bound for this chat
+					if strings.EqualFold(cl.PlaneIssueID, issueID) {
+						// Reply "ISSUE {title} 已绑定" and do not create duplicate thread link
+						// Prefer existing mapping's project/slug for title/url
+						slugEff := nsToString(cl.WorkspaceSlug)
+						projEff := nsToString(cl.PlaneProjectID)
+						go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugEff, projEff, issueID) }()
+						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate", "plane_issue_id": issueID})
+					}
+					// Different issue already bound → reject duplicate binding in same chat
+					// Reply with current binding info
+					slugCurr := nsToString(cl.WorkspaceSlug)
+					projCurr := nsToString(cl.PlaneProjectID)
+					go func() { _ = h.postBoundAlready(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID) }()
+					return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "error": "chat_already_bound_other", "plane_issue_id": cl.PlaneIssueID})
+				}
 			}
 
 			// Persist link
@@ -369,35 +348,6 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "未绑定目标工作项。请先使用 /bind 绑定，或在绑定的话题中回复 /comment。")
 			return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "comment", "error": "no_binding"})
 		}
-		return c.NoContent(http.StatusOK)
-	case "card.action.trigger":
-		// Handle interactive card callbacks
-		var cardAction struct {
-			Action struct {
-				Tag    string                 `json:"tag"`
-				Value  map[string]interface{} `json:"value"`
-				Option string                 `json:"option"`
-				Time   string                 `json:"time"`
-			} `json:"action"`
-			Token struct {
-				AppID     string `json:"app_id"`
-				TenantKey string `json:"tenant_key"`
-			} `json:"token"`
-		}
-		if err := json.Unmarshal(env.Event, &cardAction); err != nil {
-			return c.NoContent(http.StatusBadRequest)
-		}
-
-		// Handle rebind confirmation
-		if action, ok := cardAction.Action.Value["action"].(string); ok && action == "confirm_rebind" {
-			return h.handleRebindConfirmation(c, cardAction.Action.Value)
-		}
-
-		// Handle cancel rebind
-		if action, ok := cardAction.Action.Value["action"].(string); ok && action == "cancel_rebind" {
-			return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_cancelled"})
-		}
-
 		return c.NoContent(http.StatusOK)
 	default:
 		// Ignore other event types for now
@@ -626,10 +576,10 @@ func (h *Handler) postBoundAlready(chatID, threadID, slug, projectID, issueID st
 		}
 	}
 	if title != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
-		return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定，无需重复操作")
+		return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定")
 	}
 	// fallback text
-	msg := "该群聊已绑定此 Issue，无需重复绑定："
+	msg := "已绑定："
 	if url != "" {
 		msg += url
 	} else {
@@ -706,125 +656,4 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffi
 		return cli.SendPostToChat(ctx, token, chatID, post)
 	}
 	return nil
-}
-
-// sendRebindConfirmationCard sends an interactive card for rebind confirmation
-func (h *Handler) sendRebindConfirmationCard(chatID, threadID, currentTitle, currentURL, newTitle, newURL, currentIssueID, newIssueID, newProjectID, newSlug string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-	defer cancel()
-	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-	token, _, err := cli.TenantAccessToken(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Build interactive card for rebind confirmation
-	card := map[string]any{
-		"schema": "2.0",
-		"header": map[string]any{
-			"template": "blue",
-			"title": map[string]any{
-				"tag":     "plain_text",
-				"content": "换绑确认",
-			},
-		},
-		"body": map[string]any{
-			"elements": []map[string]any{
-				{
-					"tag": "div",
-					"text": map[string]any{
-						"tag":     "lark_md",
-						"content": "该群聊已绑定其他 Issue，是否要更换绑定？",
-					},
-				},
-				{
-					"tag": "div",
-					"text": map[string]any{
-						"tag":     "lark_md",
-						"content": "**当前绑定：**\n[" + currentTitle + "](" + currentURL + ")",
-					},
-				},
-				{
-					"tag": "div",
-					"text": map[string]any{
-						"tag":     "lark_md",
-						"content": "**新绑定：**\n[" + newTitle + "](" + newURL + ")",
-					},
-				},
-				{
-					"tag": "action",
-					"actions": []map[string]any{
-						{
-							"tag":  "button",
-							"text": map[string]any{"tag": "plain_text", "content": "确认换绑"},
-							"type": "primary",
-							"behaviors": []map[string]any{
-								{
-									"type": "callback",
-									"value": map[string]any{
-										"action":        "confirm_rebind",
-										"current_issue": currentIssueID,
-										"new_issue":     newIssueID,
-										"new_project":   newProjectID,
-										"new_slug":      newSlug,
-									},
-								},
-							},
-						},
-						{
-							"tag":  "button",
-							"text": map[string]any{"tag": "plain_text", "content": "取消"},
-							"type": "default",
-							"behaviors": []map[string]any{
-								{
-									"type": "callback",
-									"value": map[string]any{
-										"action": "cancel_rebind",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Prefer thread reply
-	if threadID != "" {
-		if err := cli.ReplyInteractiveCardInThread(ctx, token, threadID, card); err == nil {
-			return nil
-		}
-	}
-	if chatID != "" {
-		return cli.SendInteractiveCardToChat(ctx, token, chatID, card)
-	}
-	return nil
-}
-
-// handleRebindConfirmation handles the rebind confirmation from card callback
-func (h *Handler) handleRebindConfirmation(c echo.Context, actionValue map[string]interface{}) error {
-	// Extract values from the callback
-	newIssueID, _ := actionValue["new_issue"].(string)
-	newProjectID, _ := actionValue["new_project"].(string)
-	newSlug, _ := actionValue["new_slug"].(string)
-	_, _ = actionValue["current_issue"].(string) // current issue ID extracted for future use
-
-	if newIssueID == "" || newProjectID == "" || newSlug == "" {
-		return c.JSON(http.StatusBadRequest, map[string]any{"error": "missing required parameters"})
-	}
-
-	if !hHasDB(h) {
-		return c.JSON(http.StatusInternalServerError, map[string]any{"error": "database unavailable"})
-	}
-
-	// We need to identify which chat this callback belongs to
-	// For now, we'll need to find the chat that has the current issue bound
-	// This is a limitation - ideally the callback should include chat_id
-	// For now, let's return an error asking user to retry
-	return c.JSON(http.StatusOK, map[string]any{
-		"result":  "error",
-		"action":  "rebind_failed",
-		"message": "换绑失败：请重新发送 /bind 命令完成换绑。卡片回调暂不支持自动换绑。",
-	})
 }
