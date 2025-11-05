@@ -843,9 +843,19 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
         return err
     }
     if err := cli.ReplyCardInThread(ctx, token, threadID, card); err != nil {
-        LogStructured("error", map[string]any{"event": "lark.send.card.fail", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+        LogStructured("error", map[string]any{"event": "lark.send.card.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+        // Fallback: send to chat directly
+        if chatID != "" {
+            LogStructured("info", map[string]any{"event": "lark.send.card.fallback_to_chat.start", "chat_id": chatID, "thread_id": threadID})
+            if e2 := cli.SendCardToChat(ctx, token, chatID, card); e2 != nil {
+                LogStructured("error", map[string]any{"event": "lark.send.card.fallback_to_chat.fail", "chat_id": chatID, "thread_id": threadID, "error": e2.Error()})
+                return err
+            }
+            LogStructured("info", map[string]any{"event": "lark.send.card.fallback_to_chat.ok", "chat_id": chatID, "thread_id": threadID})
+            return nil
+        }
         return err
     }
-    LogStructured("info", map[string]any{"event": "lark.send.card.ok", "chat_id": chatID, "thread_id": threadID})
+    LogStructured("info", map[string]any{"event": "lark.send.card.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
     return nil
 }
