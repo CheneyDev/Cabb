@@ -302,14 +302,13 @@ func (c *Client) ReplyPostInThread(ctx context.Context, tenantToken, rootMessage
 }
 
 // SendCardToChat sends an interactive card message to a chat.
-// POST /open-apis/im/v1/messages?receive_id_type=chat_id with msg_type=interactive and content={"card": <card>}
+// POST /open-apis/im/v1/messages?receive_id_type=chat_id with msg_type=interactive and content=<card-json-string>
 func (c *Client) SendCardToChat(ctx context.Context, tenantToken, chatID string, card map[string]any) error {
     if tenantToken == "" {
         return errors.New("missing tenant token")
     }
     ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages?receive_id_type=chat_id"
-    wrapper := map[string]any{"card": card}
-    contentJSON, _ := json.Marshal(wrapper)
+    contentJSON, _ := json.Marshal(card)
     payload := map[string]any{
         "receive_id": chatID,
         "msg_type":   "interactive",
@@ -337,7 +336,7 @@ func (c *Client) SendCardToChat(ctx context.Context, tenantToken, chatID string,
 }
 
 // ReplyCardInThread replies to a thread with an interactive card message.
-// POST /open-apis/im/v1/messages/{message_id}/reply with msg_type=interactive
+// POST /open-apis/im/v1/messages/{message_id}/reply with msg_type=interactive and content=<card-json-string>
 func (c *Client) ReplyCardInThread(ctx context.Context, tenantToken, rootMessageID string, card map[string]any) error {
     if tenantToken == "" {
         return errors.New("missing tenant token")
@@ -347,8 +346,7 @@ func (c *Client) ReplyCardInThread(ctx context.Context, tenantToken, rootMessage
     }
     pathID := url.PathEscape(rootMessageID)
     ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages/" + pathID + "/reply"
-    wrapper := map[string]any{"card": card}
-    contentJSON, _ := json.Marshal(wrapper)
+    contentJSON, _ := json.Marshal(card)
     payload := map[string]any{"msg_type": "interactive", "content": string(contentJSON)}
     b, _ := json.Marshal(payload)
     req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
