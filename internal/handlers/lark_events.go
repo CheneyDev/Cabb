@@ -439,31 +439,82 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any) error
         newSlug, _ := val["new_slug"].(string)
         if newIssue == "" || threadID == "" || chatID == "" {
             LogStructured("error", map[string]any{"event": "lark.card.action.error", "op": op, "reason": "missing_fields"})
-            return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "missing_fields"})
+            return c.JSON(http.StatusOK, map[string]any{
+                "toast": map[string]any{"type": "error", "content": "参数缺失，操作失败"},
+            })
         }
         if !hHasDB(h) {
             LogStructured("error", map[string]any{"event": "lark.card.action.error", "op": op, "reason": "db_unavailable"})
-            return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "db_unavailable"})
+            return c.JSON(http.StatusOK, map[string]any{
+                "toast": map[string]any{"type": "error", "content": "服务暂不可用，请稍后重试"},
+            })
         }
         // Persist new binding (idempotent)
         if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, newIssue, newProj, newSlug, false); err != nil {
             LogStructured("error", map[string]any{"event": "lark.card.action.persist.error", "op": op, "error": err.Error()})
-            return c.JSON(http.StatusOK, map[string]any{"result": "error", "error": "upsert_failed"})
+            return c.JSON(http.StatusOK, map[string]any{
+                "toast": map[string]any{"type": "error", "content": "保存失败，请稍后重试"},
+            })
         }
         _ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), chatID, threadID, newIssue, newProj, newSlug)
-        // Ack success
-        go h.postBindAck(chatID, threadID, newSlug, newProj, newIssue)
+        // Immediate card update: show rebind result
+        newURL := h.planeIssueURL(newSlug, newProj, newIssue)
+        display := newURL
+        if display == "" {
+            display = newIssue
+        } else {
+            display = "[打开 Issue](" + display + ")"
+        }
+        card := map[string]any{
+            "schema": "2.0",
+            "header": map[string]any{
+                "title":    map[string]any{"tag": "plain_text", "content": "绑定已更新"},
+                "template": "green",
+            },
+            "body": map[string]any{
+                "direction": "vertical",
+                "elements": []any{
+                    map[string]any{"tag": "markdown", "content": "已改绑为新 Issue：\n" + display},
+                },
+            },
+        }
         LogStructured("info", map[string]any{"event": "lark.card.action.persist.ok", "op": op, "chat_id": chatID, "thread_id": threadID, "new_issue_id": newIssue})
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_confirm"})
+        return c.JSON(http.StatusOK, map[string]any{
+            "toast": map[string]any{"type": "success", "content": "已改绑"},
+            "card":  map[string]any{"type": "raw", "data": card},
+        })
     case "rebind_cancel":
-        if chatID != "" && threadID != "" {
-            go h.sendLarkTextToThread(chatID, threadID, "已保留当前绑定")
+        currIssue, _ := val["curr_issue_id"].(string)
+        currProj, _ := val["curr_project_id"].(string)
+        currSlug, _ := val["curr_slug"].(string)
+        currURL := h.planeIssueURL(currSlug, currProj, currIssue)
+        display := currURL
+        if display == "" {
+            display = currIssue
+        } else {
+            display = "[打开 Issue](" + display + ")"
+        }
+        card := map[string]any{
+            "schema": "2.0",
+            "header": map[string]any{
+                "title":    map[string]any{"tag": "plain_text", "content": "已取消改绑"},
+                "template": "yellow",
+            },
+            "body": map[string]any{
+                "direction": "vertical",
+                "elements": []any{
+                    map[string]any{"tag": "markdown", "content": "已保留当前绑定：\n" + display},
+                },
+            },
         }
         LogStructured("info", map[string]any{"event": "lark.card.action.ok", "op": op, "chat_id": chatID, "thread_id": threadID})
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "rebind_cancel"})
+        return c.JSON(http.StatusOK, map[string]any{
+            "toast": map[string]any{"type": "info", "content": "已取消"},
+            "card":  map[string]any{"type": "raw", "data": card},
+        })
     default:
         LogStructured("info", map[string]any{"event": "lark.card.action.ignored", "op": op})
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "noop"})
+        return c.JSON(http.StatusOK, map[string]any{"toast": map[string]any{"type": "info", "content": "无操作"}})
     }
 }
 
