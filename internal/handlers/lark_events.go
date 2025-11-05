@@ -358,6 +358,17 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "comment", "error": "no_binding"})
 		}
 		return c.NoContent(http.StatusOK)
+	case "card.action.trigger", "card.action.trigger_v1":
+		// Handle card interaction callbacks even if routed to /webhooks/lark/events
+		var act struct {
+			Token  string `json:"token"`
+			Action struct {
+				Value map[string]any `json:"value"`
+			} `json:"action"`
+		}
+		_ = json.Unmarshal(env.Event, &act)
+		LogStructured("info", map[string]any{"event": "lark.events.card_action.receive"})
+		return h.handleLarkCardAction(c, act.Action.Value, act.Token)
 	default:
 		// Ignore other event types for now
 		return c.NoContent(http.StatusOK)
