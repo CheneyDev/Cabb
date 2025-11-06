@@ -484,6 +484,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any, callb
             "header": map[string]any{
                 "title":    map[string]any{"tag": "plain_text", "content": "绑定已更新"},
                 "template": "green",
+                "icon":     map[string]any{"tag": "standard_icon", "token": "check_outlined"},
             },
             "body": map[string]any{
                 "direction": "vertical",
@@ -530,6 +531,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any, callb
             "header": map[string]any{
                 "title":    map[string]any{"tag": "plain_text", "content": "已取消改绑"},
                 "template": "yellow",
+                "icon":     map[string]any{"tag": "standard_icon", "token": "info_outlined"},
             },
             "body": map[string]any{
                 "direction": "vertical",
@@ -937,6 +939,7 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
         "header": map[string]any{
             "title":    map[string]any{"tag": "plain_text", "content": "检测到换绑请求"},
             "template": "turquoise",
+            "icon":     map[string]any{"tag": "standard_icon", "token": "replace_outlined"},
         },
         "body": map[string]any{
             "direction":          "vertical",
