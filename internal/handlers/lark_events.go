@@ -925,122 +925,85 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
         newDisplay = newURL
     }
     // Build Feishu Card JSON 2.0 (schema=2.0), improved layout per docs
-    summary := "换绑确认"
-    if currTitle != "" && newTitle != "" {
-        summary = "换绑确认：" + currTitle + " → " + newTitle
+    // Try fetch current binding time
+    bindDate := ""
+    if hHasDB(h) && threadID != "" {
+        if tl, err := h.db.GetLarkThreadLink(context.Background(), threadID); err == nil {
+            bindDate = tl.LinkedAt.UTC().Format("2006-01-02")
+        }
     }
+    summary := "确认Issue绑定请求"
+    if currTitle != "" && newTitle != "" {
+        summary = "确认：" + currTitle + " → " + newTitle
+    }
+    // Compose markdown detail lines
+    currDetail := "• Issue: " + currDisplay
+    if bindDate != "" { currDetail += "\n• 绑定时间: **" + bindDate + "**" }
+    reqDate := time.Now().UTC().Format("2006-01-02")
+    newDetail := "• Issue: " + newDisplay + "\n• 请求时间: **" + reqDate + "**"
     card := map[string]any{
         "schema": "2.0",
         "config": map[string]any{
             "update_multi": true,
-            "width_mode":   "default",
-            "summary":      map[string]any{"content": summary},
-        },
-        "header": map[string]any{
-            "title":    map[string]any{"tag": "plain_text", "content": "检测到换绑请求"},
-            "template": "turquoise",
-            "icon":     map[string]any{"tag": "standard_icon", "token": "replace_outlined"},
-        },
-        "body": map[string]any{
-            "direction":          "vertical",
-            "vertical_spacing":   "small",
-            "horizontal_spacing": "small",
-            "elements": []any{
-                // Two columns: current vs new
-                map[string]any{
-                    "tag":        "column_set",
-                    "flex_mode":  "flow",
-                    "columns": []any{
-                        map[string]any{
-                            "tag":            "column",
-                            "width":          "auto",
-                            "vertical_align": "top",
-                            "elements": []any{
-                                map[string]any{
-                                    "tag":  "div",
-                                    "text": map[string]any{"tag": "plain_text", "content": "当前绑定", "text_size": "heading-4", "text_color": "indigo"},
-                                    "icon": map[string]any{"tag": "standard_icon", "token": "link-lock_outlined", "color": "indigo"},
-                                },
-                                map[string]any{"tag": "markdown", "content": currDisplay},
-                            },
-                        },
-                        map[string]any{
-                            "tag":            "column",
-                            "width":          "auto",
-                            "vertical_align": "top",
-                            "elements": []any{
-                                map[string]any{
-                                    "tag":  "div",
-                                    "text": map[string]any{"tag": "plain_text", "content": "新的请求", "text_size": "heading-4", "text_color": "orange"},
-                                    "icon": map[string]any{"tag": "standard_icon", "token": "switch_outlined", "color": "orange"},
-                                },
-                                map[string]any{"tag": "markdown", "content": newDisplay},
-                            },
-                        },
-                    },
-                },
-                // Buttons in two columns
-                map[string]any{
-                    "tag":       "column_set",
-                    "flex_mode": "flow",
-                    "columns": []any{
-                        map[string]any{
-                            "tag":    "column",
-                            "width":  "auto",
-                            "elements": []any{
-                                map[string]any{
-                                    "tag":        "button",
-                                    "element_id": "btn_confirm",
-                                    "type":       "primary_filled",
-                                    "text":       map[string]any{"tag": "plain_text", "content": "改绑为新 Issue"},
-                                    "confirm": map[string]any{
-                                        "title": map[string]any{"tag": "plain_text", "content": "确认改绑？"},
-                                        "text":  map[string]any{"tag": "plain_text", "content": "将把本群绑定变更为新 Issue"},
-                                    },
-                                    "behaviors": []any{
-                                        map[string]any{
-                                            "type": "callback",
-                                            "value": map[string]any{
-                                                "op":               "rebind_confirm",
-                                                "chat_id":          chatID,
-                                                "thread_id":        threadID,
-                                                "curr_issue_id":    currIssueID,
-                                                "curr_project_id":  currProjectID,
-                                                "curr_slug":        currSlug,
-                                                "new_issue_id":     newIssueID,
-                                                "new_project_id":   newProjectID,
-                                                "new_slug":         newSlug,
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        map[string]any{
-                            "tag":      "column",
-                            "width":    "auto",
-                            "elements": []any{
-                                map[string]any{
-                                    "tag":        "button",
-                                    "element_id": "btn_cancel",
-                                    "type":       "default",
-                                    "text":       map[string]any{"tag": "plain_text", "content": "保持当前绑定"},
-                                    "behaviors": []any{
-                                        map[string]any{
-                                            "type": "callback",
-                                            "value": map[string]any{
-                                                "op":        "rebind_cancel",
-                                                "chat_id":   chatID,
-                                                "thread_id": threadID,
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
+            "style": map[string]any{
+                "text_size": map[string]any{
+                    "normal_v2": map[string]any{"default": "normal", "pc": "normal", "mobile": "heading"},
                 },
             },
+            "summary": map[string]any{"content": summary},
+        },
+        "body": map[string]any{
+            "direction": "vertical",
+            "elements": []any{
+                map[string]any{ "tag": "markdown", "content": "您发起了新的 Issue 绑定请求，是否确认更换绑定关系？", "text_align": "left", "text_size": "normal_v2", "margin": "0px 0px 0px 0px", "element_id": "intro" },
+                map[string]any{
+                    "tag": "column_set", "flex_mode": "stretch", "horizontal_spacing": "12px", "horizontal_align": "left", "columns": []any{
+                        map[string]any{
+                            "tag": "column", "width": "weighted", "background_style": "blue-50", "padding": "12px 12px 12px 12px", "vertical_spacing": "4px", "horizontal_align": "left", "vertical_align": "top", "weight": 1,
+                            "elements": []any{
+                                map[string]any{ "tag": "div", "text": map[string]any{"tag": "plain_text", "content": "当前绑定", "text_align": "left", "text_size": "normal_v2", "text_color": "blue"}, "icon": map[string]any{"tag": "standard_icon", "token": "info_outlined", "color": "grey"}},
+                                map[string]any{ "tag": "markdown", "content": currDetail, "text_align": "left", "text_size": "normal_v2", "element_id": "curr_detail" },
+                            },
+                        },
+                        map[string]any{
+                            "tag": "column", "width": "weighted", "background_style": "violet-50", "padding": "12px 12px 12px 12px", "vertical_spacing": "4px", "horizontal_align": "left", "vertical_align": "top", "weight": 1,
+                            "elements": []any{
+                                map[string]any{ "tag": "div", "text": map[string]any{"tag": "plain_text", "content": "新的请求", "text_align": "left", "text_size": "normal_v2", "text_color": "violet"}, "icon": map[string]any{"tag": "standard_icon", "token": "more-add_outlined", "color": "grey"}},
+                                map[string]any{ "tag": "markdown", "content": newDetail, "text_align": "left", "text_size": "normal_v2", "element_id": "new_detail" },
+                            },
+                        },
+                    },
+                    "margin": "0px 0px 0px 0px",
+                },
+                map[string]any{ "tag": "hr", "margin": "0px 0px 0px 0px", "element_id": "divider" },
+                map[string]any{
+                    "tag": "column_set", "flex_mode": "stretch", "horizontal_spacing": "8px", "horizontal_align": "left",
+                    "columns": []any{
+                        map[string]any{
+                            "tag": "column", "width": "auto", "vertical_spacing": "8px", "horizontal_align": "left", "vertical_align": "top",
+                            "elements": []any{
+                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "确认换绑"}, "type": "primary_filled", "width": "default", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{
+                                    "op": "rebind_confirm", "chat_id": chatID, "thread_id": threadID, "curr_issue_id": currIssueID, "curr_project_id": currProjectID, "curr_slug": currSlug, "new_issue_id": newIssueID, "new_project_id": newProjectID, "new_slug": newSlug,
+                                }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_confirm" },
+                            },
+                        },
+                        map[string]any{
+                            "tag": "column", "width": "auto", "vertical_spacing": "8px", "horizontal_align": "left", "vertical_align": "top",
+                            "elements": []any{
+                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"}, "type": "default", "width": "default", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{ "op": "rebind_cancel", "chat_id": chatID, "thread_id": threadID }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_cancel" },
+                            },
+                        },
+                    },
+                    "margin": "0px 0px 0px 0px",
+                },
+            },
+        },
+        "header": map[string]any{
+            "title": map[string]any{"tag": "plain_text", "content": "确认Issue绑定请求"},
+            "subtitle": map[string]any{"tag": "plain_text", "content": ""},
+            "template": "blue",
+            "icon": map[string]any{"tag": "standard_icon", "token": "link-copy_outlined"},
+            "padding": "12px 12px 12px 12px",
         },
     }
     ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
