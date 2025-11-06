@@ -956,7 +956,12 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
                             "width":          "auto",
                             "vertical_align": "top",
                             "elements": []any{
-                                map[string]any{"tag": "markdown", "content": "当前绑定\n" + currDisplay},
+                                map[string]any{
+                                    "tag":  "div",
+                                    "text": map[string]any{"tag": "plain_text", "content": "当前绑定", "text_size": "heading-4", "text_color": "indigo"},
+                                    "icon": map[string]any{"tag": "standard_icon", "token": "link-lock_outlined", "color": "indigo"},
+                                },
+                                map[string]any{"tag": "markdown", "content": currDisplay},
                             },
                         },
                         map[string]any{
@@ -964,7 +969,12 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
                             "width":          "auto",
                             "vertical_align": "top",
                             "elements": []any{
-                                map[string]any{"tag": "markdown", "content": "新的请求\n" + newDisplay},
+                                map[string]any{
+                                    "tag":  "div",
+                                    "text": map[string]any{"tag": "plain_text", "content": "新的请求", "text_size": "heading-4", "text_color": "orange"},
+                                    "icon": map[string]any{"tag": "standard_icon", "token": "switch_outlined", "color": "orange"},
+                                },
+                                map[string]any{"tag": "markdown", "content": newDisplay},
                             },
                         },
                     },
