@@ -403,3 +403,62 @@ func (c *Client) UpdateInteractiveCard(ctx context.Context, tenantToken, callbac
     }
     return nil
 }
+
+// ChatShareLink represents a share link response from Feishu API
+type ChatShareLink struct {
+    ShareLink   string `json:"share_link"`
+    ExpireTime  string `json:"expire_time"`
+    IsPermanent bool   `json:"is_permanent"`
+}
+
+// GetChatShareLink fetches the share link for a chat group.
+// POST /open-apis/im/v1/chats/:chat_id/link
+// Per docs/feishu/003-服务端API/群组/群组管理/获取群分享链接.md
+func (c *Client) GetChatShareLink(ctx context.Context, tenantToken, chatID, validityPeriod string) (*ChatShareLink, error) {
+    if tenantToken == "" {
+        return nil, errors.New("missing tenant token")
+    }
+    if strings.TrimSpace(chatID) == "" {
+        return nil, errors.New("missing chat id")
+    }
+    pathID := url.PathEscape(chatID)
+    ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/chats/" + pathID + "/link"
+    // Default to week if not specified
+    if validityPeriod == "" {
+        validityPeriod = "week"
+    }
+    payload := map[string]any{"validity_period": validityPeriod}
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil {
+        return nil, err
+    }
+    req.Header.Set("Authorization", "Bearer "+tenantToken)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        body, _ := io.ReadAll(resp.Body)
+        var er struct{ Code int `json:"code"`; Msg string `json:"msg"` }
+        _ = json.Unmarshal(body, &er)
+        return nil, fmt.Errorf("lark get chat share link status=%d code=%d msg=%s", resp.StatusCode, er.Code, strings.TrimSpace(er.Msg))
+    }
+    var result struct {
+        Code int    `json:"code"`
+        Msg  string `json:"msg"`
+        Data ChatShareLink `json:"data"`
+    }
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+        return nil, err
+    }
+    if result.Code != 0 {
+        if result.Msg == "" {
+            result.Msg = "get chat share link failed"
+        }
+        return nil, errors.New(result.Msg)
+    }
+    return &result.Data, nil
+}

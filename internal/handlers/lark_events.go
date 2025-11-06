@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -233,6 +234,8 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			_ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID, threadID, issueID, projectID, slug)
 			// Success ack with details; prefer rich post with anchor title when possible
 			go h.postBindAck(ev.Message.ChatID, threadID, slug, projectID, issueID)
+			// Post share link to Plane issue as comment
+			go h.postChatShareLinkToPlane(ev.Message.ChatID, slug, projectID, issueID)
 			LogStructured("info", map[string]any{"event": "bind.persist.ok", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID, "project_id": projectID, "slug": slug})
 			return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "plane_issue_id": issueID})
 		}
@@ -1031,4 +1034,102 @@ func escapeMD(s string) string {
     s = strings.ReplaceAll(s, "(", "\\(")
     s = strings.ReplaceAll(s, ")", "\\)")
     return s
+}
+
+// postChatShareLinkToPlane fetches the chat share link and posts it as a comment to the Plane issue.
+func (h *Handler) postChatShareLinkToPlane(chatID, slug, projectID, issueID string) {
+	if !hHasDB(h) || h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
+		return
+	}
+	if chatID == "" || slug == "" || projectID == "" || issueID == "" {
+		LogStructured("warn", map[string]any{
+			"event": "post_share_link.skip",
+			"reason": "missing_params",
+			"chat_id": chatID,
+			"slug": slug,
+			"project_id": projectID,
+			"issue_id": issueID,
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// Get Plane token
+	token, err := h.ensurePlaneBotToken(ctx, slug)
+	if err != nil || token == "" {
+		LogStructured("error", map[string]any{
+			"event": "post_share_link.token_error",
+			"chat_id": chatID,
+			"slug": slug,
+			"error": err,
+		})
+		return
+	}
+
+	// Get Lark tenant token
+	larkCli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+	larkToken, _, err := larkCli.TenantAccessToken(ctx)
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event": "post_share_link.lark_token_error",
+			"chat_id": chatID,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Get chat info for display name
+	chatInfo, err := larkCli.GetChat(ctx, larkToken, chatID)
+	chatName := "飞书群聊"
+	if err == nil && chatInfo != nil && chatInfo.Name != "" {
+		chatName = chatInfo.Name
+	}
+
+	// Get chat share link
+	shareLink, err := larkCli.GetChatShareLink(ctx, larkToken, chatID, "year")
+	if err != nil {
+		LogStructured("error", map[string]any{
+			"event": "post_share_link.get_link_error",
+			"chat_id": chatID,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if shareLink == nil || shareLink.ShareLink == "" {
+		LogStructured("warn", map[string]any{
+			"event": "post_share_link.empty_link",
+			"chat_id": chatID,
+		})
+		return
+	}
+
+	// Build HTML comment with share link
+	commentHTML := fmt.Sprintf(
+		`<p>🔗 <strong>飞书群聊已绑定</strong></p><p>群聊名称：%s</p><p><a href="%s" target="_blank">点击加入群聊</a></p>`,
+		chatName,
+		shareLink.ShareLink,
+	)
+
+	// Post comment to Plane
+	pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+	if err := pc.AddComment(ctx, token, slug, projectID, issueID, commentHTML); err != nil {
+		LogStructured("error", map[string]any{
+			"event": "post_share_link.add_comment_error",
+			"chat_id": chatID,
+			"issue_id": issueID,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	LogStructured("info", map[string]any{
+		"event": "post_share_link.ok",
+		"chat_id": chatID,
+		"chat_name": chatName,
+		"issue_id": issueID,
+		"share_link": shareLink.ShareLink,
+	})
 }
