@@ -925,22 +925,13 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
         newDisplay = newURL
     }
     // Build Feishu Card JSON 2.0 (schema=2.0), improved layout per docs
-    // Try fetch current binding time
-    bindDate := ""
-    if hHasDB(h) && threadID != "" {
-        if tl, err := h.db.GetLarkThreadLink(context.Background(), threadID); err == nil {
-            bindDate = tl.LinkedAt.UTC().Format("2006-01-02")
-        }
-    }
     summary := "确认Issue绑定请求"
     if currTitle != "" && newTitle != "" {
         summary = "确认：" + currTitle + " → " + newTitle
     }
-    // Compose markdown detail lines
-    currDetail := "• Issue: " + currDisplay
-    if bindDate != "" { currDetail += "\n• 绑定时间: **" + bindDate + "**" }
-    reqDate := time.Now().UTC().Format("2006-01-02")
-    newDetail := "• Issue: " + newDisplay + "\n• 请求时间: **" + reqDate + "**"
+    // Compose markdown detail lines (titles only, no time / no "Issue:" prefix)
+    currDetail := "**" + currDisplay + "**"
+    newDetail := "**" + newDisplay + "**"
     card := map[string]any{
         "schema": "2.0",
         "config": map[string]any{
@@ -982,7 +973,7 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
                         map[string]any{
                             "tag": "column", "width": "auto", "vertical_spacing": "8px", "horizontal_align": "left", "vertical_align": "top",
                             "elements": []any{
-                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "确认换绑"}, "type": "primary_filled", "width": "default", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{
+                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "确认换绑"}, "type": "primary_filled", "width": "default", "size": "large", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{
                                     "op": "rebind_confirm", "chat_id": chatID, "thread_id": threadID, "curr_issue_id": currIssueID, "curr_project_id": currProjectID, "curr_slug": currSlug, "new_issue_id": newIssueID, "new_project_id": newProjectID, "new_slug": newSlug,
                                 }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_confirm" },
                             },
@@ -990,7 +981,7 @@ func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectI
                         map[string]any{
                             "tag": "column", "width": "auto", "vertical_spacing": "8px", "horizontal_align": "left", "vertical_align": "top",
                             "elements": []any{
-                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"}, "type": "default", "width": "default", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{ "op": "rebind_cancel", "chat_id": chatID, "thread_id": threadID }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_cancel" },
+                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"}, "type": "default", "width": "default", "size": "large", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{ "op": "rebind_cancel", "chat_id": chatID, "thread_id": threadID }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_cancel" },
                             },
                         },
                     },
