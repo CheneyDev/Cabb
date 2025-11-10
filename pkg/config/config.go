@@ -17,11 +17,11 @@ type Config struct {
 	PlaneWebhookSecret string
 	PlaneServiceToken  string // Global Service Token for outbound API calls
 
-	// Feishu (Lark)
-	LarkAppID             string
-	LarkAppSecret         string
-	LarkEncryptKey        string
-	LarkVerificationToken string
+    // Feishu (Lark)
+    LarkAppID             string
+    LarkAppSecret         string
+    LarkEncryptKey        string
+    LarkVerificationToken string
 
 	// CNB
 	CNBAppToken        string
@@ -55,7 +55,7 @@ type Config struct {
 }
 
 func FromEnv() Config {
-	cfg := Config{
+    cfg := Config{
 		Port:        intFromEnv("PORT", 8080),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		Timezone:    strFromEnv("TIMEZONE", "Local"),
@@ -64,10 +64,10 @@ func FromEnv() Config {
 		PlaneWebhookSecret: os.Getenv("PLANE_WEBHOOK_SECRET"),
 		PlaneServiceToken:  os.Getenv("PLANE_SERVICE_TOKEN"),
 
-		LarkAppID:             os.Getenv("LARK_APP_ID"),
-		LarkAppSecret:         os.Getenv("LARK_APP_SECRET"),
-		LarkEncryptKey:        os.Getenv("LARK_ENCRYPT_KEY"),
-		LarkVerificationToken: os.Getenv("LARK_VERIFICATION_TOKEN"),
+        LarkAppID:             os.Getenv("LARK_APP_ID"),
+        LarkAppSecret:         os.Getenv("LARK_APP_SECRET"),
+        LarkEncryptKey:        os.Getenv("LARK_ENCRYPT_KEY"),
+        LarkVerificationToken: os.Getenv("LARK_VERIFICATION_TOKEN"),
 
 		CNBAppToken:        os.Getenv("CNB_APP_TOKEN"),
 		IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),

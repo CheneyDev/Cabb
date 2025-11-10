@@ -1,24 +1,73 @@
 package handlers
 
 import (
-	"context"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
+    "context"
+    "crypto/sha256"
+    "database/sql"
+    "encoding/hex"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+    "regexp"
+    "strconv"
+    "strings"
+    "time"
 
-	"cabb/internal/lark"
-	"cabb/internal/plane"
-	"cabb/internal/store"
-	"github.com/labstack/echo/v4"
+    "cabb/internal/lark"
+    "cabb/internal/plane"
+    "cabb/internal/store"
+    "github.com/labstack/echo/v4"
 )
+
+// Max acceptable age for incoming Lark events (seconds)
+const larkEventMaxAgeSeconds = 60
+
+// retryUpdateInteractiveCard updates a card via callback token with bounded retries and persists states into DB.
+// Backoff: 0s, 5s, 15s, 30s (4 attempts total). Writes event_deliveries with source=lark.card.update.
+func (h *Handler) retryUpdateInteractiveCard(callbackToken string, card map[string]any) {
+    if strings.TrimSpace(callbackToken) == "" || card == nil {
+        return
+    }
+    // Prepare identifiers
+    b, _ := json.Marshal(card)
+    sum := sha256.Sum256(b)
+    payloadSHA := hex.EncodeToString(sum[:])
+    // Record/initialize delivery row
+    if hHasDB(h) {
+        _ = h.db.UpsertEventDelivery(context.Background(), "lark.card.update", "card.update", callbackToken, payloadSHA, "queued")
+    }
+    backoffs := []time.Duration{0, 5 * time.Second, 15 * time.Second, 30 * time.Second}
+    cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+    for i, d := range backoffs {
+        if d > 0 {
+            time.Sleep(d)
+        }
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        token, _, err := cli.TenantAccessToken(ctx)
+        if err == nil {
+            err = cli.UpdateInteractiveCard(ctx, token, callbackToken, card)
+        }
+        cancel()
+        if err == nil {
+            LogStructured("info", map[string]any{"event": "lark.card.update.ok", "attempt": i + 1})
+            if hHasDB(h) {
+                _ = h.db.UpdateEventDeliveryStatus(context.Background(), "lark.card.update", callbackToken, "succeeded", nil)
+            }
+            return
+        }
+        // Schedule next retry if any
+        LogStructured("error", map[string]any{"event": "lark.card.update.fail", "attempt": i + 1, "error": err.Error()})
+        if hHasDB(h) {
+            if i < len(backoffs)-1 {
+                next := time.Now().Add(backoffs[i+1])
+                _ = h.db.UpdateEventDeliveryRetry(context.Background(), "lark.card.update", callbackToken, next)
+            } else {
+                _ = h.db.UpdateEventDeliveryStatus(context.Background(), "lark.card.update", callbackToken, "failed", nil)
+            }
+        }
+    }
+}
 
 // Event v2 envelope (兼容 challenge 握手)
 type larkEventEnvelope struct {
@@ -72,11 +121,11 @@ type larkTextContent struct {
 }
 
 func (h *Handler) LarkEvents(c echo.Context) error {
-	// Read raw for signature verification
-	body, err := io.ReadAll(c.Request().Body)
-	if err != nil {
-		return c.NoContent(http.StatusBadRequest)
-	}
+    // Read raw for signature verification
+    body, err := io.ReadAll(c.Request().Body)
+    if err != nil {
+        return c.NoContent(http.StatusBadRequest)
+    }
 
 	// Challenge quick path (旧版/新版均可)
 	var probe struct {
@@ -98,14 +147,54 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 		}
 	}
 
-	// Parse envelope
-	var env larkEventEnvelope
-	if err := json.Unmarshal(body, &env); err != nil {
-		return c.NoContent(http.StatusBadRequest)
-	}
-	if env.Challenge != "" { // 冗余保护
-		return c.JSON(http.StatusOK, map[string]string{"challenge": env.Challenge})
-	}
+    // Parse envelope
+    var env larkEventEnvelope
+    if err := json.Unmarshal(body, &env); err != nil {
+        return c.NoContent(http.StatusBadRequest)
+    }
+    if env.Challenge != "" { // 冗余保护
+        return c.JSON(http.StatusOK, map[string]string{"challenge": env.Challenge})
+    }
+
+    // Lark events idempotency + lateness guard
+    // 1) In-memory dedupe by event_id + payload sha256
+    evtID := strings.TrimSpace(env.Header.EventID)
+    sum := sha256.Sum256(body)
+    payloadSHA := hex.EncodeToString(sum[:])
+    if evtID != "" && h.dedupe != nil && h.dedupe.CheckAndMark("lark.events", evtID, payloadSHA) {
+        LogStructured("info", map[string]any{"event": "lark.event.duplicate.mem", "event_id": evtID})
+        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+    }
+    // 2) Persistent dedupe when DB is available
+    if hHasDB(h) && evtID != "" {
+        if dup, err := h.db.IsDuplicateDelivery(c.Request().Context(), "lark.events", evtID, payloadSHA); err == nil && dup {
+            LogStructured("info", map[string]any{"event": "lark.event.duplicate.db", "event_id": evtID})
+            return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+        }
+        _ = h.db.UpsertEventDelivery(c.Request().Context(), "lark.events", strings.ToLower(env.Header.EventType), evtID, payloadSHA, "seen")
+    }
+    // 3) Lateness guard: drop events older than fixed max age
+    if larkEventMaxAgeSeconds > 0 {
+        maxAge := larkEventMaxAgeSeconds
+        ct := strings.TrimSpace(env.Header.CreateTime)
+        if ct != "" {
+            if ts, err := strconv.ParseInt(ct, 10, 64); err == nil {
+                // Heuristic: treat values > 10^12 as milliseconds
+                if ts > 1_000_000_000_000 {
+                    ts = ts / 1000
+                }
+                evtT := time.Unix(ts, 0)
+                age := time.Since(evtT)
+                if age > time.Duration(maxAge)*time.Second {
+                    LogStructured("info", map[string]any{"event": "lark.event.expired", "event_id": evtID, "age_ms": age.Milliseconds(), "max_age_s": maxAge})
+                    if hHasDB(h) && evtID != "" {
+                        _ = h.db.UpdateEventDeliveryStatus(c.Request().Context(), "lark.events", evtID, "expired", nil)
+                    }
+                    return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "expired"})
+                }
+            }
+        }
+    }
 
 	switch strings.ToLower(env.Header.EventType) {
 	case "im.message.receive_v1":
@@ -243,15 +332,15 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 		if ev.Message.RootID != "" && hHasDB(h) {
 			threadID := ev.Message.RootID
 			tl, err := h.db.GetLarkThreadLink(c.Request().Context(), threadID)
-			if err == nil && tl != nil && tl.PlaneIssueID != "" {
+            if err == nil && tl != nil && tl.PlaneIssueID != "" {
 				// 1) comment command: /comment or 评论
 				arg := extractCommandArg(text, "/comment")
 				if arg == "" {
 					arg = extractCommandArg(text, "评论")
 				}
 				if arg != "" {
-					trimmed := strings.TrimSpace(arg)
-					go h.postPlaneComment(tl, trimmed)
+                    trimmed := strings.TrimSpace(arg)
+                    go h.postPlaneCommentWithRetry(tl, trimmed, ev.Message.MessageID)
 					// Best-effort user feedback in thread
 					go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "评论已同步至 Plane")
 					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "comment", "plane_issue_id": tl.PlaneIssueID})
@@ -293,15 +382,15 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 				}
 
 				// 3) auto-sync: non-command text in a bound thread when enabled
-				if tl.SyncEnabled && ev.Message.MessageType == "text" {
+                if tl.SyncEnabled && ev.Message.MessageType == "text" {
 					// skip slash-command messages
-					if !strings.HasPrefix(lct, "/") && strings.TrimSpace(text) != "" {
-						go h.postPlaneComment(tl, text)
-						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "sync_auto", "plane_issue_id": tl.PlaneIssueID})
-					}
-				}
-			}
-		}
+                        if !strings.HasPrefix(lct, "/") && strings.TrimSpace(text) != "" {
+                            go h.postPlaneCommentWithRetry(tl, text, ev.Message.MessageID)
+                            return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "sync_auto", "plane_issue_id": tl.PlaneIssueID})
+                        }
+                    }
+                }
+            }
 		// Chat-level /sync toggle fallback when no thread context
 		if hHasDB(h) && ev.Message.RootID == "" && ev.Message.ChatID != "" {
 			lct := strings.ToLower(strings.TrimSpace(text))
@@ -345,7 +434,7 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 						WorkspaceSlug:  cl.WorkspaceSlug,
 						SyncEnabled:    false,
 					}
-					go h.postPlaneComment(tl, strings.TrimSpace(arg))
+                    go h.postPlaneCommentWithRetry(tl, strings.TrimSpace(arg), ev.Message.MessageID)
 					// Ack to chat or mapped thread
 					t := nsToString(cl.LarkThreadID)
 					go h.sendLarkTextToThread(ev.Message.ChatID, t, "评论已同步至 Plane")
@@ -402,6 +491,40 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
             }
         }
     }
+    // Dedupe + lateness guard when we can parse envelope
+    var baseEnv larkEventEnvelope
+    _ = json.Unmarshal(body, &baseEnv)
+    if baseEnv.Header.EventID != "" {
+        evtID := strings.TrimSpace(baseEnv.Header.EventID)
+        sum := sha256.Sum256(body)
+        payloadSHA := hex.EncodeToString(sum[:])
+        if h.dedupe != nil && h.dedupe.CheckAndMark("lark.interactivity", evtID, payloadSHA) {
+            LogStructured("info", map[string]any{"event": "lark.interactivity.duplicate.mem", "event_id": evtID})
+            return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+        }
+        if hHasDB(h) {
+            if dup, err := h.db.IsDuplicateDelivery(c.Request().Context(), "lark.interactivity", evtID, payloadSHA); err == nil && dup {
+                LogStructured("info", map[string]any{"event": "lark.interactivity.duplicate.db", "event_id": evtID})
+                return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+            }
+            _ = h.db.UpsertEventDelivery(c.Request().Context(), "lark.interactivity", strings.ToLower(baseEnv.Header.EventType), evtID, payloadSHA, "seen")
+        }
+        if larkEventMaxAgeSeconds > 0 {
+            ct := strings.TrimSpace(baseEnv.Header.CreateTime)
+            if ct != "" {
+                if ts, err := strconv.ParseInt(ct, 10, 64); err == nil {
+                    if ts > 1_000_000_000_000 { ts = ts / 1000 }
+                    evtT := time.Unix(ts, 0)
+                    age := time.Since(evtT)
+                    if age > time.Duration(larkEventMaxAgeSeconds)*time.Second {
+                        LogStructured("info", map[string]any{"event": "lark.interactivity.expired", "event_id": evtID, "age_ms": age.Milliseconds()})
+                        if hHasDB(h) { _ = h.db.UpdateEventDeliveryStatus(c.Request().Context(), "lark.interactivity", evtID, "expired", nil) }
+                        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "expired"})
+                    }
+                }
+            }
+        }
+    }
     // Try envelope form first (im.message.card.action.trigger)
     var env larkEventEnvelope
     if json.Unmarshal(body, &env) == nil && len(env.Event) > 0 {
@@ -436,7 +559,52 @@ func (h *Handler) LarkInteractivity(c echo.Context) error {
 }
 
 func (h *Handler) LarkCommands(c echo.Context) error {
-	return c.NoContent(http.StatusOK)
+    body, err := io.ReadAll(c.Request().Body)
+    if err != nil {
+        return c.NoContent(http.StatusBadRequest)
+    }
+    if !h.verifyLarkSignature(c.Request().Header, body) {
+        var env larkEventEnvelope
+        if json.Unmarshal(body, &env) == nil {
+            if h.cfg.LarkVerificationToken != "" && env.Header.Token != h.cfg.LarkVerificationToken {
+                return c.NoContent(http.StatusUnauthorized)
+            }
+        }
+    }
+    var env larkEventEnvelope
+    _ = json.Unmarshal(body, &env)
+    evtID := strings.TrimSpace(env.Header.EventID)
+    if evtID != "" {
+        sum := sha256.Sum256(body)
+        payloadSHA := hex.EncodeToString(sum[:])
+        if h.dedupe != nil && h.dedupe.CheckAndMark("lark.commands", evtID, payloadSHA) {
+            LogStructured("info", map[string]any{"event": "lark.commands.duplicate.mem", "event_id": evtID})
+            return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+        }
+        if hHasDB(h) {
+            if dup, err := h.db.IsDuplicateDelivery(c.Request().Context(), "lark.commands", evtID, payloadSHA); err == nil && dup {
+                LogStructured("info", map[string]any{"event": "lark.commands.duplicate.db", "event_id": evtID})
+                return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+            }
+            _ = h.db.UpsertEventDelivery(c.Request().Context(), "lark.commands", strings.ToLower(env.Header.EventType), evtID, payloadSHA, "seen")
+        }
+        if larkEventMaxAgeSeconds > 0 {
+            ct := strings.TrimSpace(env.Header.CreateTime)
+            if ct != "" {
+                if ts, err := strconv.ParseInt(ct, 10, 64); err == nil {
+                    if ts > 1_000_000_000_000 { ts = ts / 1000 }
+                    evtT := time.Unix(ts, 0)
+                    age := time.Since(evtT)
+                    if age > time.Duration(larkEventMaxAgeSeconds)*time.Second {
+                        LogStructured("info", map[string]any{"event": "lark.commands.expired", "event_id": evtID, "age_ms": age.Milliseconds()})
+                        if hHasDB(h) { _ = h.db.UpdateEventDeliveryStatus(c.Request().Context(), "lark.commands", evtID, "expired", nil) }
+                        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "expired"})
+                    }
+                }
+            }
+        }
+    }
+    return c.NoContent(http.StatusOK)
 }
 
 // handleLarkCardAction processes a minimal value map with our custom fields.
@@ -499,21 +667,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any, callb
         }
         // Prefer delayed update with callback token, return toast immediately
         if callbackToken != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
-            go func(token string, card map[string]any) {
-                ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-                defer cancel()
-                cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-                tkn, _, err := cli.TenantAccessToken(ctx)
-                if err != nil {
-                    LogStructured("error", map[string]any{"event": "lark.card.update.token_error", "error": err.Error()})
-                    return
-                }
-                if err := cli.UpdateInteractiveCard(ctx, tkn, token, card); err != nil {
-                    LogStructured("error", map[string]any{"event": "lark.card.update.fail", "error": err.Error()})
-                } else {
-                    LogStructured("info", map[string]any{"event": "lark.card.update.ok"})
-                }
-            }(callbackToken, card)
+            go h.retryUpdateInteractiveCard(callbackToken, card)
         }
         LogStructured("info", map[string]any{"event": "lark.card.action.persist.ok", "op": op, "chat_id": chatID, "thread_id": threadID, "new_issue_id": newIssue})
         return c.JSON(http.StatusOK, map[string]any{"toast": map[string]any{"type": "success", "content": "已改绑"}})
@@ -545,21 +699,7 @@ func (h *Handler) handleLarkCardAction(c echo.Context, val map[string]any, callb
             },
         }
         if callbackToken != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
-            go func(token string, card map[string]any) {
-                ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-                defer cancel()
-                cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-                tkn, _, err := cli.TenantAccessToken(ctx)
-                if err != nil {
-                    LogStructured("error", map[string]any{"event": "lark.card.update.token_error", "error": err.Error()})
-                    return
-                }
-                if err := cli.UpdateInteractiveCard(ctx, tkn, token, card); err != nil {
-                    LogStructured("error", map[string]any{"event": "lark.card.update.fail", "error": err.Error()})
-                } else {
-                    LogStructured("info", map[string]any{"event": "lark.card.update.ok"})
-                }
-            }(callbackToken, card)
+            go h.retryUpdateInteractiveCard(callbackToken, card)
         }
         LogStructured("info", map[string]any{"event": "lark.card.action.ok", "op": op, "chat_id": chatID, "thread_id": threadID})
         return c.JSON(http.StatusOK, map[string]any{"toast": map[string]any{"type": "info", "content": "已取消"}})
@@ -680,32 +820,67 @@ func (h *Handler) sendLarkTextToThread(chatID, threadID, text string) error {
 }
 
 // postPlaneComment posts a text comment into Plane for the given thread link.
-func (h *Handler) postPlaneComment(tl *store.LarkThreadLink, comment string) {
-	if !hHasDB(h) || tl == nil || tl.PlaneIssueID == "" {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-	defer cancel()
-	// Resolve workspace slug and project id
-	slug := ""
-	if tl.WorkspaceSlug.Valid {
-		slug = tl.WorkspaceSlug.String
-	}
-	projectID := ""
-	if tl.PlaneProjectID.Valid {
-		projectID = tl.PlaneProjectID.String
-	}
-	if slug == "" || projectID == "" {
-		return
-	} // cannot route; 待确认：是否支持通过 Issue API 反查
-	token, _ := h.ensurePlaneBotToken(ctx, slug)
-	if token == "" {
-		return
-	}
-	pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
-	// Wrap as simple HTML; escape minimal
-	html := comment // Feishu text contains no HTML; Plane accepts HTML
-	_ = pc.AddComment(ctx, token, slug, projectID, tl.PlaneIssueID, html)
+// postPlaneCommentWithRetry posts a Plane comment with idempotency and bounded retries.
+// delivery_id: prefer Lark message_id; fallback to sha(issue_id|comment)
+func (h *Handler) postPlaneCommentWithRetry(tl *store.LarkThreadLink, comment, larkMessageID string) {
+    if !hHasDB(h) || tl == nil || tl.PlaneIssueID == "" {
+        return
+    }
+    // Resolve routing
+    slug := ""
+    if tl.WorkspaceSlug.Valid { slug = tl.WorkspaceSlug.String }
+    projectID := ""
+    if tl.PlaneProjectID.Valid { projectID = tl.PlaneProjectID.String }
+    if slug == "" || projectID == "" {
+        return
+    }
+    // Build delivery identifiers
+    trimmed := strings.TrimSpace(comment)
+    if trimmed == "" { return }
+    var deliveryID string
+    if strings.TrimSpace(larkMessageID) != "" {
+        deliveryID = strings.TrimSpace(larkMessageID)
+    } else {
+        sum := sha256.Sum256([]byte(tl.PlaneIssueID + "|" + trimmed))
+        deliveryID = hex.EncodeToString(sum[:])
+    }
+    payloadSHA := deliveryID // stable enough; could also hash full payload
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    if dup, err := h.db.IsDuplicateDelivery(ctx, "lark.comment", deliveryID, payloadSHA); err == nil && dup {
+        cancel()
+        LogStructured("info", map[string]any{"event": "lark.comment.duplicate.db", "delivery_id": deliveryID})
+        return
+    }
+    _ = h.db.UpsertEventDelivery(ctx, "lark.comment", "comment", deliveryID, payloadSHA, "queued")
+    cancel()
+
+    // Retry plan
+    backoffs := []time.Duration{0, 5 * time.Second, 15 * time.Second}
+    for i, d := range backoffs {
+        if d > 0 { time.Sleep(d) }
+        rctx, rcancel := context.WithTimeout(context.Background(), 12*time.Second)
+        token, _ := h.ensurePlaneBotToken(rctx, slug)
+        var err error
+        if token == "" {
+            err = fmt.Errorf("missing_plane_token")
+        } else {
+            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+            html := trimmed
+            err = pc.AddComment(rctx, token, slug, projectID, tl.PlaneIssueID, html)
+        }
+        rcancel()
+        if err == nil {
+            LogStructured("info", map[string]any{"event": "lark.comment.post.ok", "attempt": i + 1, "issue_id": tl.PlaneIssueID})
+            _ = h.db.UpdateEventDeliveryStatus(context.Background(), "lark.comment", deliveryID, "succeeded", nil)
+            return
+        }
+        LogStructured("error", map[string]any{"event": "lark.comment.post.fail", "attempt": i + 1, "issue_id": tl.PlaneIssueID, "error": truncate(err.Error(), 200)})
+        if i < len(backoffs)-1 {
+            _ = h.db.UpdateEventDeliveryRetry(context.Background(), "lark.comment", deliveryID, time.Now().Add(backoffs[i+1]))
+        } else {
+            _ = h.db.UpdateEventDeliveryStatus(context.Background(), "lark.comment", deliveryID, "failed", nil)
+        }
+    }
 }
 
 // extractCommandArg returns text after a command prefix (case-insensitive), trimmed.

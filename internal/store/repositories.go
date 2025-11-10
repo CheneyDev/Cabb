@@ -62,6 +62,16 @@ func (d *DB) UpdateEventDeliveryStatus(ctx context.Context, source, deliveryID, 
 	return err
 }
 
+// UpdateEventDeliveryRetry increments retries and sets next_retry_at with status='retry'.
+func (d *DB) UpdateEventDeliveryRetry(ctx context.Context, source, deliveryID string, nextRetryAt time.Time) error {
+    if d == nil || d.SQL == nil {
+        return nil
+    }
+    const q = `UPDATE event_deliveries SET status='retry', retries=retries+1, next_retry_at=$3 WHERE source=$1 AND delivery_id=$2`
+    _, err := d.SQL.ExecContext(ctx, q, source, deliveryID, nextRetryAt)
+    return err
+}
+
 // RepoProjectMappings repo
 type RepoProjectMapping struct {
 	PlaneProjectID     string

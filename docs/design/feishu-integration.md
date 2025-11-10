@@ -121,6 +121,17 @@ POST /webhooks/lark/commands       # 命令处理
 - 群内命令 `/comment`、`/sync on|off` 等按“线程粒度”生效：只影响当前绑定线程，不影响其他群聊或线程。
 - 每个群聊仍保持“单一活跃绑定”的约束（同一群聊同一时间仅绑定一个 issue）；重复绑定同一 issue 会提示“已绑定（无需重复绑定）”。
 
+### 事件去重与时效
+
+- 去重键：`header.event_id + payload_sha256`，首先使用 5 分钟 TTL 的内存去重兜底，其次持久化到 `event_deliveries` 表，命中则直接返回 `200 {status: "duplicate"}`。
+- 事件时效：通过 `header.create_time` 判定事件年龄，超过 60 秒的迟到事件直接忽略（返回 `200 {status: "expired"}`），避免平台重试导致历史事件在修复后被补处理。
+
+### 卡片更新重试
+
+- 交互卡片更新采用回调 token（callback token）延迟更新。
+- 写入 `event_deliveries`（`source=lark.card.update`，`event_type=card.update`），便于观测与排错。
+- 退避策略：0s、5s、15s、30s 共 4 次尝试；成功标记 `succeeded`，失败标记 `failed`；每次失败会更新 `retries` 和 `next_retry_at`。
+
 ### 2. 标签通知接口
 
 ```
