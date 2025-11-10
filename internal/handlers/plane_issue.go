@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"context"
-	"fmt"
-	"sort"
-	"strings"
-	"sync"
-	"time"
+    "context"
+    "fmt"
+    "sort"
+    "strings"
+    "sync"
+    "time"
 
-	"cabb/internal/cnb"
-	"cabb/internal/plane"
+    "cabb/internal/cnb"
+    "cabb/internal/plane"
 )
 
 // acquireCreateLock locks on a (repo|planeIssueID) key to serialize CNB issue creation in-process
@@ -479,15 +479,14 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 	// Plane 会同时发送 issue_comment 与 issue.updated(仅评论相关字段变更) 两个事件。为避免重复通知，这里在 activity.field 含 "comment" 时不发送摘要通知。
 	af := strings.ToLower(strings.TrimSpace(env.Activity.Field))
 	isCommentActivity := strings.Contains(af, "comment")
-	if !isCommentActivity && planeIssueID != "" {
-		if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
-			summary := "Plane 工作项更新: " + truncate(name, 80)
-			if action != "" {
-				summary += " (" + action + ")"
-			}
-			go h.sendLarkTextToThread("", tid, summary)
-		}
-	}
+    if !isCommentActivity && planeIssueID != "" {
+        summary := "Plane 工作项更新: " + truncate(name, 80)
+        if action != "" {
+            summary += " (" + action + ")"
+        }
+        // 广播到所有已绑定的飞书线程
+        go h.notifyAllLarkThreads(planeIssueID, summary)
+    }
 	if deliveryID != "" {
 		_ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue", deliveryID, "succeeded", nil)
 	}
@@ -550,26 +549,27 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
 			}
 		}
 	}
-	if tid, err := h.db.FindLarkThreadByPlaneIssue(ctx, planeIssueID); err == nil && tid != "" {
-		txt := commentHTML
-		txt = strings.ReplaceAll(txt, "<br>", "\n")
-		txt = stripTags(txt)
-		// Prefer mapped display name; fallback to Plane actor display name
-		actorName := ""
-		if id := strings.TrimSpace(env.Activity.Actor.ID); id != "" && hHasDB(h) {
-			if name, err := h.db.FindDisplayNameByPlaneUserID(ctx, id); err == nil && strings.TrimSpace(name) != "" {
-				actorName = strings.TrimSpace(name)
-			}
-		}
-		if actorName == "" {
-			actorName = strings.TrimSpace(env.Activity.Actor.DisplayName)
-		}
-		if actorName == "" {
-			actorName = "Plane 用户"
-		}
-		msg := actorName + " 添加评论：" + truncate(txt, 140)
-		go h.sendLarkTextToThread("", tid, msg)
-	}
+    if planeIssueID != "" {
+        txt := commentHTML
+        txt = strings.ReplaceAll(txt, "<br>", "\n")
+        txt = stripTags(txt)
+        // Prefer mapped display name; fallback to Plane actor display name
+        actorName := ""
+        if id := strings.TrimSpace(env.Activity.Actor.ID); id != "" && hHasDB(h) {
+            if name, err := h.db.FindDisplayNameByPlaneUserID(ctx, id); err == nil && strings.TrimSpace(name) != "" {
+                actorName = strings.TrimSpace(name)
+            }
+        }
+        if actorName == "" {
+            actorName = strings.TrimSpace(env.Activity.Actor.DisplayName)
+        }
+        if actorName == "" {
+            actorName = "Plane 用户"
+        }
+        msg := actorName + " 添加评论：" + truncate(txt, 140)
+        // 广播到所有已绑定的飞书线程
+        go h.notifyAllLarkThreads(planeIssueID, msg)
+    }
 	if deliveryID != "" {
 		_ = h.db.UpdateEventDeliveryStatus(ctx, "plane.issue_comment", deliveryID, "succeeded", nil)
 	}
@@ -578,6 +578,32 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
 // ==== helpers (issue) ====
 
 func hHasDB(h *Handler) bool { return h != nil && h.db != nil && h.db.SQL != nil }
+
+// notifyAllLarkThreads 将文本消息广播到与指定 Plane Issue 绑定的所有飞书线程。
+// 设计：
+// - 多群绑定：同一 plane_issue_id 可在多个群/线程中绑定；此处逐一发送。
+// - 失败容错：单个线程发送失败不会影响其他线程。
+// - 发送路径：优先在线程中回复；若失败且已知 chat_id，则退回群内发送。
+func (h *Handler) notifyAllLarkThreads(planeIssueID, text string) {
+    if !hHasDB(h) || strings.TrimSpace(planeIssueID) == "" || strings.TrimSpace(text) == "" {
+        return
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+    defer cancel()
+    links, err := h.db.ListLarkThreadLinks(ctx, planeIssueID, "", nil, 200)
+    if err != nil || len(links) == 0 {
+        return
+    }
+    for _, tl := range links {
+        // Best-effort: 先尝试线程回复
+        if err := h.sendLarkTextToThread(tl.LarkChatID.String, tl.LarkThreadID, text); err != nil {
+            // 已在 sendLarkTextToThread 中做过失败日志，这里继续尝试 chat 级发送
+            if tl.LarkChatID.Valid {
+                _ = h.sendLarkTextToThread(tl.LarkChatID.String, "", text)
+            }
+        }
+    }
+}
 
 // syncParentIssueIfNeeded 同步父工作项到 CNB 并返回 CNB Issue 编号
 func (h *Handler) syncParentIssueIfNeeded(ctx context.Context, parentPlaneID, cnbRepoID, workspaceSlug, planeProjectID string, cn *cnb.Client) (string, error) {
