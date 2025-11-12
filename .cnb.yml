@@ -24,7 +24,8 @@ main:
           timeout: 20m
           script:
             - |
-              set -euo pipefail
+              # use POSIX sh options (dash) — avoid pipefail
+              set -eu
               echo "[setup] update packages and install git/curl/tzdata" >&2
               apt-get update -y >/dev/null
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
@@ -67,7 +68,8 @@ main:
           timeout: 20m
           script:
             - |
-              set -euo pipefail
+              # use POSIX sh options (dash) — avoid pipefail
+              set -eu
               echo "[setup] update packages and install git/curl/tzdata" >&2
               apt-get update -y >/dev/null
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
