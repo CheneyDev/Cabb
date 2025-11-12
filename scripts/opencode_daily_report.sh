@@ -9,7 +9,8 @@ export TZ=${TZ:-Asia/Shanghai}
 
 timeframe="${REPORT_TIMEFRAME:-yesterday}"
 zen_mode="${ZEN_MODE:-1}"
-model="${OPENCODE_MODEL:-grok-code}"
+# prefer fully-qualified model id per docs (opencode/<model-id>)
+model="${OPENCODE_MODEL:-opencode/grok-code}"
 # Prefer OPENCODE_API_KEY; fallbacks are best-effort in case secrets use different key names
 api_key="${OPENCODE_API_KEY:-}"
 if [ -z "${api_key}" ]; then
@@ -99,8 +100,7 @@ fi
 try_opencode() {
   command -v opencode >/dev/null 2>&1 || return 1
 
-  # Avoid leaking key to logs
-  export OPENCODE_ZEN="${zen_mode}"
+  # Avoid leaking key to logs; pass via env
   export OPENCODE_MODEL="${model}"
   if [ -n "${api_key}" ]; then
     export OPENCODE_API_KEY="${api_key}"
@@ -110,16 +110,12 @@ try_opencode() {
   prompt+="- 范围：${start_ts} 至 ${end_ts} (${TZ})\n"
   prompt+="- 要求：按作者分组，列出每位作者的提交条数与关键变更点；保留小标题，条目精炼；最后提供整体统计与风险/待办提示。\n"
 
-  # Try a few common CLI patterns, stop when one succeeds
-  # 1) Generic: read stdin, flags
-  if opencode --zen --model "${OPENCODE_MODEL}" --prompt "${prompt}" < "${log_file}" > "${out_file}.ai" 2>/dev/null; then
+  # Use non-interactive CLI per docs: opencode run
+  if opencode run -m "${OPENCODE_MODEL}" -f "${log_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
     return 0
   fi
-  # 2) Subcommand chat/ask
-  if opencode chat --zen -m "${OPENCODE_MODEL}" -p "${prompt}" < "${log_file}" > "${out_file}.ai" 2>/dev/null; then
-    return 0
-  fi
-  if opencode ask --zen -m "${OPENCODE_MODEL}" -p "${prompt}" < "${log_file}" > "${out_file}.ai" 2>/dev/null; then
+  # Fallback: attach server if running (unlikely in CI)
+  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${log_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
     return 0
   fi
   return 1

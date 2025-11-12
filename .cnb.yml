@@ -12,7 +12,7 @@ main:
       env:
         TZ: Asia/Shanghai
         RUNNER_ARCH: cnb:arch:amd64
-        OPENCODE_MODEL: "grok-code"
+        OPENCODE_MODEL: "opencode/grok-code"
         # 使用上一自然日作为日报统计范围（yesterday|today）
         REPORT_TIMEFRAME: "yesterday"
         ZEN_MODE: "1"
@@ -30,19 +30,17 @@ main:
               apt-get update -y >/dev/null
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
               git --version
-              echo "[setup] try install opencode CLI" >&2
-              # 优先官方安装脚本（如存在），失败则尝试 npm 全局安装
+              echo "[setup] install opencode CLI" >&2
+              # Correct installers per docs/opencode-docs/index.mdx
               if ! command -v opencode >/dev/null 2>&1; then
-                (curl -fsSL https://opencode.ai/install.sh | bash) || true
+                (curl -fsSL https://opencode.ai/install | bash) || true
               fi
               if ! command -v opencode >/dev/null 2>&1; then
-                npm i -g @opencode/cli || npm i -g opencode || true
+                npm i -g opencode-ai || true
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
-            - |
               echo "[report] run opencode (best-effort) with fallback summarizer" >&2
               bash scripts/opencode_daily_report.sh
-            - |
               echo "[report] show report summary" >&2
               if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
                 ls -lah daily-reports
@@ -59,7 +57,7 @@ main:
       env:
         TZ: Asia/Shanghai
         RUNNER_ARCH: cnb:arch:amd64
-        OPENCODE_MODEL: "grok-code"
+        OPENCODE_MODEL: "opencode/grok-code"
         ZEN_MODE: "1"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
@@ -74,18 +72,16 @@ main:
               apt-get update -y >/dev/null
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
               git --version
-              echo "[setup] try install opencode CLI" >&2
+              echo "[setup] install opencode CLI" >&2
               if ! command -v opencode >/dev/null 2>&1; then
-                (curl -fsSL https://opencode.ai/install.sh | bash) || true
+                (curl -fsSL https://opencode.ai/install | bash) || true
               fi
               if ! command -v opencode >/dev/null 2>&1; then
-                npm i -g @opencode/cli || npm i -g opencode || true
+                npm i -g opencode-ai || true
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
-            - |
               echo "[report] run opencode (best-effort) with fallback summarizer" >&2
               bash scripts/opencode_daily_report.sh
-            - |
               echo "[report] show report summary" >&2
               if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
                 ls -lah daily-reports
