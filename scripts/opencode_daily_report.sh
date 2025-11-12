@@ -32,17 +32,25 @@ case "${timeframe}" in
     end_ts=$(date -d "tomorrow 00:00:00" +'%Y-%m-%d 00:00:00')
     label=$(date +%Y-%m-%d)
     ;;
+  last_24h)
+    start_ts=$(date -d "-24 hours" +'%Y-%m-%d %H:%M:00')
+    end_ts=$(date +'%Y-%m-%d %H:%M:00')
+    label="$(date +%Y-%m-%d)-24h"
+    ;;
+  last_month)
+    first_of_this_month=$(date +%Y-%m-01)
+    start_month=$(date -d "${first_of_this_month} -1 month" +%Y-%m-01)
+    start_ts="${start_month} 00:00:00"
+    end_ts="${first_of_this_month} 00:00:00"
+    label=$(date -d "${first_of_this_month} -1 month" +%Y-%m)
+    ;;
   *)
-    echo "unknown REPORT_TIMEFRAME: ${timeframe}, fallback to yesterday" >&2
+    # default to yesterday
     start_ts=$(date -d "yesterday 00:00:00" +'%Y-%m-%d 00:00:00')
     end_ts=$(date -d "today 00:00:00" +'%Y-%m-%d 00:00:00')
     label=$(date -d "yesterday" +%Y-%m-%d)
     ;;
 esac
-
-echo "[debug] timezone: ${TZ}" >&2
-echo "[debug] timeframe: ${timeframe} => ${start_ts} .. ${end_ts} (label=${label})" >&2
-echo "[debug] CNB env: CNB_REPO_SLUG=${CNB_REPO_SLUG:-}, CNB_BRANCH=${CNB_BRANCH:-}, CNB_COMMIT=${CNB_COMMIT:-}" >&2
 
 repo_slug="${CNB_REPO_SLUG:-}"
 if [ -z "${repo_slug}" ]; then
@@ -92,26 +100,14 @@ ensure_repo || true
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
   git_root=$(git rev-parse --show-toplevel)
   git config --global --add safe.directory "${git_root}" || true
-  echo "[debug] git root: ${git_root}" >&2
-  echo "[debug] git remote -v:" >&2
-  (git remote -v | sed 's#://[^@]*@#://***@#') >&2 || true
-  echo "[debug] is shallow: $(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)" >&2
-  echo "[debug] local branches (head):" >&2
-  (git branch -a --format='%(refname:short)' | head -n 50) >&2 || true
   # Best‑effort: fetch full history and all branches, even if CI did a partial clone
   # Ensure remote tracks all branches
   if git remote get-url origin >/dev/null 2>&1; then
-    echo "[debug] remote set-branches origin *" >&2
-    (git remote set-branches origin "*" 2>&1 || true) >&2
+    (git remote set-branches origin "*" 2>/dev/null || true)
   fi
   # Fetch all refs and unshallow if needed
-  echo "[debug] fetch --all --prune --tags" >&2
-  (git fetch --all --prune --tags --recurse-submodules=no 2>&1 || true) >&2
-  echo "[debug] fetch --unshallow || --depth=0" >&2
-  (git fetch --unshallow 2>&1 || git fetch --depth=0 2>&1 || true) >&2
-  # Debug: show brief ref summary
-  echo "[debug] recent refs after fetch:" >&2
-  (git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' | sort -k2 | tail -n 10 || true) >&2
+  (git fetch --all --prune --tags --recurse-submodules=no 2>/dev/null || true)
+  (git fetch --unshallow 2>/dev/null || git fetch --depth=0 2>/dev/null || true)
 fi
 
 # Collect raw logs for the time window
@@ -123,11 +119,6 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ];
     --date=format:'%Y-%m-%d %H:%M' \
     --pretty=format:'%H%x09%an%x09%ad%x09%s' \
     > "${log_file}" || true
-  echo "[debug] log lines: $(wc -l < "${log_file}" 2>/dev/null || echo 0)" >&2
-  echo "[debug] log head:" >&2
-  (sed -n '1,10p' "${log_file}" 2>/dev/null || true) >&2
-  echo "[debug] author counts:" >&2
-  (awk -F "\t" '{print $2}' "${log_file}" 2>/dev/null | sed '/^$/d' | sort | uniq -c | sort -nr | sed -n '1,20p') >&2 || true
 else
   : > "${log_file}"
 fi
@@ -152,6 +143,47 @@ if ${has_commits}; then
 else
   echo "> 本时段暂无提交记录。" >> "${out_file}"
   echo "" >> "${out_file}"
+fi
+
+# Optional fallback: if no commits in the strict window, widen to the last 24 hours ending now
+if [ "${has_commits}" = false ]; then
+  fb_start_ts=$(date -d "-24 hours" +'%Y-%m-%d %H:%M:00' || true)
+  fb_end_ts=$(date +'%Y-%m-%d %H:%M:00' || true)
+  if [ -n "${fb_start_ts:-}" ]; then
+    echo "[debug] fallback window: ${fb_start_ts} .. ${fb_end_ts}" >&2
+    fb_log_file="tmp/git-logs-fallback-${label}.txt"
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
+      git log --all --since="${fb_start_ts}" --until="${fb_end_ts}" \
+        --date=format:'%Y-%m-%d %H:%M' \
+        --pretty=format:'%H%x09%an%x09%ad%x09%s' \
+        > "${fb_log_file}" || true
+      echo "[debug] fallback log lines: $(wc -l < "${fb_log_file}" 2>/dev/null || echo 0)" >&2
+    else
+      : > "${fb_log_file}"
+    fi
+    if [ -s "${fb_log_file}" ]; then
+      echo "> 注：严格时间窗内无提交；以下为过去24小时内的提交汇总（${fb_start_ts} 至 ${fb_end_ts}）。" >> "${out_file}"
+      echo "" >> "${out_file}"
+      echo "## 总览（过去24小时）" >> "${out_file}"
+      awk -F "\t" '{print $2}' "${fb_log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
+        | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s：%d 次提交\n", $0, c)}' >> "${out_file}"
+      echo "" >> "${out_file}"
+      echo "## 分作者提交明细（过去24小时）" >> "${out_file}"
+      mapfile -t authors < <(awk -F "\t" '{print $2}' "${fb_log_file}" | sed '/^$/d' | sort -u)
+      for author in "${authors[@]}"; do
+        echo "### ${author}" >> "${out_file}"
+        echo "" >> "${out_file}"
+        git log --all --since="${fb_start_ts}" --until="${fb_end_ts}" \
+          --author="${author}" \
+          --pretty=format:'- %h %s' \
+          >> "${out_file}" || true
+        echo "" >> "${out_file}"
+      done
+      # Swap log_file to fb for downstream AI summary
+      log_file="${fb_log_file}"
+      has_commits=true
+    fi
+  fi
 fi
 
 # Try opencode (zen mode) to author a polished report from raw logs
