@@ -25,6 +25,11 @@ main:
         REPORT_DIFF_MAX_COMMITS: "100"
         REPORT_NUMSTAT_LINES: "5000"
         REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
+        # 发布目标（默认指向 plane-test 仓库 main 分支 ai-report 根目录）
+        REPORT_PUBLISH_ENABLE: "1"
+        REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
+        REPORT_PUBLISH_BRANCH: "main"
+        REPORT_PUBLISH_DIR: "ai-report"
       # 秘钥仓库导入（参考 .cnb/web_trigger.yml 的 ENV_URL）
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
@@ -47,10 +52,10 @@ main:
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
               bash scripts/opencode_daily_report.sh
-              if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
-                ls -lah daily-reports
+              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+                ls -lah reports
                 echo "----- Report Preview -----"
-                head -n 80 $(ls -1t daily-reports/*.md | head -n 1) || true
+                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
                 echo "----- End Preview -----"
               else
                 echo "no report generated" >&2
@@ -76,6 +81,11 @@ main:
         REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
         # 要求 AI 汇总成功，否则任务失败（更贴合“必须AI理解后汇报”的诉求）
         REQUIRE_AI_SUMMARY: "1"
+        # 发布目标默认启用
+        REPORT_PUBLISH_ENABLE: "1"
+        REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
+        REPORT_PUBLISH_BRANCH: "main"
+        REPORT_PUBLISH_DIR: "ai-report"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate daily report
@@ -97,10 +107,10 @@ main:
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
               bash scripts/opencode_daily_report.sh
-              if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
-                ls -lah daily-reports
+              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+                ls -lah reports
                 echo "----- Report Preview -----"
-                head -n 80 $(ls -1t daily-reports/*.md | head -n 1) || true
+                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
                 echo "----- End Preview -----"
               else
                 echo "no report generated" >&2

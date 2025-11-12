@@ -38,7 +38,7 @@ branch:
           BRANCH: "main"
         inputs:
           SERVICES_LIST: *services_list_input
-      - name: 生成日报（手动）
+      - name: 生成汇报
         description: 汇总 git 提交并生成工作日报
         event: web_trigger_daily_report
         env:
@@ -46,6 +46,34 @@ branch:
           ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml"
         inputs:
           REPORT_TIMEFRAME: *report_timeframe_input
+          REPORT_PUBLISH_ENABLE:
+            name: 是否推送到仓库
+            description: 将汇报文件提交到目标仓库
+            required: false
+            type: switch
+            default: "true"
+            options:
+              - name: 启用
+                value: "true"
+              - name: 禁用
+                value: "false"
+          REPORT_PUBLISH_REPO_URL:
+            name: 目标仓库 URL
+            description: 例如 https://cnb.cool/1024hub/plane-test
+            required: false
+            type: input
+            default: "https://cnb.cool/1024hub/plane-test"
+          REPORT_PUBLISH_BRANCH:
+            name: 目标分支
+            required: false
+            type: input
+            default: "main"
+          REPORT_PUBLISH_DIR:
+            name: 目标目录根
+            description: 汇报保存根目录
+            required: false
+            type: input
+            default: "ai-report"
           REPORT_DIFF_MODE:
             name: 明细级别
             description: 统计-only 或包含采样补丁
@@ -100,7 +128,7 @@ branch:
           BRANCH: "develop"
         inputs:
           SERVICES_LIST: *services_list_input
-      - name: 生成日报（手动）
+      - name: 生成汇报
         description: 汇总 git 提交并生成工作日报
         event: web_trigger_daily_report
         env:
@@ -108,6 +136,34 @@ branch:
           ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml"
         inputs:
           REPORT_TIMEFRAME: *report_timeframe_input
+          REPORT_PUBLISH_ENABLE:
+            name: 是否推送到仓库
+            description: 将汇报文件提交到目标仓库
+            required: false
+            type: switch
+            default: "true"
+            options:
+              - name: 启用
+                value: "true"
+              - name: 禁用
+                value: "false"
+          REPORT_PUBLISH_REPO_URL:
+            name: 目标仓库 URL
+            description: 例如 https://cnb.cool/1024hub/plane-test
+            required: false
+            type: input
+            default: "https://cnb.cool/1024hub/plane-test"
+          REPORT_PUBLISH_BRANCH:
+            name: 目标分支
+            required: false
+            type: input
+            default: "main"
+          REPORT_PUBLISH_DIR:
+            name: 目标目录根
+            description: 汇报保存根目录
+            required: false
+            type: input
+            default: "ai-report"
           REPORT_DIFF_MODE:
             name: 明细级别
             description: 统计-only 或包含采样补丁

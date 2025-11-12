@@ -13,6 +13,11 @@ zen_mode="${ZEN_MODE:-1}"
 model="${OPENCODE_MODEL:-opencode/grok-code}"
 # require AI summary or fallback allowed (manual可设置 REQUIRE_AI_SUMMARY=1)
 require_ai="${REQUIRE_AI_SUMMARY:-0}"
+# publish settings
+publish_enable="${REPORT_PUBLISH_ENABLE:-1}"
+publish_repo_url="${REPORT_PUBLISH_REPO_URL:-https://cnb.cool/1024hub/plane-test}"
+publish_branch="${REPORT_PUBLISH_BRANCH:-main}"
+publish_dir_root="${REPORT_PUBLISH_DIR:-ai-report}"
 # diff context controls (manual trigger can override via web_trigger inputs)
 diff_mode="${REPORT_DIFF_MODE:-stats}" # stats | sampled_patch | full_patch
 char_budget="${REPORT_DIFF_CHAR_BUDGET:-200000}"
@@ -49,11 +54,13 @@ if [ -z "${api_key}" ]; then
 fi
 
 # Determine time window and label
+report_type="daily"
 case "${timeframe}" in
   yesterday)
     start_ts=$(date -d "yesterday 00:00:00" +'%Y-%m-%d 00:00:00')
     end_ts=$(date -d "today 00:00:00" +'%Y-%m-%d 00:00:00')
     label=$(date -d "yesterday" +%Y-%m-%d)
+    report_type="daily"
     ;;
   last_week)
     # Compute previous calendar week (Mon 00:00:00 to this week's Mon 00:00:00)
@@ -63,6 +70,9 @@ case "${timeframe}" in
     start_ts="${last_mon_date} 00:00:00"
     end_ts="${this_mon_date} 00:00:00"
     label=$(date -d "${last_mon_date}" +%Y-%m-%d)
+    report_type="weekly"
+    week_start_date="${last_mon_date}"
+    week_end_date=$(date -d "${this_mon_date} -1 day" +%Y-%m-%d)
     ;;
   last_month)
     first_of_this_month=$(date +%Y-%m-01)
@@ -70,12 +80,14 @@ case "${timeframe}" in
     start_ts="${start_month} 00:00:00"
     end_ts="${first_of_this_month} 00:00:00"
     label=$(date -d "${first_of_this_month} -1 month" +%Y-%m)
+    report_type="monthly"
     ;;
   *)
     # default to yesterday
     start_ts=$(date -d "yesterday 00:00:00" +'%Y-%m-%d 00:00:00')
     end_ts=$(date -d "today 00:00:00" +'%Y-%m-%d 00:00:00')
     label=$(date -d "yesterday" +%Y-%m-%d)
+    report_type="daily"
     ;;
 esac
 
@@ -89,9 +101,9 @@ if [ -z "${repo_slug}" ]; then
   fi
 fi
 
-mkdir -p daily-reports tmp || true
+mkdir -p reports tmp || true
 
-out_file="daily-reports/daily-report-${label}.md"
+out_file="reports/work-report-${label}.md"
 log_file="tmp/git-logs-${label}.txt"
 patch_ctx_file="tmp/git-patch-${label}.txt"
 
@@ -156,7 +168,7 @@ if [ -s "${log_file}" ]; then
   has_commits=true
 fi
 
-echo "# 项目工作日报（${label}）" > "${out_file}"
+echo "# 项目工作汇报（${label}）" > "${out_file}"
 echo "" >> "${out_file}"
 echo "- 时间范围：${start_ts} 至 ${end_ts} (${TZ})" >> "${out_file}"
 echo "- 仓库：${repo_slug}" >> "${out_file}"
@@ -380,3 +392,68 @@ echo "" >> "${out_file}"
 echo "</details>" >> "${out_file}"
 
 echo "report generated: ${out_file}" >&2
+
+# Publish report to external repo under ai-report/{daily|weekly|monthly}/
+publish_report() {
+  # Require token and repo URL
+  if [ -z "${publish_repo_url}" ] || [ -z "${CNB_TOKEN:-}" ]; then
+    return 0
+  fi
+
+  # Compute target path and filename by type
+  target_subdir="${publish_dir_root}/${report_type}"
+  case "${report_type}" in
+    daily)
+      target_filename="${label}.md"
+      range_text="${label}"
+      ;;
+    weekly)
+      # Ensure week_start/end present; fallback to label only
+      if [ -n "${week_start_date:-}" ] && [ -n "${week_end_date:-}" ]; then
+        target_filename="${week_start_date}_to_${week_end_date}.md"
+        range_text="${week_start_date}~${week_end_date}"
+      else
+        target_filename="${label}.md"
+        range_text="${label}"
+      fi
+      ;;
+    monthly)
+      target_filename="${label}.md"
+      range_text="${label}"
+      ;;
+    *)
+      target_filename="${label}.md"
+      range_text="${label}"
+      ;;
+  esac
+
+  workdir="tmp/publish"
+  rm -rf "${workdir}" && mkdir -p "${workdir}"
+  auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
+  # Clone target
+  GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" clone "${publish_repo_url}" "${workdir}" >/dev/null 2>&1 || return 0
+  cd "${workdir}"
+  # Checkout branch (create if missing)
+  if git show-ref --verify --quiet "refs/heads/${publish_branch}"; then
+    git checkout "${publish_branch}" >/dev/null 2>&1 || true
+  else
+    git checkout -b "${publish_branch}" >/dev/null 2>&1 || true
+  fi
+  mkdir -p "${target_subdir}"
+  cp -f "${OLDPWD}/${out_file}" "${target_subdir}/${target_filename}"
+  git config user.name "cabb-report-bot"
+  git config user.email "bot@cabb.local"
+  git add "${target_subdir}/${target_filename}" || true
+  if git diff --cached --quiet >/dev/null 2>&1; then
+    # no changes
+    cd - >/dev/null 2>&1 || true
+    return 0
+  fi
+  git commit -m "chore(report): ${report_type} ${range_text}" >/dev/null 2>&1 || true
+  GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" push origin "${publish_branch}" >/dev/null 2>&1 || true
+  cd - >/dev/null 2>&1 || true
+}
+
+if [ "${publish_enable}" = "1" ] || [ "${publish_enable}" = "true" ]; then
+  publish_report || true
+fi
