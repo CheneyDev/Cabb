@@ -29,6 +29,15 @@ fi
 if [ -z "${api_key}" ]; then
   api_key="${OPENCODE_KEY:-}"
 fi
+if [ -z "${api_key}" ]; then
+  api_key="${OPENCODE_ZEN_API_KEY:-}"
+fi
+if [ -z "${api_key}" ]; then
+  api_key="${ZEN_API_KEY:-}"
+fi
+if [ -z "${api_key}" ]; then
+  api_key="${OC_API_KEY:-}"
+fi
 
 # Determine time window and label
 case "${timeframe}" in
@@ -285,12 +294,12 @@ try_opencode() {
   prompt+="4. 风险与待办：潜在风险、技术债、下一步行动（Owner/ETA）。\n"
   prompt+="要求：\n- 语言简练，避免赘述；\n- 不复述完整 diff，仅用 numstat 与文件路径提炼要点；\n- 若无提交，明确说明“本期无提交”。\n"
 
-  # Use non-interactive CLI per docs: opencode run with context file
-  if opencode run -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>"tmp/opencode.stderr"; then
+  # Use non-interactive CLI: ensure prompt is not parsed as file by separating with --
+  if opencode run -m "${OPENCODE_MODEL}" -f "${ctx_file}" -- "${prompt}" > "${out_file}.ai" 2>"tmp/opencode.stderr"; then
     return 0
   fi
   # Fallback: attach server if running (unlikely in CI)
-  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>>"tmp/opencode.stderr"; then
+  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${ctx_file}" -- "${prompt}" > "${out_file}.ai" 2>>"tmp/opencode.stderr"; then
     return 0
   fi
   # Surface concise error context without secrets
