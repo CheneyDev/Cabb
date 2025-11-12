@@ -55,20 +55,25 @@ mkdir -p daily-reports tmp || true
 out_file="daily-reports/daily-report-${label}.md"
 log_file="tmp/git-logs-${label}.txt"
 
-# Make git workspace safe for CI
+# Make git workspace safe for CI and try to ensure history availability
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git_root=$(git rev-parse --show-toplevel)
   git config --global --add safe.directory "${git_root}" || true
+  # Best-effort: fetch full history and all branches
+  # Some CI clones are shallow; widen history so we can see yesterday's commits,
+  # and include non-default branches.
+  (git fetch --all --prune --tags --recurse-submodules=no 2>/dev/null || true)
+  (git fetch --unshallow 2>/dev/null || git fetch --depth=0 2>/dev/null || true)
 fi
 
 # Collect raw logs for the time window
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git log \
+    --all \
     --since="${start_ts}" \
     --until="${end_ts}" \
     --date=format:'%Y-%m-%d %H:%M' \
     --pretty=format:'%H%x09%an%x09%ad%x09%s' \
-    --no-merges \
     > "${log_file}" || true
 else
   : > "${log_file}"
@@ -138,10 +143,10 @@ else
       echo "" >> "${out_file}"
       # Short hash + subject per commit
       git log \
+        --all \
         --since="${start_ts}" \
         --until="${end_ts}" \
         --author="${author}" \
-        --no-merges \
         --pretty=format:'- %h %s' \
         >> "${out_file}" || true
       echo "" >> "${out_file}"
