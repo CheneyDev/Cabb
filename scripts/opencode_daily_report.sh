@@ -11,6 +11,14 @@ timeframe="${REPORT_TIMEFRAME:-yesterday}"
 zen_mode="${ZEN_MODE:-1}"
 # prefer fully-qualified model id per docs (opencode/<model-id>)
 model="${OPENCODE_MODEL:-opencode/grok-code}"
+# diff context controls (manual trigger can override via web_trigger inputs)
+diff_mode="${REPORT_DIFF_MODE:-stats}" # stats | sampled_patch | full_patch
+char_budget="${REPORT_DIFF_CHAR_BUDGET:-200000}"
+top_files="${REPORT_DIFF_TOP_FILES:-20}"
+max_hunks_per_file="${REPORT_DIFF_HUNKS_PER_FILE:-3}"
+max_commits="${REPORT_DIFF_MAX_COMMITS:-100}"
+exclude_globs="${REPORT_EXCLUDE_GLOBS:-node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock;*.class;*.bin;*.exe;*.dylib;*.so;*.dll}"
+numstat_lines="${REPORT_NUMSTAT_LINES:-5000}"
 # Prefer OPENCODE_API_KEY; fallbacks are best-effort in case secrets use different key names
 api_key="${OPENCODE_API_KEY:-}"
 if [ -z "${api_key}" ]; then
@@ -65,6 +73,7 @@ mkdir -p daily-reports tmp || true
 
 out_file="daily-reports/daily-report-${label}.md"
 log_file="tmp/git-logs-${label}.txt"
+patch_ctx_file="tmp/git-patch-${label}.txt"
 
 # Make git workspace safe for CI and try to ensure history availability
 ensure_repo() {
@@ -146,6 +155,29 @@ fi
 
 # No implicit fallback; timeframes are strictly one of: yesterday, last_week, last_month
 
+# Utility: exclude patterns
+matches_exclude() {
+  local f="$1"
+  local IFS=';'
+  # shellcheck disable=SC2086
+  for pat in ${exclude_globs}; do
+    [ -z "${pat}" ] && continue
+    case "$f" in
+      $pat) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Utility: redact secrets in patches
+redact() {
+  sed -E \
+    -e 's/(Authorization:)[[:space:]]*[^\r\n]*/\1 ***REDACTED***/Ig' \
+    -e 's/(Bearer)[[:space:]]+[A-Za-z0-9._-]+/\1 ***REDACTED***/Ig' \
+    -e 's/(sk-[A-Za-z0-9_-]{10,})/sk-***REDACTED***/g' \
+    -e 's/(CNB_TOKEN=)[^\r\n& ]+/\1***REDACTED***/g'
+}
+
 # Build rich commit context for AI (includes per-commit numstat and bodies)
 ctx_file="tmp/git-context-${label}.md"
 {
@@ -166,11 +198,75 @@ ctx_file="tmp/git-context-${label}.md"
       --date=iso-local \
       --numstat \
       --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
-      | head -n 20000
+      | head -n "${numstat_lines}"
+    echo
+    if [ "${diff_mode}" != "stats" ]; then
+      echo "## Patch samples"
+      echo "Budget: chars=${char_budget}, top_files=${top_files}, hunks_per_file=${max_hunks_per_file}, max_commits=${max_commits}"
+    fi
   else
     echo "> No commits found in the selected window."
   fi
 } > "${ctx_file}"
+
+# Prepare sampled/full patch context if requested
+> "${patch_ctx_file}"
+if ${has_commits} && [ "${diff_mode}" != "stats" ]; then
+  # Collect candidate commits within window (exclude merges for patch to control size)
+  mapfile -t commit_list < <(git rev-list --all --since="${start_ts}" --until="${end_ts}" --no-merges)
+  tmp_scores="tmp/commit-scores-${label}.txt"
+  : > "${tmp_scores}"
+  for sha in "${commit_list[@]}"; do
+    sum=$(git show --numstat --format="" "$sha" | awk '{a=$1;b=$2; if(a=="-")a=0; if(b=="-")b=0; s+=a+b} END{print s+0}')
+    echo "$sum $sha" >> "${tmp_scores}"
+  done
+  mapfile -t top_commits < <(sort -nr -k1,1 "${tmp_scores}" | awk '{print $2}' | head -n "${max_commits}")
+
+  total_len=0
+  for sha in "${top_commits[@]}"; do
+    hdr=$(git show -s --format='commit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%n' --date=iso-local "$sha")
+    entry_file="tmp/patch-entry-${sha}.txt"
+    printf "%s\n" "$hdr" > "$entry_file"
+    mapfile -t files < <(git show --numstat --format="" "$sha" | awk '{a=$1;b=$2;f=$3; if(a=="-")a=0; if(b=="-")b=0; print a+b, f}' | sort -nr -k1,1 | awk '{ $1=""; sub(/^ /, ""); print }')
+    count=0
+    for f in "${files[@]}"; do
+      [ -z "$f" ] && continue
+      if matches_exclude "$f"; then
+        continue
+      fi
+      file_patch=$(git show --no-color --unified=3 --format="" "$sha" -- "$f" | redact)
+      if [ -n "$file_patch" ]; then
+        if [ "${diff_mode}" = "sampled_patch" ]; then
+          file_patch=$(printf "%s\n" "$file_patch" | awk -v N="${max_hunks_per_file}" 'BEGIN{h=0} { if($0 ~ /^@@/) h++; if(h==0 || h<=N) print }')
+        fi
+        printf "diff -- sampled file: %s\n%s\n\n" "$f" "$file_patch" >> "$entry_file"
+        count=$((count+1))
+        if [ "$count" -ge "$top_files" ]; then
+          break
+        fi
+      fi
+    done
+    entry_size=$(wc -c < "$entry_file" | tr -d ' ')
+    if [ "$(( total_len + entry_size ))" -le "$char_budget" ]; then
+      cat "$entry_file" >> "$patch_ctx_file"
+      total_len=$(( total_len + entry_size ))
+    else
+      remain=$(( char_budget - total_len ))
+      if [ "$remain" -gt 0 ]; then
+        head -c "$remain" "$entry_file" >> "$patch_ctx_file" || true
+        total_len=$char_budget
+      fi
+      break
+    fi
+  done
+  if [ -s "$patch_ctx_file" ]; then
+    {
+      echo
+      echo "## Patch samples (truncated by budget if necessary)"
+      cat "$patch_ctx_file"
+    } >> "$ctx_file"
+  fi
+fi
 
 # Try opencode to author a polished report from commit context
 try_opencode() {
@@ -189,7 +285,7 @@ try_opencode() {
     last_month) period_label="月报" ;;
     *) period_label="汇报" ;;
   esac
-  prompt="你是资深工程经理，需基于提交记录（含 numstat 与提交信息）生成中文${period_label}。\n"
+  prompt="你是资深工程经理，需基于提交记录（含 numstat 与提交信息，且在必要时包含采样的补丁片段）生成中文${period_label}。\n"
   prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
   prompt+="请输出结构化 Markdown：\n"
   prompt+="1. 概览：本期工作主题、亮点、影响范围。\n"

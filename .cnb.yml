@@ -57,6 +57,14 @@ main:
         ZEN_MODE: "1"
         # 手动触发默认统计“昨天”，可在按钮输入中覆盖
         REPORT_TIMEFRAME: "yesterday"
+        # 手动触发默认启用采样补丁
+        REPORT_DIFF_MODE: "sampled_patch"
+        REPORT_DIFF_CHAR_BUDGET: "200000"
+        REPORT_DIFF_TOP_FILES: "20"
+        REPORT_DIFF_HUNKS_PER_FILE: "3"
+        REPORT_DIFF_MAX_COMMITS: "100"
+        REPORT_NUMSTAT_LINES: "5000"
+        REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate daily report
