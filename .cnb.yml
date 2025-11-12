@@ -54,9 +54,9 @@ main:
               bash scripts/opencode_daily_report.sh
               if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
                 ls -lah reports
-                echo "----- Report Preview -----"
+                echo "----- 汇报预览 -----"
                 head -n 80 $(ls -1t reports/*.md | head -n 1) || true
-                echo "----- End Preview -----"
+                echo "----- 预览结束 -----"
               else
                 echo "no report generated" >&2
               fi
@@ -109,9 +109,9 @@ main:
               bash scripts/opencode_daily_report.sh
               if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
                 ls -lah reports
-                echo "----- Report Preview -----"
+                echo "----- 汇报预览 -----"
                 head -n 80 $(ls -1t reports/*.md | head -n 1) || true
-                echo "----- End Preview -----"
+                echo "----- 预览结束 -----"
               else
                 echo "no report generated" >&2
               fi

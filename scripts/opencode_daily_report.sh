@@ -306,14 +306,13 @@ try_opencode() {
     last_month) period_label="月报" ;;
     *) period_label="汇报" ;;
   esac
-  prompt="你是资深工程经理，需基于提交记录（含 numstat 与提交信息，且在必要时包含采样的补丁片段）生成中文${period_label}。\n"
+  prompt="你是资深工程经理，需基于提交记录（含 numstat 以及必要时的采样补丁片段）生成中文${period_label}。\n"
   prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
-  prompt+="请输出结构化 Markdown：\n"
-  prompt+="1. 概览：本期工作主题、亮点、影响范围。\n"
-  prompt+="2. 统计：总提交数/按作者分布/改动规模（可据 numstat 估算）。\n"
-  prompt+="3. 关键变更：按模块或特性归纳（列出文件/目录线索与简要说明）。\n"
-  prompt+="4. 风险与待办：潜在风险、技术债、下一步行动（Owner/ETA）。\n"
-  prompt+="要求：\n- 语言简练，避免赘述；\n- 不复述完整 diff，仅用 numstat 与文件路径提炼要点；\n- 若无提交，明确说明“本期无提交”。\n"
+  prompt+="请输出结构化 Markdown，重点按人员总结：\n"
+  prompt+="1. 概览：本期主题、亮点、重要进展。\n"
+  prompt+="2. 人员汇总（逐人分节）：\n   - 角色/主题：该成员本期工作的主题与目标\n   - 完成要点：结合文件路径/模块与 numstat 概述主要改动，提炼意图（不要罗列 commit 清单或粘贴完整 diff）\n   - 影响与价值：对功能/质量/性能/交付的影响\n   - 风险与待办：风险、技术债、下一步行动（标注 Owner/ETA）\n"
+  prompt+="3. 横向事项：跨团队协作、阻塞项与依赖\n"
+  prompt+="要求：\n- 不要逐条列出 commit 或粘贴完整 diff；\n- 以模块/文件路径和变更意图来提炼内容，可给出改动规模（增删行）作为量化；\n- 语言简练，结论先行；\n- 若无提交，明确说明“本期无提交”。\n"
 
   # Use non-interactive CLI: place message first to avoid it being parsed as a file
   if opencode run "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${out_file}.ai" 2>"tmp/opencode.stderr"; then
@@ -351,45 +350,12 @@ else
   else
     if ${has_commits}; then
       echo "## 数据化汇总（备用）" >> "${out_file}"
-      echo "" >> "${out_file}"
-      # List unique authors preserving locale
-      mapfile -t authors < <(awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort -u)
-      for author in "${authors[@]}"; do
-        echo "### ${author}" >> "${out_file}"
-        echo "" >> "${out_file}"
-        git log \
-          --all \
-          --since="${start_ts}" \
-          --until="${end_ts}" \
-          --author="${author}" \
-          --pretty=format:'- %h %s' \
-          >> "${out_file}" || true
-        echo "" >> "${out_file}"
-      done
+      echo "“AI 汇总失败”时的占位输出，已省略提交清单。" >> "${out_file}"
     else
       echo "> 本时段暂无提交记录。" >> "${out_file}"
     fi
   fi
 fi
-
-# Append raw logs for reference (collapsed in most viewers)
-echo "<details><summary>原始提交记录 / 作者分布</summary>" >> "${out_file}"
-echo "" >> "${out_file}"
-if ${has_commits}; then
-  echo "作者分布：" >> "${out_file}"
-  awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
-    | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s：%d 次提交\n", $0, c)}' >> "${out_file}"
-  echo "" >> "${out_file}"
-fi
-if ${has_commits}; then
-  printf '````\n' >> "${out_file}"
-  cat "${log_file}" >> "${out_file}"
-  printf '\n````\n' >> "${out_file}"
-else
-  echo "(空)" >> "${out_file}"
-fi
-echo "" >> "${out_file}"
-echo "</details>" >> "${out_file}"
 
 echo "report generated: ${out_file}" >&2
 
@@ -433,24 +399,31 @@ publish_report() {
   # Clone target
   GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" clone "${publish_repo_url}" "${workdir}" >/dev/null 2>&1 || return 0
   cd "${workdir}"
+  git config --global --add safe.directory "$(pwd)" || true
   # Checkout branch (create if missing)
   if git show-ref --verify --quiet "refs/heads/${publish_branch}"; then
     git checkout "${publish_branch}" >/dev/null 2>&1 || true
   else
     git checkout -b "${publish_branch}" >/dev/null 2>&1 || true
   fi
+  # Rebase onto latest remote to avoid non-fast-forward on push
+  GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" pull --rebase origin "${publish_branch}" >/dev/null 2>&1 || true
   mkdir -p "${target_subdir}"
   cp -f "${OLDPWD}/${out_file}" "${target_subdir}/${target_filename}"
   git config user.name "cabb-report-bot"
   git config user.email "bot@cabb.local"
-  git add "${target_subdir}/${target_filename}" || true
+  git add -A "${target_subdir}" || true
   if git diff --cached --quiet >/dev/null 2>&1; then
     # no changes
     cd - >/dev/null 2>&1 || true
     return 0
   fi
   git commit -m "chore(report): ${report_type} ${range_text}" >/dev/null 2>&1 || true
-  GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" push origin "${publish_branch}" >/dev/null 2>&1 || true
+  if ! GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" push origin "${publish_branch}" >/dev/null 2>&1; then
+    # Try one rebase cycle then push again
+    GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" pull --rebase origin "${publish_branch}" >/dev/null 2>&1 || true
+    GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" push origin "${publish_branch}" >/dev/null 2>&1 || true
+  fi
   cd - >/dev/null 2>&1 || true
 }
 
