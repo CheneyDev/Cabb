@@ -27,15 +27,14 @@ case "${timeframe}" in
     end_ts=$(date -d "today 00:00:00" +'%Y-%m-%d 00:00:00')
     label=$(date -d "yesterday" +%Y-%m-%d)
     ;;
-  today)
-    start_ts=$(date -d "today 00:00:00" +'%Y-%m-%d 00:00:00')
-    end_ts=$(date -d "tomorrow 00:00:00" +'%Y-%m-%d 00:00:00')
-    label=$(date +%Y-%m-%d)
-    ;;
-  last_24h)
-    start_ts=$(date -d "-24 hours" +'%Y-%m-%d %H:%M:00')
-    end_ts=$(date +'%Y-%m-%d %H:%M:00')
-    label="$(date +%Y-%m-%d)-24h"
+  last_week)
+    # Compute previous calendar week (Mon 00:00:00 to this week's Mon 00:00:00)
+    dow=$(date +%u) # 1..7 (Mon=1)
+    this_mon_date=$(date -d "today -$((dow-1)) days" +%Y-%m-%d)
+    last_mon_date=$(date -d "${this_mon_date} -7 days" +%Y-%m-%d)
+    start_ts="${last_mon_date} 00:00:00"
+    end_ts="${this_mon_date} 00:00:00"
+    label=$(date -d "${last_mon_date}" +%Y-%m-%d)
     ;;
   last_month)
     first_of_this_month=$(date +%Y-%m-01)
@@ -145,48 +144,35 @@ else
   echo "" >> "${out_file}"
 fi
 
-# Optional fallback: if no commits in the strict window, widen to the last 24 hours ending now
-if [ "${has_commits}" = false ]; then
-  fb_start_ts=$(date -d "-24 hours" +'%Y-%m-%d %H:%M:00' || true)
-  fb_end_ts=$(date +'%Y-%m-%d %H:%M:00' || true)
-  if [ -n "${fb_start_ts:-}" ]; then
-    echo "[debug] fallback window: ${fb_start_ts} .. ${fb_end_ts}" >&2
-    fb_log_file="tmp/git-logs-fallback-${label}.txt"
-    if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
-      git log --all --since="${fb_start_ts}" --until="${fb_end_ts}" \
-        --date=format:'%Y-%m-%d %H:%M' \
-        --pretty=format:'%H%x09%an%x09%ad%x09%s' \
-        > "${fb_log_file}" || true
-      echo "[debug] fallback log lines: $(wc -l < "${fb_log_file}" 2>/dev/null || echo 0)" >&2
-    else
-      : > "${fb_log_file}"
-    fi
-    if [ -s "${fb_log_file}" ]; then
-      echo "> 注：严格时间窗内无提交；以下为过去24小时内的提交汇总（${fb_start_ts} 至 ${fb_end_ts}）。" >> "${out_file}"
-      echo "" >> "${out_file}"
-      echo "## 总览（过去24小时）" >> "${out_file}"
-      awk -F "\t" '{print $2}' "${fb_log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
-        | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s：%d 次提交\n", $0, c)}' >> "${out_file}"
-      echo "" >> "${out_file}"
-      echo "## 分作者提交明细（过去24小时）" >> "${out_file}"
-      mapfile -t authors < <(awk -F "\t" '{print $2}' "${fb_log_file}" | sed '/^$/d' | sort -u)
-      for author in "${authors[@]}"; do
-        echo "### ${author}" >> "${out_file}"
-        echo "" >> "${out_file}"
-        git log --all --since="${fb_start_ts}" --until="${fb_end_ts}" \
-          --author="${author}" \
-          --pretty=format:'- %h %s' \
-          >> "${out_file}" || true
-        echo "" >> "${out_file}"
-      done
-      # Swap log_file to fb for downstream AI summary
-      log_file="${fb_log_file}"
-      has_commits=true
-    fi
-  fi
-fi
+# No implicit fallback; timeframes are strictly one of: yesterday, last_week, last_month
 
-# Try opencode (zen mode) to author a polished report from raw logs
+# Build rich commit context for AI (includes per-commit numstat and bodies)
+ctx_file="tmp/git-context-${label}.md"
+{
+  echo "# Repo Commit Context"
+  echo "- Time window: ${start_ts} .. ${end_ts} (${TZ})"
+  echo "- Repo: ${repo_slug}"
+  echo "- Branch (trigger): ${CNB_BRANCH:-}"
+  echo
+  if ${has_commits}; then
+    echo "## Author counts"
+    awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
+      | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s: %d commits\n", $0, c)}'
+    echo
+    echo "## Commit details (numstat + message)"
+    echo "NOTE: This is a summary (numstat) view, not full patches."
+    git log --all \
+      --since="${start_ts}" --until="${end_ts}" \
+      --date=iso-local \
+      --numstat \
+      --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
+      | head -n 20000
+  else
+    echo "> No commits found in the selected window."
+  fi
+} > "${ctx_file}"
+
+# Try opencode to author a polished report from commit context
 try_opencode() {
   command -v opencode >/dev/null 2>&1 || return 1
 
@@ -196,22 +182,34 @@ try_opencode() {
     export OPENCODE_API_KEY="${api_key}"
   fi
 
-  prompt="请基于以下 git 提交原始记录，生成中文 Markdown 工作日报：\n\n"
-  prompt+="- 范围：${start_ts} 至 ${end_ts} (${TZ})\n"
-  prompt+="- 要求：按作者分组，列出每位作者的提交条数与关键变更点；保留小标题，条目精炼；最后提供整体统计与风险/待办提示。\n"
+  # Chinese prompt to produce a structured work report from commits and numstat
+  case "${timeframe}" in
+    yesterday) period_label="日报" ;;
+    last_week) period_label="周报" ;;
+    last_month) period_label="月报" ;;
+    *) period_label="汇报" ;;
+  esac
+  prompt="你是资深工程经理，需基于提交记录（含 numstat 与提交信息）生成中文${period_label}。\n"
+  prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
+  prompt+="请输出结构化 Markdown：\n"
+  prompt+="1. 概览：本期工作主题、亮点、影响范围。\n"
+  prompt+="2. 统计：总提交数/按作者分布/改动规模（可据 numstat 估算）。\n"
+  prompt+="3. 关键变更：按模块或特性归纳（列出文件/目录线索与简要说明）。\n"
+  prompt+="4. 风险与待办：潜在风险、技术债、下一步行动（Owner/ETA）。\n"
+  prompt+="要求：\n- 语言简练，避免赘述；\n- 不复述完整 diff，仅用 numstat 与文件路径提炼要点；\n- 若无提交，明确说明“本期无提交”。\n"
 
-  # Use non-interactive CLI per docs: opencode run
-  if opencode run -m "${OPENCODE_MODEL}" -f "${log_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
+  # Use non-interactive CLI per docs: opencode run with context file
+  if opencode run -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
     return 0
   fi
   # Fallback: attach server if running (unlikely in CI)
-  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${log_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
+  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
     return 0
   fi
   return 1
 }
 
-if ${has_commits} && try_opencode; then
+if try_opencode; then
   echo "## AI 汇总（opencode）" >> "${out_file}"
   echo "" >> "${out_file}"
   cat "${out_file}.ai" >> "${out_file}" || true

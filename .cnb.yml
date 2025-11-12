@@ -13,7 +13,7 @@ main:
         TZ: Asia/Shanghai
         RUNNER_ARCH: cnb:arch:amd64
         OPENCODE_MODEL: "opencode/grok-code"
-        # 使用上一自然日作为日报统计范围（yesterday|today）
+        # 使用上一自然日作为日报统计范围
         REPORT_TIMEFRAME: "yesterday"
         ZEN_MODE: "1"
       # 秘钥仓库导入（参考 .cnb/web_trigger.yml 的 ENV_URL）
@@ -55,8 +55,8 @@ main:
         RUNNER_ARCH: cnb:arch:amd64
         OPENCODE_MODEL: "opencode/grok-code"
         ZEN_MODE: "1"
-        # 手动触发默认统计“今天”，可在按钮输入中覆盖
-        REPORT_TIMEFRAME: "today"
+        # 手动触发默认统计“昨天”，可在按钮输入中覆盖
+        REPORT_TIMEFRAME: "yesterday"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate daily report

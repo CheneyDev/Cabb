@@ -17,15 +17,13 @@ report_timeframe_input: &report_timeframe_input
   description: 生成日报的统计时间范围
   required: false
   type: select
-  default: today
+  default: yesterday
   options:
     - name: 昨天
       value: yesterday
-    - name: 今天
-      value: today
-    - name: 过去24小时
-      value: last_24h
-    - name: 上一个月
+    - name: 上周
+      value: last_week
+    - name: 上个月
       value: last_month
 
 branch:
