@@ -40,6 +40,10 @@ case "${timeframe}" in
     ;;
 esac
 
+echo "[debug] timezone: ${TZ}" >&2
+echo "[debug] timeframe: ${timeframe} => ${start_ts} .. ${end_ts} (label=${label})" >&2
+echo "[debug] CNB env: CNB_REPO_SLUG=${CNB_REPO_SLUG:-}, CNB_BRANCH=${CNB_BRANCH:-}, CNB_COMMIT=${CNB_COMMIT:-}" >&2
+
 repo_slug="${CNB_REPO_SLUG:-}"
 if [ -z "${repo_slug}" ]; then
   # Fallback to local repo dir name
@@ -88,16 +92,26 @@ ensure_repo || true
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
   git_root=$(git rev-parse --show-toplevel)
   git config --global --add safe.directory "${git_root}" || true
+  echo "[debug] git root: ${git_root}" >&2
+  echo "[debug] git remote -v:" >&2
+  (git remote -v | sed 's#://[^@]*@#://***@#') >&2 || true
+  echo "[debug] is shallow: $(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)" >&2
+  echo "[debug] local branches (head):" >&2
+  (git branch -a --format='%(refname:short)' | head -n 50) >&2 || true
   # Best‑effort: fetch full history and all branches, even if CI did a partial clone
   # Ensure remote tracks all branches
   if git remote get-url origin >/dev/null 2>&1; then
-    (git remote set-branches origin "*" 2>/dev/null || true)
+    echo "[debug] remote set-branches origin *" >&2
+    (git remote set-branches origin "*" 2>&1 || true) >&2
   fi
   # Fetch all refs and unshallow if needed
-  (git fetch --all --prune --tags --recurse-submodules=no 2>/dev/null || true)
-  (git fetch --unshallow 2>/dev/null || git fetch --depth=0 2>/dev/null || true)
+  echo "[debug] fetch --all --prune --tags" >&2
+  (git fetch --all --prune --tags --recurse-submodules=no 2>&1 || true) >&2
+  echo "[debug] fetch --unshallow || --depth=0" >&2
+  (git fetch --unshallow 2>&1 || git fetch --depth=0 2>&1 || true) >&2
   # Debug: show brief ref summary
-  (git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' refs/heads | sort -k2 | tail -n 5 || true) >&2
+  echo "[debug] recent refs after fetch:" >&2
+  (git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' | sort -k2 | tail -n 10 || true) >&2
 fi
 
 # Collect raw logs for the time window
@@ -109,6 +123,11 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ];
     --date=format:'%Y-%m-%d %H:%M' \
     --pretty=format:'%H%x09%an%x09%ad%x09%s' \
     > "${log_file}" || true
+  echo "[debug] log lines: $(wc -l < "${log_file}" 2>/dev/null || echo 0)" >&2
+  echo "[debug] log head:" >&2
+  (sed -n '1,10p' "${log_file}" 2>/dev/null || true) >&2
+  echo "[debug] author counts:" >&2
+  (awk -F "\t" '{print $2}' "${log_file}" 2>/dev/null | sed '/^$/d' | sort | uniq -c | sort -nr | sed -n '1,20p') >&2 || true
 else
   : > "${log_file}"
 fi

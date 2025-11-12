@@ -30,6 +30,10 @@ main:
               echo "[debug] list .git and top-level files" >&2
               ls -la .git 2>&1 || echo "[debug] .git not present" >&2
               ls -la | sed -n '1,80p'
+              echo "[debug] CNB env (non-secret):" >&2
+              echo "  CNB_BRANCH=${CNB_BRANCH:-}" >&2
+              echo "  CNB_REPO_SLUG=${CNB_REPO_SLUG:-}" >&2
+              echo "  CNB_REPO_URL_HTTPS=${CNB_REPO_URL_HTTPS:-}" >&2
               echo "[setup] update packages and install git/curl/tzdata" >&2
               apt-get update -y >/dev/null
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
@@ -47,7 +51,7 @@ main:
               bash scripts/opencode_daily_report.sh
               echo "[report] show report summary" >&2
               echo "[debug] recent local refs" >&2
-              git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' refs/heads | sort -k2 | tail -n 10 || true
+              git for-each-ref --format='%(refname:short) %(objectname:short) %(committerdate:iso8601)' | sort -k3 | tail -n 20 || true
               if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
                 ls -lah daily-reports
                 echo "----- Report Preview -----"
@@ -78,6 +82,10 @@ main:
               echo "[debug] list .git and top-level files" >&2
               ls -la .git 2>&1 || echo "[debug] .git not present" >&2
               ls -la | sed -n '1,80p'
+              echo "[debug] CNB env (non-secret):" >&2
+              echo "  CNB_BRANCH=${CNB_BRANCH:-}" >&2
+              echo "  CNB_REPO_SLUG=${CNB_REPO_SLUG:-}" >&2
+              echo "  CNB_REPO_URL_HTTPS=${CNB_REPO_URL_HTTPS:-}" >&2
               echo "[setup] update packages and install git/curl/tzdata" >&2
               apt-get update -y >/dev/null
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
@@ -94,7 +102,7 @@ main:
               bash scripts/opencode_daily_report.sh
               echo "[report] show report summary" >&2
               echo "[debug] recent local refs" >&2
-              git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' refs/heads | sort -k2 | tail -n 10 || true
+              git for-each-ref --format='%(refname:short) %(objectname:short) %(committerdate:iso8601)' | sort -k3 | tail -n 20 || true
               if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
                 ls -lah daily-reports
                 echo "----- Report Preview -----"
