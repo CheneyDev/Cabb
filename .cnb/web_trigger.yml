@@ -12,6 +12,18 @@ services_list_input: &services_list_input
   multiple: true
   options: *service_options
 
+# 日报时间范围输入（手动触发）
+report_timeframe_input: &report_timeframe_input
+  description: 生成日报的统计时间范围
+  required: false
+  type: select
+  default: yesterday
+  options:
+    - name: 昨天
+      value: yesterday
+    - name: 今天
+      value: today
+
 branch:
   - reg: "^ma"
     buttons:
@@ -24,6 +36,14 @@ branch:
           BRANCH: "main"
         inputs:
           SERVICES_LIST: *services_list_input
+      - name: 生成日报（手动）
+        description: 汇总 git 提交并生成工作日报
+        event: web_trigger_daily_report
+        env:
+          RUNNER_ARCH: cnb:arch:amd64
+          ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml"
+        inputs:
+          REPORT_TIMEFRAME: *report_timeframe_input
   - buttons:
       - name: <!!!测试-开始构建!!!>
         description: 构建到测试环境
@@ -34,3 +54,11 @@ branch:
           BRANCH: "develop"
         inputs:
           SERVICES_LIST: *services_list_input
+      - name: 生成日报（手动）
+        description: 汇总 git 提交并生成工作日报
+        event: web_trigger_daily_report
+        env:
+          RUNNER_ARCH: cnb:arch:amd64
+          ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml"
+        inputs:
+          REPORT_TIMEFRAME: *report_timeframe_input

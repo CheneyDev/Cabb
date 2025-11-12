@@ -51,3 +51,45 @@ main:
               else
                 echo "no report generated" >&2
               fi
+
+"**":
+  web_trigger_daily_report:
+    - name: web-manual-opencode-report
+      env:
+        TZ: Asia/Shanghai
+        RUNNER_ARCH: cnb:arch:amd64
+        OPENCODE_MODEL: "grok-code"
+        ZEN_MODE: "1"
+      imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
+      stages:
+        - name: Install deps and generate daily report
+          image: node:20
+          timeout: 20m
+          script:
+            - |
+              set -euo pipefail
+              echo "[setup] update packages and install git/curl/tzdata" >&2
+              apt-get update -y >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              git --version
+              echo "[setup] try install opencode CLI" >&2
+              if ! command -v opencode >/dev/null 2>&1; then
+                (curl -fsSL https://opencode.ai/install.sh | bash) || true
+              fi
+              if ! command -v opencode >/dev/null 2>&1; then
+                npm i -g @opencode/cli || npm i -g opencode || true
+                export PATH="$(npm root -g)/.bin:$PATH"
+              fi
+            - |
+              echo "[report] run opencode (best-effort) with fallback summarizer" >&2
+              bash scripts/opencode_daily_report.sh
+            - |
+              echo "[report] show report summary" >&2
+              if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
+                ls -lah daily-reports
+                echo "----- Report Preview -----"
+                head -n 80 $(ls -1t daily-reports/*.md | head -n 1) || true
+                echo "----- End Preview -----"
+              else
+                echo "no report generated" >&2
+              fi
