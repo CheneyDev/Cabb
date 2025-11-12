@@ -56,18 +56,52 @@ out_file="daily-reports/daily-report-${label}.md"
 log_file="tmp/git-logs-${label}.txt"
 
 # Make git workspace safe for CI and try to ensure history availability
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+ensure_repo() {
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+  # If workspace is not a git repo (some CI snapshots omit .git), clone a fresh copy
+  if [ -n "${CNB_REPO_URL_HTTPS:-}" ] && [ -n "${CNB_TOKEN:-}" ]; then
+    echo "[fallback] cloning repo to tmp/clone for history..." >&2
+    mkdir -p tmp/clone
+    # Avoid leaking token to logs; use header auth instead of embedding in URL
+    git -c http.extraHeader="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')" \
+      clone --no-tags --filter=blob:none --mirror "${CNB_REPO_URL_HTTPS}" tmp/clone 2>/dev/null || {
+        echo "[warn] clone via header failed, trying credential-in-url (may be masked)" >&2
+        git clone --no-tags --filter=blob:none --mirror "https://cnb:${CNB_TOKEN}@${CNB_REPO_URL_HTTPS#https://}" tmp/clone 2>/dev/null || true
+      }
+    if [ -d tmp/clone ]; then
+      # Use a worktree from the mirror to query logs
+      mkdir -p tmp/work
+      git --git-dir=tmp/clone --work-tree=tmp/work init 2>/dev/null || true
+      (cd tmp/work && git config --local core.bare false >/dev/null 2>&1 || true)
+      export GIT_DIR="$(pwd)/tmp/clone"
+      export GIT_WORK_TREE="$(pwd)/tmp/work"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+ensure_repo || true
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
   git_root=$(git rev-parse --show-toplevel)
   git config --global --add safe.directory "${git_root}" || true
-  # Best-effort: fetch full history and all branches
-  # Some CI clones are shallow; widen history so we can see yesterday's commits,
-  # and include non-default branches.
+  # Best‑effort: fetch full history and all branches, even if CI did a partial clone
+  # Ensure remote tracks all branches
+  if git remote get-url origin >/dev/null 2>&1; then
+    (git remote set-branches origin "*" 2>/dev/null || true)
+  fi
+  # Fetch all refs and unshallow if needed
   (git fetch --all --prune --tags --recurse-submodules=no 2>/dev/null || true)
   (git fetch --unshallow 2>/dev/null || git fetch --depth=0 2>/dev/null || true)
+  # Debug: show brief ref summary
+  (git for-each-ref --format='%(refname:short) %(committerdate:iso8601)' refs/heads | sort -k2 | tail -n 5 || true) >&2
 fi
 
 # Collect raw logs for the time window
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
   git log \
     --all \
     --since="${start_ts}" \
@@ -137,7 +171,7 @@ else
     echo "## 分作者提交明细" >> "${out_file}"
     echo "" >> "${out_file}"
     # List unique authors preserving locale
-    mapfile -t authors < <(awk -F "\t" '{print $2}' "${log_file}" | sort -u)
+    mapfile -t authors < <(awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort -u)
     for author in "${authors[@]}"; do
       echo "### ${author}" >> "${out_file}"
       echo "" >> "${out_file}"
