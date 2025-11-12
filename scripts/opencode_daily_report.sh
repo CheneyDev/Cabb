@@ -286,13 +286,24 @@ try_opencode() {
   prompt+="要求：\n- 语言简练，避免赘述；\n- 不复述完整 diff，仅用 numstat 与文件路径提炼要点；\n- 若无提交，明确说明“本期无提交”。\n"
 
   # Use non-interactive CLI per docs: opencode run with context file
-  if opencode run -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
+  if opencode run -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>"tmp/opencode.stderr"; then
     return 0
   fi
   # Fallback: attach server if running (unlikely in CI)
-  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>/dev/null; then
+  if opencode run --format json -m "${OPENCODE_MODEL}" -f "${ctx_file}" "${prompt}" > "${out_file}.ai" 2>>"tmp/opencode.stderr"; then
     return 0
   fi
+  # Surface concise error context without secrets
+  {
+    echo "[opencode] failed to generate AI summary"
+    echo "- model: ${OPENCODE_MODEL}"
+    if [ -n "${OPENCODE_API_KEY:-}" ]; then echo "- apiKey: present"; else echo "- apiKey: missing"; fi
+    echo "- ctx_file size: $(wc -c < "${ctx_file}" 2>/dev/null || echo 0) bytes"
+    if [ -s "tmp/opencode.stderr" ]; then
+      echo "- stderr (first 80 lines):"
+      sed -n '1,80p' "tmp/opencode.stderr"
+    fi
+  } >&2
   return 1
 }
 

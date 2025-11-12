@@ -16,6 +16,15 @@ main:
         # 使用上一自然日作为日报统计范围
         REPORT_TIMEFRAME: "yesterday"
         ZEN_MODE: "1"
+        # 定时任务改为：AI 必达 + 采样补丁
+        REQUIRE_AI_SUMMARY: "1"
+        REPORT_DIFF_MODE: "sampled_patch"
+        REPORT_DIFF_CHAR_BUDGET: "200000"
+        REPORT_DIFF_TOP_FILES: "20"
+        REPORT_DIFF_HUNKS_PER_FILE: "3"
+        REPORT_DIFF_MAX_COMMITS: "100"
+        REPORT_NUMSTAT_LINES: "5000"
+        REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
       # 秘钥仓库导入（参考 .cnb/web_trigger.yml 的 ENV_URL）
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
