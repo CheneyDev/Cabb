@@ -1,2 +1,53 @@
 include:
   - https://cnb.cool/1024hub/workflow/-/blob/master/pipeline/deploy/be-go-single.yml
+
+# 定时任务：每日 03:00 生成工作日报（Asia/Shanghai）
+# 说明：尝试安装并在 zen 模式下运行 opencode；若失败，回落到内置 git 汇总脚本。
+# 待确认：
+# - 是否使用“上一自然日（昨天 00:00:00~今天 00:00:00）”作为日报时间范围。
+# - API Key 建议放入平台密钥仓库，通过 imports 注入，避免明文保存在仓库。
+main:
+  "crontab: 0 3 * * *":
+    - name: daily-opencode-report
+      env:
+        TZ: Asia/Shanghai
+        RUNNER_ARCH: cnb:arch:amd64
+        OPENCODE_MODEL: "grok-code"
+        # 使用上一自然日作为日报统计范围（yesterday|today）
+        REPORT_TIMEFRAME: "yesterday"
+        ZEN_MODE: "1"
+      # 秘钥仓库导入（参考 .cnb/web_trigger.yml 的 ENV_URL）
+      imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
+      stages:
+        - name: Install deps and generate daily report
+          image: node:20
+          timeout: 20m
+          script:
+            - |
+              set -euo pipefail
+              echo "[setup] update packages and install git/curl/tzdata" >&2
+              apt-get update -y >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              git --version
+              echo "[setup] try install opencode CLI" >&2
+              # 优先官方安装脚本（如存在），失败则尝试 npm 全局安装
+              if ! command -v opencode >/dev/null 2>&1; then
+                (curl -fsSL https://opencode.ai/install.sh | bash) || true
+              fi
+              if ! command -v opencode >/dev/null 2>&1; then
+                npm i -g @opencode/cli || npm i -g opencode || true
+                export PATH="$(npm root -g)/.bin:$PATH"
+              fi
+            - |
+              echo "[report] run opencode (best-effort) with fallback summarizer" >&2
+              bash scripts/opencode_daily_report.sh
+            - |
+              echo "[report] show report summary" >&2
+              if [ -d daily-reports ] && ls -1 daily-reports/*.md >/dev/null 2>&1; then
+                ls -lah daily-reports
+                echo "----- Report Preview -----"
+                head -n 80 $(ls -1t daily-reports/*.md | head -n 1) || true
+                echo "----- End Preview -----"
+              else
+                echo "no report generated" >&2
+              fi
