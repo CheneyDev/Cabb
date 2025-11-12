@@ -11,6 +11,8 @@ timeframe="${REPORT_TIMEFRAME:-yesterday}"
 zen_mode="${ZEN_MODE:-1}"
 # prefer fully-qualified model id per docs (opencode/<model-id>)
 model="${OPENCODE_MODEL:-opencode/grok-code}"
+# require AI summary or fallback allowed (manual可设置 REQUIRE_AI_SUMMARY=1)
+require_ai="${REQUIRE_AI_SUMMARY:-0}"
 # diff context controls (manual trigger can override via web_trigger inputs)
 diff_mode="${REPORT_DIFF_MODE:-stats}" # stats | sampled_patch | full_patch
 char_budget="${REPORT_DIFF_CHAR_BUDGET:-200000}"
@@ -141,17 +143,6 @@ echo "" >> "${out_file}"
 echo "- 时间范围：${start_ts} 至 ${end_ts} (${TZ})" >> "${out_file}"
 echo "- 仓库：${repo_slug}" >> "${out_file}"
 echo "" >> "${out_file}"
-
-if ${has_commits}; then
-  echo "## 总览" >> "${out_file}"
-  # Count commits by author
-  awk -F "\t" '{print $2}' "${log_file}" | sort | uniq -c | sort -nr \
-    | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s：%d 次提交\n", $0, c)}' >> "${out_file}"
-  echo "" >> "${out_file}"
-else
-  echo "> 本时段暂无提交记录。" >> "${out_file}"
-  echo "" >> "${out_file}"
-fi
 
 # No implicit fallback; timeframes are strictly one of: yesterday, last_week, last_month
 
@@ -312,30 +303,43 @@ if try_opencode; then
   echo "" >> "${out_file}"
 else
   # Fallback: native grouped summary
-  if ${has_commits}; then
-    echo "## 分作者提交明细" >> "${out_file}"
-    echo "" >> "${out_file}"
-    # List unique authors preserving locale
-    mapfile -t authors < <(awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort -u)
-    for author in "${authors[@]}"; do
-      echo "### ${author}" >> "${out_file}"
+  if [ "${require_ai}" = "1" ]; then
+    echo "## AI 汇总生成失败" >> "${out_file}"
+    echo "本次手动触发配置要求生成 AI 汇总，但调用失败。请检查 OPENCODE_API_KEY 与网络后重试。" >> "${out_file}"
+    exit 1
+  else
+    if ${has_commits}; then
+      echo "## 数据化汇总（备用）" >> "${out_file}"
       echo "" >> "${out_file}"
-      # Short hash + subject per commit
-      git log \
-        --all \
-        --since="${start_ts}" \
-        --until="${end_ts}" \
-        --author="${author}" \
-        --pretty=format:'- %h %s' \
-        >> "${out_file}" || true
-      echo "" >> "${out_file}"
-    done
+      # List unique authors preserving locale
+      mapfile -t authors < <(awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort -u)
+      for author in "${authors[@]}"; do
+        echo "### ${author}" >> "${out_file}"
+        echo "" >> "${out_file}"
+        git log \
+          --all \
+          --since="${start_ts}" \
+          --until="${end_ts}" \
+          --author="${author}" \
+          --pretty=format:'- %h %s' \
+          >> "${out_file}" || true
+        echo "" >> "${out_file}"
+      done
+    else
+      echo "> 本时段暂无提交记录。" >> "${out_file}"
+    fi
   fi
 fi
 
 # Append raw logs for reference (collapsed in most viewers)
-echo "<details><summary>原始提交记录</summary>" >> "${out_file}"
+echo "<details><summary>原始提交记录 / 作者分布</summary>" >> "${out_file}"
 echo "" >> "${out_file}"
+if ${has_commits}; then
+  echo "作者分布：" >> "${out_file}"
+  awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
+    | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s：%d 次提交\n", $0, c)}' >> "${out_file}"
+  echo "" >> "${out_file}"
+fi
 if ${has_commits}; then
   printf '````\n' >> "${out_file}"
   cat "${log_file}" >> "${out_file}"

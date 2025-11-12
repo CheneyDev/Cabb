@@ -65,6 +65,8 @@ main:
         REPORT_DIFF_MAX_COMMITS: "100"
         REPORT_NUMSTAT_LINES: "5000"
         REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
+        # 要求 AI 汇总成功，否则任务失败（更贴合“必须AI理解后汇报”的诉求）
+        REQUIRE_AI_SUMMARY: "1"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate daily report
