@@ -49,7 +49,7 @@ branch:
         inputs:
           SERVICES_LIST: *services_list_input
       - name: 生成汇报
-        description: 汇总 git 提交并生成工作日报
+        description: 汇总 git 提交并生成工作汇报
         event: web_trigger_daily_report
         env:
           RUNNER_ARCH: cnb:arch:amd64
