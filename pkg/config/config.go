@@ -15,7 +15,7 @@ type Config struct {
 	// Plane (Webhook-only)
 	PlaneBaseURL       string
 	PlaneWebhookSecret string
-	PlaneServiceToken  string // Global Service Token for outbound API calls
+    PlaneServiceToken  string // Global Service Token for outbound API calls
 
     // Feishu (Lark)
     LarkAppID             string
@@ -23,16 +23,28 @@ type Config struct {
     LarkEncryptKey        string
     LarkVerificationToken string
 
-	// CNB
-	CNBAppToken        string
-	IntegrationToken   string
-	CNBBaseURL         string
-	CNBOutboundEnabled bool
+    // CNB
+    CNBAppToken        string
+    IntegrationToken   string
+    CNBBaseURL         string
+    CNBOutboundEnabled bool
 
-	// Optional CNB path overrides
-	CNBIssueCreatePath  string
-	CNBIssueUpdatePath  string
-	CNBIssueCommentPath string
+    // Optional CNB path overrides
+    CNBIssueCreatePath  string
+    CNBIssueUpdatePath  string
+    CNBIssueCommentPath string
+
+    // AI / Branch naming
+    AIBranchAutocreateEnabled bool
+    AIProvider                string // cerebras|openai (default: cerebras)
+    // Cerebras
+    CerebrasAPIKey   string
+    CerebrasBaseURL  string
+    CerebrasModel    string
+    // OpenAI (optional fallback)
+    OpenAIAPIKey     string
+    OpenAIBaseURL    string
+    OpenAIModel      string
 
 	// Crypto
 	EncryptionKey string
@@ -72,13 +84,13 @@ func FromEnv() Config {
 		CNBAppToken:        os.Getenv("CNB_APP_TOKEN"),
 		IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),
 		CNBBaseURL:         os.Getenv("CNB_BASE_URL"),
-		CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", true),
+        CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", true),
 
 		CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
 		CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),
-		CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
+        CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
 
-		EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
+        EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
 
 		FrontendBaseURL: os.Getenv("FRONTEND_BASE_URL"),
 
@@ -87,13 +99,23 @@ func FromEnv() Config {
 		AdminSessionSecure:     boolFromEnv("ADMIN_SESSION_SECURE", false),
 		AdminBootstrapEmail:    os.Getenv("ADMIN_BOOTSTRAP_EMAIL"),
 		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
-		AdminBootstrapName:     strFromEnv("ADMIN_BOOTSTRAP_NAME", "Plane Admin"),
+        AdminBootstrapName:     strFromEnv("ADMIN_BOOTSTRAP_NAME", "Plane Admin"),
 
-		CleanupThreadLinksEnabled: boolFromEnv("CLEANUP_THREAD_LINKS_ENABLED", true),
-		CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
-		CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
-	}
-	return cfg
+        CleanupThreadLinksEnabled: boolFromEnv("CLEANUP_THREAD_LINKS_ENABLED", true),
+        CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
+        CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
+
+        // AI / Branch naming
+        AIBranchAutocreateEnabled: boolFromEnv("AI_BRANCH_AUTOCREATE_ENABLED", false),
+        AIProvider:                strFromEnv("AI_PROVIDER", "cerebras"),
+        CerebrasAPIKey:            os.Getenv("CEREBRAS_API_KEY"),
+        CerebrasBaseURL:           strFromEnv("CEREBRAS_BASE_URL", "https://api.cerebras.ai"),
+        CerebrasModel:             strFromEnv("CEREBRAS_MODEL", "gpt-oss-120b"),
+        OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
+        OpenAIBaseURL:             os.Getenv("OPENAI_BASE_URL"),
+        OpenAIModel:               strFromEnv("OPENAI_MODEL", "gpt-4o-mini"),
+    }
+    return cfg
 }
 
 func (c Config) Address() string {

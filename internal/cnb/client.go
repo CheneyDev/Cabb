@@ -61,10 +61,146 @@ func (c *Client) defaultUpdatePath() string {
 	return "/{repo}/-/issues/{number}"
 }
 func (c *Client) defaultCommentPath() string {
-	if c.IssueCommentPath != "" {
-		return c.IssueCommentPath
-	}
-	return "/{repo}/-/issues/{number}/comments"
+    if c.IssueCommentPath != "" {
+        return c.IssueCommentPath
+    }
+    return "/{repo}/-/issues/{number}/comments"
+}
+
+// Branch APIs (per swagger):
+//   GET    /{repo}/-/git/head                        -> default branch (openapi.HeadRef)
+//   GET    /{repo}/-/git/branches                    -> list branches (page,page_size)
+//   GET    /{repo}/-/git/branches/{branch}           -> get single branch
+//   POST   /{repo}/-/git/branches                    -> create branch {name,start_point}
+//   DELETE /{repo}/-/git/branches/{branch}           -> delete branch
+
+func (c *Client) pathGetHead(repo string) (string, error) {
+    return expand("/{repo}/-/git/head", repo, "")
+}
+func (c *Client) pathBranches(repo string) (string, error) {
+    return expand("/{repo}/-/git/branches", repo, "")
+}
+func (c *Client) pathBranch(repo, branch string) (string, error) {
+    // {number} placeholder isn't used here; reuse expand for consistency
+    return expand("/{repo}/-/git/branches/{number}", repo, branch)
+}
+
+// GetDefaultBranch returns the repository default branch name.
+func (c *Client) GetDefaultBranch(ctx context.Context, repo string) (string, error) {
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+        return "", errors.New("missing CNB base URL or token")
+    }
+    p, err := c.pathGetHead(repo)
+    if err != nil { return "", err }
+    ep, err := c.join(p)
+    if err != nil { return "", err }
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+    if err != nil { return "", err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return "", err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return "", fmt.Errorf("cnb get head status=%d", resp.StatusCode)
+    }
+    var out struct { Name string `json:"name"`; Protected bool `json:"protected"` }
+    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return "", err }
+    if strings.TrimSpace(out.Name) == "" { return "", errors.New("empty head name") }
+    return out.Name, nil
+}
+
+// BranchSummary is a minimal view for duplication checks.
+type BranchSummary struct {
+    Name string `json:"name"`
+}
+
+// ListBranches retrieves a page of branches.
+func (c *Client) ListBranches(ctx context.Context, repo string, page, pageSize int) ([]BranchSummary, error) {
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+        return nil, errors.New("missing CNB base URL or token")
+    }
+    p, err := c.pathBranches(repo)
+    if err != nil { return nil, err }
+    ep, err := c.join(p)
+    if err != nil { return nil, err }
+    // append query
+    if page <= 0 { page = 1 }
+    if pageSize <= 0 { pageSize = 30 }
+    if u, err2 := url.Parse(ep); err2 == nil {
+        q := u.Query()
+        q.Set("page", fmt.Sprintf("%d", page))
+        q.Set("page_size", fmt.Sprintf("%d", pageSize))
+        u.RawQuery = q.Encode()
+        ep = u.String()
+    }
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+    if err != nil { return nil, err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return nil, err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return nil, fmt.Errorf("cnb list branches status=%d", resp.StatusCode)
+    }
+    var arr []BranchSummary
+    if err := json.NewDecoder(resp.Body).Decode(&arr); err != nil { return nil, err }
+    return arr, nil
+}
+
+// GetBranch fetches a single branch; returns (nil,nil) on 404.
+func (c *Client) GetBranch(ctx context.Context, repo, branch string) (*BranchSummary, error) {
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+        return nil, errors.New("missing CNB base URL or token")
+    }
+    p, err := c.pathBranch(repo, branch)
+    if err != nil { return nil, err }
+    ep, err := c.join(p)
+    if err != nil { return nil, err }
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+    if err != nil { return nil, err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return nil, err }
+    defer resp.Body.Close()
+    if resp.StatusCode == http.StatusNotFound {
+        return nil, nil
+    }
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        return nil, fmt.Errorf("cnb get branch status=%d", resp.StatusCode)
+    }
+    var out BranchSummary
+    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return nil, err }
+    return &out, nil
+}
+
+// CreateBranch creates a branch from a start point (branch or commit SHA).
+func (c *Client) CreateBranch(ctx context.Context, repo, name, startPoint string) error {
+    if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+        return errors.New("missing CNB base URL or token")
+    }
+    if strings.TrimSpace(name) == "" { return errors.New("empty branch name") }
+    if strings.TrimSpace(startPoint) == "" { startPoint = "main" }
+    p, err := c.pathBranches(repo)
+    if err != nil { return err }
+    ep, err := c.join(p)
+    if err != nil { return err }
+    payload := map[string]any{"name": name, "start_point": startPoint}
+    b, _ := json.Marshal(payload)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil { return err }
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
+    resp, err := c.httpClient().Do(req)
+    if err != nil { return err }
+    defer resp.Body.Close()
+    if resp.StatusCode == http.StatusCreated || (resp.StatusCode >= 200 && resp.StatusCode < 300) {
+        return nil
+    }
+    return fmt.Errorf("cnb create branch status=%d", resp.StatusCode)
 }
 
 func (c *Client) defaultAssigneesPath() string {

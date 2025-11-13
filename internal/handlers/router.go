@@ -1,13 +1,17 @@
 package handlers
 
 import (
-	"sync"
-	"time"
+    "context"
+    "sync"
+    "time"
 
-	"cabb/internal/store"
-	"cabb/pkg/config"
+    cerebras "cabb/internal/ai/providers/cerebras"
+    openaip "cabb/internal/ai/providers/openai"
+    "cabb/internal/store"
+    "cabb/pkg/config"
 
-	"github.com/labstack/echo/v4"
+    "github.com/labstack/echo/v4"
+    "strings"
 )
 
 func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
@@ -23,14 +27,18 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 		ttl = 12 * time.Hour
 	}
 
-	h := &Handler{
-		cfg:                 cfg,
-		dedupe:              d,
-		db:                  db,
-		sessionCookieName:   sessionCookie,
-		sessionTTL:          ttl,
-		sessionCookieSecure: cfg.AdminSessionSecure,
-	}
+    // Optional AI namer
+    varNamer := initBranchNamer(cfg)
+
+    h := &Handler{
+        cfg:                 cfg,
+        dedupe:              d,
+        db:                  db,
+        sessionCookieName:   sessionCookie,
+        sessionTTL:          ttl,
+        sessionCookieSecure: cfg.AdminSessionSecure,
+        aiNamer:             varNamer,
+    }
 
 	// Health
 	e.GET("/healthz", h.Healthz)
@@ -95,11 +103,31 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 }
 
 type Handler struct {
-	cfg                 config.Config
-	dedupe              *Deduper
-	db                  *store.DB
-	sessionCookieName   string
-	sessionTTL          time.Duration
-	sessionCookieSecure bool
-	createLocks         sync.Map // key: repo|planeIssueID -> *sync.Mutex
+    cfg                 config.Config
+    dedupe              *Deduper
+    db                  *store.DB
+    sessionCookieName   string
+    sessionTTL          time.Duration
+    sessionCookieSecure bool
+    createLocks         sync.Map // key: repo|planeIssueID -> *sync.Mutex
+    aiNamer             interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) }
+}
+
+// initBranchNamer wires an AI-based branch namer if enabled and credentials are present.
+func initBranchNamer(cfg config.Config) interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) } {
+    if !cfg.AIBranchAutocreateEnabled {
+        return nil
+    }
+    // Prefer Cerebras when configured (default)
+    provider := strings.ToLower(strings.TrimSpace(cfg.AIProvider))
+    if provider == "" || provider == "cerebras" {
+        if cfg.CerebrasAPIKey != "" {
+            return cerebras.New(cfg.CerebrasModel, cfg.CerebrasAPIKey, cfg.CerebrasBaseURL)
+        }
+    }
+    // Fallback to OpenAI if configured and build-tag enabled
+    if cfg.OpenAIAPIKey != "" {
+        return openaip.New(cfg.OpenAIModel, cfg.OpenAIAPIKey, cfg.OpenAIBaseURL)
+    }
+    return nil
 }

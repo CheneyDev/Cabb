@@ -105,6 +105,19 @@ make build
 | `INTEGRATION_TOKEN` | 回调验证令牌 | 自行生成 (`openssl rand -hex 32`) |
 | `CNB_BASE_URL` | CNB API 地址 | 默认 `https://api.cnb.cool` |
 
+### AI/自动分支命名
+
+| 环境变量 | 说明 | 默认值 |
+|----------|------|--------|
+| `AI_BRANCH_AUTOCREATE_ENABLED` | 是否在 Plane Issue 创建时自动生成并创建 CNB 分支 | `false` |
+| `AI_PROVIDER` | 首选供应商：`cerebras` 或 `openai` | `cerebras` |
+| `CEREBRAS_API_KEY` | Cerebras API Key | - |
+| `CEREBRAS_BASE_URL` | Cerebras API 基地址 | `https://api.cerebras.ai` |
+| `CEREBRAS_MODEL` | Cerebras 模型 | `gpt-oss-120b` |
+| `OPENAI_API_KEY` | OpenAI API Key（可选：作为备选供应商） | - |
+| `OPENAI_BASE_URL` | 可选，OpenAI Base URL（自定义网关/代理） | - |
+| `OPENAI_MODEL` | OpenAI 模型 | `gpt-4o-mini` |
+
 ### 管理控制台
 
 | 环境变量 | 说明 | 默认值 |
@@ -117,7 +130,7 @@ make build
 
 ### Webhook 接收
 
-- `POST /webhooks/plane` - Plane 事件接收
+- `POST /webhooks/plane` - Plane 事件接收（启用 AI 自动分支后，会在 Issue 创建事件中生成并创建分支）
 - `POST /webhooks/lark/events` - 飞书事件接收
 - `POST /webhooks/lark/interactivity` - 飞书交互回调
 

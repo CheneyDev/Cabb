@@ -1,0 +1,59 @@
+# Authentication
+
+The Cerebras API uses API keys for authentication. Create and manage API keys from our [Inference Cloud Console](https://cloud.cerebras.ai).
+
+<Danger>
+  **Keep your API key secure.** Never share it publicly or include it in client-side code (such as browsers or mobile apps). Instead, load it safely from an environment variable or a server-side key management service.
+</Danger>
+
+API keys are passed using HTTP Bearer authentication:
+
+```
+Authorization: Bearer CEREBRAS_API_KEY
+```
+
+## Example Request
+
+```bash  theme={null}
+curl --location 'https://api.cerebras.ai/v1/chat/completions' \
+  --header 'Content-Type: application/json' \
+  --header "Authorization: Bearer ${CEREBRAS_API_KEY}" \
+  --data '{
+    "model": "llama3.1-8b",
+    "messages": [
+      {"role": "user", "content": "Tell me a fun fact about space."}
+    ]
+  }'
+```
+
+## Using Official SDKs
+
+You can also authenticate automatically when using the official SDKs for Python and Node.js by passing your API key during client initialization:
+
+<CodeGroup>
+  ```python Python theme={null}
+  import os
+  from cerebras.cloud.sdk import Cerebras
+
+  client = Cerebras(
+      # This is the default and can be omitted
+      api_key=os.environ.get("CEREBRAS_API_KEY"),
+  )
+  ```
+
+  ```javascript Node.js theme={null}
+  import Cerebras from 'cerebras_cloud_sdk';
+
+  const client = new Cerebras({
+    apiKey: process.env['CEREBRAS_API_KEY'], // This is the default and can be omitted
+  });
+  ```
+</CodeGroup>
+
+## Set Your API Key
+
+For security reasons, and to avoid configuring your API key each time, we recommend setting your API key as an environment variable. You can do this by running the following command in your terminal:
+
+```bash  theme={null}
+export CEREBRAS_API_KEY="your-api-key"
+```

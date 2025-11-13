@@ -262,9 +262,14 @@ func (h *Handler) handlePlaneIssueEvent(env planeWebhookEnvelope, deliveryID str
 					unlock()
 					continue
 				}
-				_, _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
-				LogStructured("info", map[string]any{"event": "plane.issue.cnbrpc", "delivery_id": deliveryID, "action": action, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "op": "create_issue", "result": "created", "cnb_issue_iid": iid})
-				unlock()
+			_, _ = h.db.CreateIssueLink(ctx, planeIssueID, m.CNBRepoID, iid)
+			LogStructured("info", map[string]any{"event": "plane.issue.cnbrpc", "delivery_id": deliveryID, "action": action, "plane_issue_id": planeIssueID, "repo": m.CNBRepoID, "op": "create_issue", "result": "created", "cnb_issue_iid": iid})
+			unlock()
+
+			// Auto branch creation via AI suggestion (if enabled)
+				if h.aiNamer != nil {
+					go h.maybeCreateCNBBranchForIssue(context.Background(), cn, m.CNBRepoID, planeIssueID, name, descHTML, effectiveWorkspaceSlug, planeProjectID)
+				}
 				if startDate != "" || dueDate != "" || hasPriority {
 					dfields := map[string]any{}
 					if startDate != "" {
@@ -770,6 +775,84 @@ func (h *Handler) generateTitleWithParent(ctx context.Context, originalTitle, pa
 	}
 
 	return fmt.Sprintf("[Parent: #%s ] %s", cnbIssueID, originalTitle)
+}
+
+// maybeCreateCNBBranchForIssue suggests and creates a CNB branch for the given Plane issue.
+// It is best-effort and logs structured events; errors are swallowed to avoid impacting the main flow.
+func (h *Handler) maybeCreateCNBBranchForIssue(ctx context.Context, cn *cnb.Client, repo, planeIssueID, issueTitle, issueDescHTML, workspaceSlug, planeProjectID string) {
+    if h == nil || h.aiNamer == nil || cn == nil {
+        return
+    }
+    // Bound processing time to avoid long blocking
+    cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+    defer cancel()
+
+    branch, reason, err := h.aiNamer.SuggestBranchName(cctx, issueTitle, issueDescHTML)
+    if err != nil || strings.TrimSpace(branch) == "" {
+        LogStructured("error", map[string]any{"event": "plane.issue.branch.ai", "plane_issue_id": planeIssueID, "repo": repo, "error": map[string]any{"code": "ai_branch_generate_failed", "message": truncate(fmt.Sprintf("%v", err), 180)}})
+        // No fallback here; keep silent when AI fails
+        return
+    }
+    // Try to prefix issue key into branch slug: {prefix}/{issuekey}-{slug}
+    issueKey := ""
+    // Look up issue detail to get sequence_id and project identifier
+    if strings.TrimSpace(workspaceSlug) != "" && strings.TrimSpace(planeProjectID) != "" && strings.TrimSpace(h.cfg.PlaneServiceToken) != "" {
+        plc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+        if det, derr := plc.GetIssueDetail(cctx, h.cfg.PlaneServiceToken, workspaceSlug, planeProjectID, planeIssueID); derr == nil && det != nil {
+            seq := det.SequenceID
+            if seq > 0 {
+                // fetch project to get identifier
+                if proj, perr := plc.GetProject(cctx, h.cfg.PlaneServiceToken, workspaceSlug, planeProjectID); perr == nil && proj != nil {
+                    id := strings.TrimSpace(proj.Identifier)
+                    if id == "" {
+                        id = strings.TrimSpace(proj.Slug)
+                    }
+                    if id != "" {
+                        issueKey = fmt.Sprintf("%s-%d", id, seq)
+                    }
+                }
+            }
+        }
+    }
+    if issueKey != "" {
+        parts := strings.SplitN(branch, "/", 2)
+        if len(parts) == 2 {
+            prefix := parts[0]
+            slug := parts[1]
+            ik := strings.ToLower(issueKey)
+            if !strings.HasPrefix(slug, ik+"-") {
+                slug = ik + "-" + slug
+            }
+            branch = prefix + "/" + slug
+        }
+    }
+
+    // Ensure not duplicate; resolve start point
+    start := "main"
+    if b, err := cn.GetDefaultBranch(cctx, repo); err == nil && strings.TrimSpace(b) != "" {
+        start = strings.TrimSpace(b)
+    }
+    // If branch exists, append numeric suffixes up to N
+    finalName := branch
+    for i := 0; i < 10; i++ {
+        exists := false
+        if got, _ := cn.GetBranch(cctx, repo, finalName); got != nil && strings.TrimSpace(got.Name) != "" {
+            exists = true
+        }
+        if !exists {
+            break
+        }
+        finalName = fmt.Sprintf("%s-%d", branch, i+2)
+    }
+    if err := cn.CreateBranch(cctx, repo, finalName, start); err != nil {
+        LogStructured("error", map[string]any{"event": "plane.issue.branch.cnbrpc", "plane_issue_id": planeIssueID, "repo": repo, "op": "create_branch", "branch": finalName, "start_point": start, "error": map[string]any{"code": "cnb_create_branch_failed", "message": truncate(fmt.Sprintf("%v", err), 180)}})
+        return
+    }
+    // Link branch to Plane issue (primary=true on first creation)
+    if hHasDB(h) {
+        _ = h.db.UpsertBranchIssueLink(context.Background(), planeIssueID, repo, finalName, true)
+    }
+    LogStructured("info", map[string]any{"event": "plane.issue.branch.created", "plane_issue_id": planeIssueID, "repo": repo, "branch": finalName, "start_point": start, "reason": optionalString(reason)})
 }
 
 func dataGetString(m map[string]any, key string) (string, bool) {
