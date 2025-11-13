@@ -115,3 +115,108 @@ main:
               else
                 echo "no report generated" >&2
               fi
+  "crontab: 0 5 * * 1":
+    - name: weekly-opencode-report
+      env:
+        TZ: Asia/Shanghai
+        RUNNER_ARCH: cnb:arch:amd64
+        OPENCODE_MODEL: "opencode/grok-code"
+        # 上一自然周（周一至周日）
+        REPORT_TIMEFRAME: "last_week"
+        ZEN_MODE: "1"
+        # AI 必达 + 采样补丁
+        REQUIRE_AI_SUMMARY: "1"
+        REPORT_DIFF_MODE: "sampled_patch"
+        REPORT_DIFF_CHAR_BUDGET: "200000"
+        REPORT_DIFF_TOP_FILES: "20"
+        REPORT_DIFF_HUNKS_PER_FILE: "3"
+        REPORT_DIFF_MAX_COMMITS: "100"
+        REPORT_NUMSTAT_LINES: "5000"
+        REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
+        # 发布目标
+        REPORT_PUBLISH_ENABLE: "1"
+        REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
+        REPORT_PUBLISH_BRANCH: "main"
+        REPORT_PUBLISH_DIR: "ai-report"
+      imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
+      stages:
+        - name: Install deps and generate weekly report
+          image: node:20
+          timeout: 20m
+          script:
+            - |
+              # use POSIX sh options (dash) — avoid pipefail
+              set -eu
+              apt-get update -y >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              git --version
+              # Install opencode CLI
+              if ! command -v opencode >/dev/null 2>&1; then
+                (curl -fsSL https://opencode.ai/install | bash) || true
+              fi
+              if ! command -v opencode >/dev/null 2>&1; then
+                npm i -g opencode-ai || true
+                export PATH="$(npm root -g)/.bin:$PATH"
+              fi
+              bash scripts/opencode_daily_report.sh
+              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+                ls -lah reports
+                echo "----- 汇报预览 -----"
+                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
+                echo "----- 预览结束 -----"
+              else
+                echo "no report generated" >&2
+              fi
+
+  "crontab: 0 1 1 * *":
+    - name: monthly-opencode-report
+      env:
+        TZ: Asia/Shanghai
+        RUNNER_ARCH: cnb:arch:amd64
+        OPENCODE_MODEL: "opencode/grok-code"
+        # 上一个自然月
+        REPORT_TIMEFRAME: "last_month"
+        ZEN_MODE: "1"
+        # AI 必达 + 采样补丁
+        REQUIRE_AI_SUMMARY: "1"
+        REPORT_DIFF_MODE: "sampled_patch"
+        REPORT_DIFF_CHAR_BUDGET: "200000"
+        REPORT_DIFF_TOP_FILES: "20"
+        REPORT_DIFF_HUNKS_PER_FILE: "3"
+        REPORT_DIFF_MAX_COMMITS: "100"
+        REPORT_NUMSTAT_LINES: "5000"
+        REPORT_EXCLUDE_GLOBS: "node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock"
+        # 发布目标
+        REPORT_PUBLISH_ENABLE: "1"
+        REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
+        REPORT_PUBLISH_BRANCH: "main"
+        REPORT_PUBLISH_DIR: "ai-report"
+      imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
+      stages:
+        - name: Install deps and generate monthly report
+          image: node:20
+          timeout: 20m
+          script:
+            - |
+              # use POSIX sh options (dash) — avoid pipefail
+              set -eu
+              apt-get update -y >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              git --version
+              # Install opencode CLI
+              if ! command -v opencode >/dev/null 2>&1; then
+                (curl -fsSL https://opencode.ai/install | bash) || true
+              fi
+              if ! command -v opencode >/dev/null 2>&1; then
+                npm i -g opencode-ai || true
+                export PATH="$(npm root -g)/.bin:$PATH"
+              fi
+              bash scripts/opencode_daily_report.sh
+              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+                ls -lah reports
+                echo "----- 汇报预览 -----"
+                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
+                echo "----- 预览结束 -----"
+              else
+                echo "no report generated" >&2
+              fi
