@@ -55,18 +55,17 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 		model = "gpt-oss-120b"
 	}
 
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"branch": map[string]any{
-				"type":        "string",
-				"pattern":     "^(feat|fix|chore|docs|refactor|test|perf|ci|build|style)(/[a-z0-9][a-z0-9_/-]{0,60})$",
-				"description": "lowercase Git branch name in prefix/slug format",
-			},
-		},
-		"required":             []string{"branch"},
-		"additionalProperties": false,
-	}
+    schema := map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "branch": map[string]any{
+                "type":        "string",
+                "description": "lowercase Git branch name in prefix/slug format",
+            },
+        },
+        "required":             []string{"branch"},
+        "additionalProperties": false,
+    }
 
 	sys := strings.Join([]string{
 		"You generate concise Git branch names for software issues.",
@@ -80,14 +79,16 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 	}, "\n")
 	usr := fmt.Sprintf("Title: %s\nDescription (may include HTML): %s\nReturn a fitting branch.", strings.TrimSpace(title), strings.TrimSpace(description))
 
-	body := map[string]any{
-		"model":    model,
-		"messages": []map[string]any{{"role": "system", "content": sys}, {"role": "user", "content": usr}},
-		"response_format": map[string]any{
-			"type":        "json_schema",
-			"json_schema": map[string]any{"name": "branch_schema", "strict": true, "schema": schema},
-		},
-	}
+    body := map[string]any{
+        "model":                 model,
+        "messages":              []map[string]any{{"role": "system", "content": sys}, {"role": "user", "content": usr}},
+        "reasoning_effort":      "medium",
+        "max_completion_tokens": 128,
+        "response_format": map[string]any{
+            "type":        "json_schema",
+            "json_schema": map[string]any{"name": "branch_schema", "strict": true, "schema": schema},
+        },
+    }
 	b, _ := json.Marshal(body)
 	ep, err := p.endpoint("/v1/chat/completions")
 	if err != nil {
