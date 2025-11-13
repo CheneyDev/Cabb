@@ -110,7 +110,7 @@ func FromEnv() Config {
         AIProvider:                strFromEnv("AI_PROVIDER", "cerebras"),
         CerebrasAPIKey:            os.Getenv("CEREBRAS_API_KEY"),
         CerebrasBaseURL:           strFromEnv("CEREBRAS_BASE_URL", "https://api.cerebras.ai"),
-        CerebrasModel:             strFromEnv("CEREBRAS_MODEL", "gpt-oss-120b"),
+        CerebrasModel:             strFromEnv("CEREBRAS_MODEL", "zai-glm-4.6"),
         OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
         OpenAIBaseURL:             os.Getenv("OPENAI_BASE_URL"),
         OpenAIModel:               strFromEnv("OPENAI_MODEL", "gpt-4o-mini"),

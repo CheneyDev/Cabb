@@ -50,10 +50,10 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 	if strings.TrimSpace(p.apiKey) == "" {
 		return "", "", errors.New("missing CEREBRAS_API_KEY")
 	}
-	model := p.model
-	if model == "" {
-		model = "gpt-oss-120b"
-	}
+    model := p.model
+    if model == "" {
+        model = "zai-glm-4.6"
+    }
 
     schema := map[string]any{
         "type": "object",
@@ -67,26 +67,33 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
         "additionalProperties": false,
     }
 
-	sys := strings.Join([]string{
+	prompt := strings.Join([]string{
 		"You generate concise Git branch names for software issues.",
 		"Rules:",
-		"- Respond with JSON matching the provided schema only.",
+		"- Return only a JSON object: {\"branch\":\"...\"}.",
 		"- branch must be lowercase.",
 		"- Allowed prefixes: feat, fix, chore, docs, refactor, test, perf, ci, build, style.",
 		"- Format: <prefix>/<slug> where slug uses [a-z0-9_/-], 2..60 chars after prefix/.",
 		"- No punctuation, no emojis, no quotes.",
 		"- Keep it short and meaningful.",
+		fmt.Sprintf("Title: %s", strings.TrimSpace(title)),
+		fmt.Sprintf("Description (may include HTML): %s", strings.TrimSpace(description)),
 	}, "\n")
-	usr := fmt.Sprintf("Title: %s\nDescription (may include HTML): %s\nReturn a fitting branch.", strings.TrimSpace(title), strings.TrimSpace(description))
 
     body := map[string]any{
-        "model":                 model,
-        "messages":              []map[string]any{{"role": "system", "content": sys}, {"role": "user", "content": usr}},
+		"model":                 model,
+		// 参考 Playground，最小只传 user 消息，更容易符合约束
+		"messages":              []map[string]any{{"role": "user", "content": prompt}},
+        "stream":                false,
+        "temperature":           0.6,
+        "top_p":                 0.95,
         "reasoning_effort":      "medium",
         "max_completion_tokens": 128,
+        "tools":                 []any{},
         "response_format": map[string]any{
             "type":        "json_schema",
-            "json_schema": map[string]any{"name": "branch_schema", "strict": true, "schema": schema},
+            // 使用 strict=false，避免 beta 期服务端拒绝；本地进行格式校验
+            "json_schema": map[string]any{"name": "branch_schema", "strict": false, "schema": schema},
         },
     }
 	b, _ := json.Marshal(body)
@@ -127,18 +134,32 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", "", err
 	}
-	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-		return "", "", errors.New("empty response content")
-	}
-	var parsed struct {
-		Branch string `json:"branch"`
-	}
-	if err := json.Unmarshal([]byte(out.Choices[0].Message.Content), &parsed); err != nil {
-		return "", "", err
-	}
-	branch, ok := ai.SanitizeBranch(parsed.Branch)
-	if !ok || branch == "" {
-		branch = ai.FallbackBranch(title)
-	}
-	return branch, "", nil
+    if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
+        return "", "", errors.New("empty response content")
+    }
+    raw := strings.TrimSpace(out.Choices[0].Message.Content)
+    // Attempt to strip code fences like ```json ... ```
+    if strings.HasPrefix(raw, "```") {
+        raw = strings.TrimPrefix(raw, "```")
+        // optionally strip language tag
+        if i := strings.IndexByte(raw, '\n'); i >= 0 { raw = raw[i+1:] }
+        if j := strings.LastIndex(raw, "```"); j >= 0 { raw = raw[:j] }
+        raw = strings.TrimSpace(raw)
+    }
+    // Try direct unmarshal; if fails, try to extract first {...}
+    var parsed struct { Branch string `json:"branch"` }
+    if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+        // Find first JSON object substring heuristically
+        if i := strings.Index(raw, "{"); i >= 0 {
+            if j := strings.LastIndex(raw, "}"); j > i {
+                frag := raw[i:j+1]
+                _ = json.Unmarshal([]byte(frag), &parsed)
+            }
+        }
+    }
+    branch, ok := ai.SanitizeBranch(parsed.Branch)
+    if !ok || branch == "" {
+        branch = ai.FallbackBranch(title)
+    }
+    return branch, "", nil
 }
