@@ -5,13 +5,11 @@ import (
     "sync"
     "time"
 
-    cerebras "cabb/internal/ai/providers/cerebras"
     openaip "cabb/internal/ai/providers/openai"
     "cabb/internal/store"
     "cabb/pkg/config"
 
     "github.com/labstack/echo/v4"
-    "strings"
 )
 
 func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
@@ -116,14 +114,6 @@ type Handler struct {
 
 // initBranchNamer wires an AI-based branch namer if enabled and credentials are present.
 func initBranchNamer(cfg config.Config) interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) } {
-    // Prefer Cerebras when configured (default)
-    provider := strings.ToLower(strings.TrimSpace(cfg.AIProvider))
-    if provider == "" || provider == "cerebras" {
-        if cfg.CerebrasAPIKey != "" {
-            return cerebras.New(cfg.CerebrasModel, cfg.CerebrasAPIKey, cfg.CerebrasBaseURL)
-        }
-    }
-    // Fallback to OpenAI if configured and build-tag enabled
     if cfg.OpenAIAPIKey != "" {
         return openaip.New(cfg.OpenAIModel, cfg.OpenAIAPIKey, cfg.OpenAIBaseURL)
     }

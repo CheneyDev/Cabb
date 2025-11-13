@@ -105,15 +105,11 @@ make build
 | `INTEGRATION_TOKEN` | 回调验证令牌 | 自行生成 (`openssl rand -hex 32`) |
 | `CNB_BASE_URL` | CNB API 地址 | 默认 `https://api.cnb.cool` |
 
-### AI/自动分支命名
+### AI/自动分支命名（OpenAI）
 
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
-| `AI_PROVIDER` | 首选供应商：`cerebras` 或 `openai` | `cerebras` |
-| `CEREBRAS_API_KEY` | Cerebras API Key | - |
-| `CEREBRAS_BASE_URL` | Cerebras API 基地址 | `https://api.cerebras.ai` |
-| `CEREBRAS_MODEL` | Cerebras 模型 | `gpt-oss-120b` |
-| `OPENAI_API_KEY` | OpenAI API Key（可选：作为备选供应商） | - |
+| `OPENAI_API_KEY` | OpenAI API Key | - |
 | `OPENAI_BASE_URL` | 可选，OpenAI Base URL（自定义网关/代理） | - |
 | `OPENAI_MODEL` | OpenAI 模型 | `gpt-4o-mini` |
 

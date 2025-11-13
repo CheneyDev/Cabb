@@ -1,5 +1,3 @@
-//go:build openai
-
 package openai
 
 import (
