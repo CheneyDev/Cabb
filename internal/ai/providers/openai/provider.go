@@ -1,15 +1,18 @@
 package openai
 
 import (
+    "bytes"
     "context"
     "encoding/json"
     "errors"
     "fmt"
+    "io"
+    "net/http"
+    "net/url"
     "strings"
+    "time"
 
     ai "cabb/internal/ai"
-    openaisdk "github.com/openai/openai-go"
-    "github.com/openai/openai-go/option"
 )
 
 type provider struct {
@@ -18,16 +21,27 @@ type provider struct {
     baseURL string
 }
 
-// New returns an OpenAI-backed BranchNamer (requires build tag 'openai').
+// New returns an OpenAI-backed BranchNamer using stdlib HTTP.
 func New(model, apiKey, baseURL string) ai.BranchNamer {
     return &provider{model: strings.TrimSpace(model), apiKey: strings.TrimSpace(apiKey), baseURL: strings.TrimSpace(baseURL)}
 }
 
-func (p *provider) client() *openaisdk.Client {
-    if p.baseURL != "" {
-        return openaisdk.NewClient(option.WithAPIKey(p.apiKey), option.WithBaseURL(p.baseURL))
+func (p *provider) endpoint(paths ...string) (string, error) {
+    base := p.baseURL
+    if base == "" {
+        base = "https://api.openai.com"
     }
-    return openaisdk.NewClient(option.WithAPIKey(p.apiKey))
+    u, err := url.Parse(base)
+    if err != nil {
+        return "", err
+    }
+    path := strings.TrimRight(u.Path, "/")
+    for _, s := range paths {
+        if !strings.HasPrefix(s, "/") { s = "/" + s }
+        path += s
+    }
+    u.Path = path
+    return u.String(), nil
 }
 
 func (p *provider) SuggestBranchName(ctx context.Context, title, description string) (string, string, error) {
@@ -36,10 +50,11 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
     }
     model := p.model
     if model == "" { model = "gpt-4o-mini" }
+
     sys := strings.Join([]string{
         "You generate concise Git branch names for software issues.",
         "Rules:",
-        "- Return only JSON via structured output schema.",
+        "- Return only JSON with fields: branch, reason.",
         "- branch must be lowercase.",
         "- Allowed prefixes: feat, fix, chore, docs, refactor, test, perf, ci, build, style.",
         "- Format: <prefix>/<slug> where slug uses [a-z0-9_/-], no spaces, 2..60 chars after prefix/.",
@@ -51,40 +66,65 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
         "- Do not refuse or add explanations; output JSON only.",
     }, "\n")
     user := fmt.Sprintf("Title: %s\nDescription (may include HTML): %s\nReturn a fitting branch.", strings.TrimSpace(title), strings.TrimSpace(description))
-    schema := map[string]any{
-        "type": "object",
-        "properties": map[string]any{
-            "branch": map[string]any{"type": "string", "pattern": "^(feat|fix|chore|docs|refactor|test|perf|ci|build|style)(/[a-z0-9][a-z0-9_/-]{0,60})$"},
-            "reason": map[string]any{"anyOf": []any{map[string]any{"type": "string"}, map[string]any{"type": "null"}}},
+
+    // Use Chat Completions with JSON mode to keep dependencies minimal
+    body := map[string]any{
+        "model": model,
+        "messages": []map[string]any{
+            {"role": "system", "content": sys},
+            {"role": "user", "content": user},
         },
-        "required": []string{"branch", "reason"},
-        "additionalProperties": false,
+        "response_format": map[string]any{"type": "json_object"},
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "stream": false,
+        "max_tokens": 128,
     }
-    client := p.client()
-    resp, err := client.Responses.New(ctx, openaisdk.ResponseNewParams{
-        Model: openaisdk.F(model),
-        Input: openaisdk.F([]openaisdk.Input{openaisdk.TextInput{Text: sys + "\n\n" + user}}),
-        ResponseFormat: openaisdk.F(openaisdk.ResponseFormat{Type: openaisdk.F("json_schema"), JsonSchema: openaisdk.F(openaisdk.ResponseFormatJSONSchema{Name: openaisdk.F("branch_name"), Strict: openaisdk.Bool(true), Schema: openaisdk.F(schema)})}),
-    })
+    b, _ := json.Marshal(body)
+    ep, err := p.endpoint("/v1/chat/completions")
     if err != nil { return "", "", err }
-    if strings.EqualFold(resp.Status, "incomplete") {
-        return "", "", fmt.Errorf("openai incomplete: %v", resp.IncompleteDetails)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+    if err != nil { return "", "", err }
+    req.Header.Set("Authorization", "Bearer "+p.apiKey)
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
+    hc := &http.Client{Timeout: 12 * time.Second}
+    resp, err := hc.Do(req)
+    if err != nil { return "", "", err }
+    defer resp.Body.Close()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        var detail string
+        if d, _ := io.ReadAll(resp.Body); len(d) > 0 {
+            if len(d) > 400 { d = d[:400] }
+            detail = strings.TrimSpace(string(d))
+        }
+        return "", "", fmt.Errorf("openai chat completions status=%d body=%s", resp.StatusCode, detail)
     }
-    var jsonStr string
-    if len(resp.Output) > 0 {
-        for _, item := range resp.Output {
-            for _, c := range item.Content {
-                if c.Type == "refusal" { return "", "", errors.New("openai refusal") }
-                if c.Type == "output_text" && c.Text != nil { jsonStr += c.Text.Value }
-                if c.Type == "json" && c.JSON != nil { if s, ok := c.JSON.(string); ok { jsonStr = s } }
+    var out struct {
+        Choices []struct {
+            Message struct {
+                Content string `json:"content"`
+            } `json:"message"`
+        } `json:"choices"`
+    }
+    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return "", "", err }
+    if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
+        return "", "", errors.New("empty structured output")
+    }
+    raw := strings.TrimSpace(out.Choices[0].Message.Content)
+    // Try decode to struct
+    var parsed struct { Branch string `json:"branch"`; Reason *string `json:"reason"` }
+    if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+        // Attempt to extract first JSON object
+        if i := strings.Index(raw, "{"); i >= 0 {
+            if j := strings.LastIndex(raw, "}"); j > i {
+                frag := raw[i:j+1]
+                _ = json.Unmarshal([]byte(frag), &parsed)
             }
         }
     }
-    if strings.TrimSpace(jsonStr) == "" { return "", "", errors.New("empty structured output") }
-    var out struct{ Branch string `json:"branch"`; Reason *string `json:"reason"` }
-    if err := json.Unmarshal([]byte(jsonStr), &out); err != nil { return "", "", err }
-    b, ok := ai.SanitizeBranch(out.Branch)
-    if !ok || b == "" { b = ai.FallbackBranch(title) }
-    reason := ""; if out.Reason != nil { reason = strings.TrimSpace(*out.Reason) }
-    return b, reason, nil
+    bname, ok := ai.SanitizeBranch(parsed.Branch)
+    if !ok || bname == "" { bname = ai.FallbackBranch(title) }
+    reason := ""; if parsed.Reason != nil { reason = strings.TrimSpace(*parsed.Reason) }
+    return bname, reason, nil
 }
