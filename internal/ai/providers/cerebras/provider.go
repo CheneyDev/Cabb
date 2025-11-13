@@ -56,12 +56,8 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
                 "pattern": "^(feat|fix|chore|docs|refactor|test|perf|ci|build|style)(/[a-z0-9][a-z0-9_/-]{0,60})$",
                 "description": "lowercase Git branch name in prefix/slug format",
             },
-            "reason": map[string]any{
-                "anyOf": []any{map[string]any{"type": "string"}, map[string]any{"type": "null"}},
-                "description": "very short rationale (<=200 chars) for the chosen name or null",
-            },
         },
-        "required": []string{"branch", "reason"},
+        "required": []string{"branch"},
         "additionalProperties": false,
     }
 
@@ -92,12 +88,18 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
     if err != nil { return "", "", err }
     req.Header.Set("Authorization", "Bearer "+p.apiKey)
     req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
     hc := &http.Client{Timeout: 12 * time.Second}
     resp, err := hc.Do(req)
     if err != nil { return "", "", err }
     defer resp.Body.Close()
     if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-        return "", "", fmt.Errorf("cerebras chat completions status=%d", resp.StatusCode)
+        var detail string
+        if d, _ := io.ReadAll(resp.Body); len(d) > 0 {
+            if len(d) > 400 { d = d[:400] }
+            detail = strings.TrimSpace(string(d))
+        }
+        return "", "", fmt.Errorf("cerebras chat completions status=%d body=%s", resp.StatusCode, detail)
     }
     var out struct{ Choices []struct{ Message struct{ Content string `json:"content"` } `json:"message"` } `json:"choices"` }
     if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -106,7 +108,7 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
     if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
         return "", "", errors.New("empty response content")
     }
-    var parsed struct{ Branch string `json:"branch"`; Reason *string `json:"reason"` }
+    var parsed struct{ Branch string `json:"branch"` }
     if err := json.Unmarshal([]byte(out.Choices[0].Message.Content), &parsed); err != nil {
         return "", "", err
     }
@@ -114,8 +116,5 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
     if !ok || branch == "" {
         branch = ai.FallbackBranch(title)
     }
-    reason := ""
-    if parsed.Reason != nil { reason = strings.TrimSpace(*parsed.Reason) }
-    return branch, reason, nil
+    return branch, "", nil
 }
-

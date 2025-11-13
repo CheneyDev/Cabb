@@ -8,6 +8,7 @@ import (
     "sync"
     "time"
 
+    ai "cabb/internal/ai"
     "cabb/internal/cnb"
     "cabb/internal/plane"
 )
@@ -789,9 +790,10 @@ func (h *Handler) maybeCreateCNBBranchForIssue(ctx context.Context, cn *cnb.Clie
 
     branch, reason, err := h.aiNamer.SuggestBranchName(cctx, issueTitle, issueDescHTML)
     if err != nil || strings.TrimSpace(branch) == "" {
-        LogStructured("error", map[string]any{"event": "plane.issue.branch.ai", "plane_issue_id": planeIssueID, "repo": repo, "error": map[string]any{"code": "ai_branch_generate_failed", "message": truncate(fmt.Sprintf("%v", err), 180)}})
-        // No fallback here; keep silent when AI fails
-        return
+        LogStructured("error", map[string]any{"event": "plane.issue.branch.ai", "plane_issue_id": planeIssueID, "repo": repo, "error": map[string]any{"code": "ai_branch_generate_failed", "message": truncate(fmt.Sprintf("%v", err), 400)}})
+        // Fallback to local branch slug if AI fails
+        branch = ai.FallbackBranch(issueTitle)
+        reason = "fallback:local"
     }
     // Try to prefix issue key into branch slug: {prefix}/{issuekey}-{slug}
     issueKey := ""
