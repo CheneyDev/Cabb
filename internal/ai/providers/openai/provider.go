@@ -48,7 +48,8 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
         "- No punctuation, no emojis, no quotes.",
         "- Keep it short and meaningful.",
         "- If information is insufficient or missing, you must still return a branch.",
-        "- When unsure, use prefix 'feat' and derive a short slug from the title; if the title is empty, use 'task' as the slug.",
+        "- Output must be ASCII; transliterate or simplify non-ASCII to ASCII.",
+        "- When unsure, use prefix 'feat' and derive a short ASCII slug from the title; if the title is empty, use 'task' as the slug.",
         "- Do not refuse or add explanations; output JSON only.",
     }, "\n")
     user := fmt.Sprintf("Title: %s\nDescription (may include HTML): %s\nReturn a fitting branch.", strings.TrimSpace(title), strings.TrimSpace(description))

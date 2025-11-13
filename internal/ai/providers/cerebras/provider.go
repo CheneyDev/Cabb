@@ -75,10 +75,11 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 		"- Allowed prefixes: feat, fix, chore, docs, refactor, test, perf, ci, build, style.",
 		"- Format: <prefix>/<slug> where slug uses [a-z0-9_/-], 2..60 chars after prefix/.",
 		"- No punctuation, no emojis, no quotes.",
-		"- Keep it short and meaningful.",
-		"- If information is insufficient or missing, you must still return a branch.",
-		"- When unsure, use prefix 'feat' and derive a short slug from the title; if the title is empty, use 'task' as the slug.",
-		"- Do not refuse or add explanations; output JSON only.",
+        "- Keep it short and meaningful.",
+        "- If information is insufficient or missing, you must still return a branch.",
+        "- Output must be ASCII; transliterate or simplify non-ASCII to ASCII.",
+        "- When unsure, use prefix 'feat' and derive a short ASCII slug from the title; if the title is empty, use 'task' as the slug.",
+        "- Do not refuse or add explanations; output JSON only.",
 		fmt.Sprintf("Title: %s", strings.TrimSpace(title)),
 		fmt.Sprintf("Description (may include HTML): %s", strings.TrimSpace(description)),
 	}, "\n")
@@ -102,8 +103,8 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
     if strings.EqualFold(model, "gpt-oss-120b") {
         body["reasoning_effort"] = "medium"
     }
-	b, _ := json.Marshal(body)
-	ep, err := p.endpoint("/v1/chat/completions")
+    b, _ := json.Marshal(body)
+    ep, err := p.endpoint("/v1/chat/completions")
 	if err != nil {
 		return "", "", err
 	}
@@ -130,20 +131,67 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 		}
 		return "", "", fmt.Errorf("cerebras chat completions status=%d body=%s", resp.StatusCode, detail)
 	}
-	var out struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", "", err
-	}
-    if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-        return "", "", errors.New("empty response content")
+    var out struct {
+        Choices []struct {
+            Message struct {
+                Content string `json:"content"`
+            } `json:"message"`
+        } `json:"choices"`
     }
-    raw := strings.TrimSpace(out.Choices[0].Message.Content)
+    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+        return "", "", err
+    }
+    // Fallback: if content empty, retry once with JSON mode (response_format: json_object)
+    raw := strings.TrimSpace(func() string {
+        if len(out.Choices) > 0 {
+            return out.Choices[0].Message.Content
+        }
+        return ""
+    }())
+    if raw == "" {
+        // rebuild request with json_object mode
+        body2 := map[string]any{
+            "model":                 model,
+            "messages":              []map[string]any{{"role": "user", "content": prompt}},
+            "stream":                false,
+            "temperature":           0.6,
+            "top_p":                 0.95,
+            "max_completion_tokens": 128,
+            "tools":                 []any{},
+            "response_format":       map[string]any{"type": "json_object"},
+        }
+        b2, _ := json.Marshal(body2)
+        req2, err2 := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b2))
+        if err2 != nil {
+            return "", "", errors.New("empty response content")
+        }
+        req2.Header.Set("Authorization", "Bearer "+p.apiKey)
+        req2.Header.Set("Content-Type", "application/json")
+        req2.Header.Set("Accept", "application/json")
+        resp2, err2 := hc.Do(req2)
+        if err2 != nil {
+            return "", "", errors.New("empty response content")
+        }
+        defer resp2.Body.Close()
+        if resp2.StatusCode >= 200 && resp2.StatusCode < 300 {
+            var out2 struct {
+                Choices []struct {
+                    Message struct {
+                        Content string `json:"content"`
+                    } `json:"message"`
+                } `json:"choices"`
+            }
+            if err := json.NewDecoder(resp2.Body).Decode(&out2); err == nil {
+                if len(out2.Choices) > 0 {
+                    raw = strings.TrimSpace(out2.Choices[0].Message.Content)
+                }
+            }
+        }
+        if raw == "" {
+            return "", "", errors.New("empty response content")
+        }
+    }
+    raw = strings.TrimSpace(raw)
     // Attempt to strip code fences like ```json ... ```
     if strings.HasPrefix(raw, "```") {
         raw = strings.TrimPrefix(raw, "```")
