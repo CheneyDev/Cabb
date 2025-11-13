@@ -115,9 +115,6 @@ type Handler struct {
 
 // initBranchNamer wires an AI-based branch namer if enabled and credentials are present.
 func initBranchNamer(cfg config.Config) interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) } {
-    if !cfg.AIBranchAutocreateEnabled {
-        return nil
-    }
     // Prefer Cerebras when configured (default)
     provider := strings.ToLower(strings.TrimSpace(cfg.AIProvider))
     if provider == "" || provider == "cerebras" {

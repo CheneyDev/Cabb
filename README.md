@@ -109,7 +109,6 @@ make build
 
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
-| `AI_BRANCH_AUTOCREATE_ENABLED` | 是否在 Plane Issue 创建时自动生成并创建 CNB 分支 | `false` |
 | `AI_PROVIDER` | 首选供应商：`cerebras` 或 `openai` | `cerebras` |
 | `CEREBRAS_API_KEY` | Cerebras API Key | - |
 | `CEREBRAS_BASE_URL` | Cerebras API 基地址 | `https://api.cerebras.ai` |

@@ -832,18 +832,7 @@ func (h *Handler) maybeCreateCNBBranchForIssue(ctx context.Context, cn *cnb.Clie
     if b, err := cn.GetDefaultBranch(cctx, repo); err == nil && strings.TrimSpace(b) != "" {
         start = strings.TrimSpace(b)
     }
-    // If branch exists, append numeric suffixes up to N
     finalName := branch
-    for i := 0; i < 10; i++ {
-        exists := false
-        if got, _ := cn.GetBranch(cctx, repo, finalName); got != nil && strings.TrimSpace(got.Name) != "" {
-            exists = true
-        }
-        if !exists {
-            break
-        }
-        finalName = fmt.Sprintf("%s-%d", branch, i+2)
-    }
     if err := cn.CreateBranch(cctx, repo, finalName, start); err != nil {
         LogStructured("error", map[string]any{"event": "plane.issue.branch.cnbrpc", "plane_issue_id": planeIssueID, "repo": repo, "op": "create_branch", "branch": finalName, "start_point": start, "error": map[string]any{"code": "cnb_create_branch_failed", "message": truncate(fmt.Sprintf("%v", err), 180)}})
         return

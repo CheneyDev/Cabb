@@ -105,8 +105,8 @@ func FromEnv() Config {
         CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
         CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
 
-        // AI / Branch naming
-        AIBranchAutocreateEnabled: boolFromEnv("AI_BRANCH_AUTOCREATE_ENABLED", false),
+        // AI / Branch naming (hardcoded enabled)
+        AIBranchAutocreateEnabled: true,
         AIProvider:                strFromEnv("AI_PROVIDER", "cerebras"),
         CerebrasAPIKey:            os.Getenv("CEREBRAS_API_KEY"),
         CerebrasBaseURL:           strFromEnv("CEREBRAS_BASE_URL", "https://api.cerebras.ai"),
