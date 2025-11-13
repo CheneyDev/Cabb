@@ -87,7 +87,6 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
         "stream":                false,
         "temperature":           0.6,
         "top_p":                 0.95,
-        "reasoning_effort":      "medium",
         "max_completion_tokens": 128,
         "tools":                 []any{},
         "response_format": map[string]any{
@@ -95,6 +94,10 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
             // 使用 strict=false，避免 beta 期服务端拒绝；本地进行格式校验
             "json_schema": map[string]any{"name": "branch_schema", "strict": false, "schema": schema},
         },
+    }
+    // reasoning_effort 仅 gpt-oss-120b 支持；其它模型会 400（param=reasoning_effort）
+    if strings.EqualFold(model, "gpt-oss-120b") {
+        body["reasoning_effort"] = "medium"
     }
 	b, _ := json.Marshal(body)
 	ep, err := p.endpoint("/v1/chat/completions")
