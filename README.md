@@ -199,6 +199,9 @@ make build
 - `POST /api/admin/login` - 管理员登录
 - `GET /api/admin/mappings` - 查看映射关系
 - `POST /api/admin/mappings/repo-project` - 创建仓库-项目映射
+- `GET /admin/links/issues` - 查看 CNB Issue 链接
+- `GET /admin/links/lark-threads` - 查看 Lark 线程链接
+- `GET /admin/links/branches` - 查看分支链接（支持 plane_issue_id/cnb_repo_id/branch/active/limit 过滤）
 
 ### 系统
 

@@ -832,6 +832,124 @@ func (h *Handler) AdminIssueLinksDelete(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": true})
 }
 
+// GET /admin/links/branches
+func (h *Handler) AdminBranchIssueLinksList(c echo.Context) error {
+    if !hHasDB(h) {
+        return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+    }
+    limit := 50
+    if l := strings.TrimSpace(c.QueryParam("limit")); l != "" {
+        if v, err := strconv.Atoi(l); err == nil {
+            limit = v
+        }
+    }
+    planeIssueID := strings.TrimSpace(c.QueryParam("plane_issue_id"))
+    cnbRepoID := strings.TrimSpace(c.QueryParam("cnb_repo_id"))
+    branch := strings.TrimSpace(c.QueryParam("branch"))
+    var active *bool
+    if av := strings.TrimSpace(c.QueryParam("active")); av != "" {
+        if b, err := strconv.ParseBool(av); err == nil { active = &b }
+    }
+    ctx := c.Request().Context()
+    rows, err := h.db.ListBranchIssueLinks(ctx, planeIssueID, cnbRepoID, branch, active, limit)
+    if err != nil {
+        return writeError(c, http.StatusBadGateway, "query_failed", "查询失败", map[string]any{"error": err.Error()})
+    }
+
+    // Prepare Plane workspace/project enrichment
+    trimNull := func(ns sql.NullString) string { if ns.Valid { return strings.TrimSpace(ns.String) } ; return "" }
+    planeClient := plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+    type workspaceToken struct { token, slug string }
+    tokens := make(map[string]workspaceToken)
+    // Collect tokens by workspace id
+    for _, it := range rows {
+        wsID := trimNull(it.PlaneWorkspaceID)
+        if wsID == "" { continue }
+        if _, exists := tokens[wsID]; exists { continue }
+        slug := trimNull(it.WorkspaceSlug)
+        if slug == "" {
+            // fallback: try fetch from mapping using repo id
+            if m, er := h.db.GetRepoProjectMapping(ctx, trimNull(it.CNBRepoID)); er == nil && m != nil {
+                if m.WorkspaceSlug.Valid && strings.TrimSpace(m.WorkspaceSlug.String) != "" {
+                    slug = strings.TrimSpace(m.WorkspaceSlug.String)
+                }
+            }
+        }
+        tokens[wsID] = workspaceToken{token: strings.TrimSpace(h.cfg.PlaneServiceToken), slug: slug}
+    }
+    type workspaceMeta struct { name, slug string }
+    workspaceInfos := make(map[string]workspaceMeta)
+    for wsID, tk := range tokens {
+        meta := workspaceMeta{slug: tk.slug}
+        if tk.token != "" && tk.slug != "" {
+            wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+            ws, werr := planeClient.GetWorkspace(wctx, tk.token, tk.slug)
+            cancel()
+            if werr == nil && ws != nil {
+                name := strings.TrimSpace(ws.Name)
+                if name == "" { name = strings.TrimSpace(ws.Title) }
+                if name != "" { meta.name = name }
+                if s := strings.TrimSpace(ws.Slug); s != "" { meta.slug = s }
+            }
+        }
+        workspaceInfos[wsID] = meta
+    }
+    type projectMeta struct { name, identifier, slug string }
+    projectInfos := make(map[string]projectMeta)
+    for _, it := range rows {
+        wsID := trimNull(it.PlaneWorkspaceID)
+        projID := trimNull(it.PlaneProjectID)
+        if wsID == "" || projID == "" { continue }
+        key := wsID + "::" + projID
+        if _, exists := projectInfos[key]; exists { continue }
+        tk := tokens[wsID]
+        slug := workspaceInfos[wsID].slug
+        if slug == "" { slug = tk.slug }
+        meta := projectMeta{}
+        if tk.token != "" && slug != "" {
+            pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+            proj, perr := planeClient.GetProject(pctx, tk.token, slug, projID)
+            cancel()
+            if perr == nil && proj != nil {
+                if n := strings.TrimSpace(proj.Name); n != "" { meta.name = n } else if s := strings.TrimSpace(proj.Slug); s != "" { meta.name = s }
+                if id := strings.TrimSpace(proj.Identifier); id != "" { meta.identifier = id }
+                if s := strings.TrimSpace(proj.Slug); s != "" { meta.slug = s }
+            }
+        }
+        projectInfos[key] = meta
+    }
+
+    out := make([]map[string]any, 0, len(rows))
+    for _, it := range rows {
+        wsID := trimNull(it.PlaneWorkspaceID)
+        projID := trimNull(it.PlaneProjectID)
+        wm := workspaceInfos[wsID]
+        pm := projectInfos[wsID+"::"+projID]
+        out = append(out, map[string]any{
+            "plane_issue_id":           it.PlaneIssueID,
+            "cnb_repo_id":              trimNull(it.CNBRepoID),
+            "branch":                   trimNull(it.Branch),
+            "is_primary":               it.IsPrimary,
+            "active":                   it.Active,
+            "created_at":               it.CreatedAt.UTC().Format(time.RFC3339),
+            "deleted_at":               nullTimeValue(it.DeletedAt),
+            "plane_project_id":         trimNull(it.PlaneProjectID),
+            "plane_project_name":       optionalString(pm.name),
+            "plane_project_identifier": optionalString(pm.identifier),
+            "plane_project_slug":       optionalString(pm.slug),
+            "plane_workspace_id":       trimNull(it.PlaneWorkspaceID),
+            "plane_workspace_name":     optionalString(wm.name),
+            "plane_workspace_slug":     optionalString(wm.slug),
+        })
+    }
+    return c.JSON(http.StatusOK, map[string]any{"items": out, "count": len(out)})
+}
+
+// GET /admin/links/branches/view
+// A minimal HTML view to visualize branch links via the JSON endpoint.
+// AdminBranchIssueLinksView removed per requirement: backend only provides APIs; frontend lives elsewhere.
+
+
 // GET /admin/links/lark-threads
 func (h *Handler) AdminLarkThreadLinksList(c echo.Context) error {
 	if !hHasDB(h) {

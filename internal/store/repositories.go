@@ -813,6 +813,83 @@ func (d *DB) DeactivateBranchIssueLink(ctx context.Context, cnbRepoID, branch st
 	return err
 }
 
+// BranchIssueLinkRow represents a row from branch_issue_links joined with repo_project_mappings for Plane metadata.
+type BranchIssueLinkRow struct {
+    PlaneIssueID      string
+    CNBRepoID         sql.NullString
+    Branch            sql.NullString
+    IsPrimary         bool
+    Active            bool
+    CreatedAt         time.Time
+    DeletedAt         sql.NullTime
+    PlaneProjectID    sql.NullString
+    PlaneWorkspaceID  sql.NullString
+    WorkspaceSlug     sql.NullString
+}
+
+// ListBranchIssueLinks lists branch links with optional filters.
+func (d *DB) ListBranchIssueLinks(ctx context.Context, planeIssueID, cnbRepoID, branch string, active *bool, limit int) ([]BranchIssueLinkRow, error) {
+    if d == nil || d.SQL == nil {
+        return nil, sql.ErrConnDone
+    }
+    if limit <= 0 || limit > 500 {
+        limit = 50
+    }
+    where := "WHERE 1=1"
+    args := []any{}
+    ai := 1
+    if strings.TrimSpace(planeIssueID) != "" {
+        where += fmt.Sprintf(" AND bil.plane_issue_id=$%d::uuid", ai)
+        args = append(args, planeIssueID)
+        ai++
+    }
+    if strings.TrimSpace(cnbRepoID) != "" {
+        where += fmt.Sprintf(" AND bil.cnb_repo_id=$%d", ai)
+        args = append(args, cnbRepoID)
+        ai++
+    }
+    if strings.TrimSpace(branch) != "" {
+        where += fmt.Sprintf(" AND bil.branch=$%d", ai)
+        args = append(args, branch)
+        ai++
+    }
+    if active != nil {
+        where += fmt.Sprintf(" AND bil.active=$%d", ai)
+        args = append(args, *active)
+        ai++
+    }
+    q := fmt.Sprintf(`
+        SELECT bil.plane_issue_id::text,
+               bil.cnb_repo_id,
+               bil.branch,
+               bil.is_primary,
+               bil.active,
+               bil.created_at,
+               bil.deleted_at,
+               rpm.plane_project_id::text,
+               rpm.plane_workspace_id::text,
+               rpm.workspace_slug
+        FROM branch_issue_links bil
+        LEFT JOIN repo_project_mappings rpm ON rpm.cnb_repo_id = bil.cnb_repo_id
+        %s
+        ORDER BY bil.created_at DESC
+        LIMIT %d`, where, limit)
+    rows, err := d.SQL.QueryContext(ctx, q, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    var out []BranchIssueLinkRow
+    for rows.Next() {
+        var r BranchIssueLinkRow
+        if err := rows.Scan(&r.PlaneIssueID, &r.CNBRepoID, &r.Branch, &r.IsPrimary, &r.Active, &r.CreatedAt, &r.DeletedAt, &r.PlaneProjectID, &r.PlaneWorkspaceID, &r.WorkspaceSlug); err != nil {
+            return nil, err
+        }
+        out = append(out, r)
+    }
+    return out, rows.Err()
+}
+
 // ===== Lark (Feishu) mappings =====
 
 // UpsertLarkThreadLink binds a Lark thread/root message to a Plane issue.

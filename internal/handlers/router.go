@@ -83,9 +83,10 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.GET("/links/issues", h.AdminIssueLinksList)
 	admin.POST("/links/issues", h.AdminIssueLinksUpsert)
 	admin.DELETE("/links/issues", h.AdminIssueLinksDelete)
-	admin.GET("/links/lark-threads", h.AdminLarkThreadLinksList)
-	admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
-	admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
+    admin.GET("/links/lark-threads", h.AdminLarkThreadLinksList)
+    admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
+    admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
+    admin.GET("/links/branches", h.AdminBranchIssueLinksList)
 	
 	// Plane data APIs
 	admin.GET("/plane/workspaces", h.AdminPlaneWorkspaces)
