@@ -47,6 +47,9 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
         "- Format: <prefix>/<slug> where slug uses [a-z0-9_/-], no spaces, 2..60 chars after prefix/.",
         "- No punctuation, no emojis, no quotes.",
         "- Keep it short and meaningful.",
+        "- If information is insufficient or missing, you must still return a branch.",
+        "- When unsure, use prefix 'feat' and derive a short slug from the title; if the title is empty, use 'task' as the slug.",
+        "- Do not refuse or add explanations; output JSON only.",
     }, "\n")
     user := fmt.Sprintf("Title: %s\nDescription (may include HTML): %s\nReturn a fitting branch.", strings.TrimSpace(title), strings.TrimSpace(description))
     schema := map[string]any{
@@ -86,4 +89,3 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
     reason := ""; if out.Reason != nil { reason = strings.TrimSpace(*out.Reason) }
     return b, reason, nil
 }
-

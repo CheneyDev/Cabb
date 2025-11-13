@@ -76,6 +76,9 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
 		"- Format: <prefix>/<slug> where slug uses [a-z0-9_/-], 2..60 chars after prefix/.",
 		"- No punctuation, no emojis, no quotes.",
 		"- Keep it short and meaningful.",
+		"- If information is insufficient or missing, you must still return a branch.",
+		"- When unsure, use prefix 'feat' and derive a short slug from the title; if the title is empty, use 'task' as the slug.",
+		"- Do not refuse or add explanations; output JSON only.",
 		fmt.Sprintf("Title: %s", strings.TrimSpace(title)),
 		fmt.Sprintf("Description (may include HTML): %s", strings.TrimSpace(description)),
 	}, "\n")
