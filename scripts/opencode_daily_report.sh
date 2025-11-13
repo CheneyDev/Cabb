@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Generate a daily Markdown report for git commits within a time window.
-# Tries to use opencode (zen mode) if available; otherwise falls back
-# to a native git-based summary grouped by author.
+##
+# 项目工作汇报生成脚本（日报/周报/月报）
+#
+# 作用概览
+# - 跨分支聚合：统计指定时间窗（昨天/上一周/上个月）内“所有分支”的提交。
+# - AI 汇总优先：基于提交统计 + 采样补丁的上下文，让 opencode 生成中文结构化“按人员总结”的汇报。
+# - 幂等发布：按固定命名将汇报推送到目标仓库（同一时间窗覆盖旧文件），供团队留存与查阅。
+# - 控制台预览：流水线末尾输出最新汇报的前 80 行，便于快速确认质量。
+#
+# 设计要点
+# - 可观测而不过度：不在日志泄露密钥；补丁上下文会做基础脱敏（Authorization/Bearer/sk-/CNB_TOKEN）。
+# - 稳健性：CI 若为浅克隆或无 .git，会自动克隆只读镜像用于统计；git safe.directory 避免权限告警。
+# - 一致性：手动/定时共享同一实现与参数，差异仅在时间窗默认值（按钮可选）。
+##
 
 export TZ=${TZ:-Asia/Shanghai}
 
@@ -26,7 +37,7 @@ max_hunks_per_file="${REPORT_DIFF_HUNKS_PER_FILE:-3}"
 max_commits="${REPORT_DIFF_MAX_COMMITS:-100}"
 exclude_globs="${REPORT_EXCLUDE_GLOBS:-node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock;*.class;*.bin;*.exe;*.dylib;*.so;*.dll}"
 numstat_lines="${REPORT_NUMSTAT_LINES:-5000}"
-# Prefer OPENCODE_API_KEY; fallbacks are best-effort in case secrets use different key names
+# API Key 检测：支持多种变量名，最终导出为 OPENCODE_API_KEY（opencode CLI 将读取这一变量）。
 api_key="${OPENCODE_API_KEY:-}"
 if [ -z "${api_key}" ]; then
   api_key="${OPENCODE_TOKEN:-}"
@@ -63,7 +74,7 @@ case "${timeframe}" in
     report_type="daily"
     ;;
   last_week)
-    # Compute previous calendar week (Mon 00:00:00 to this week's Mon 00:00:00)
+    # 上一自然周：本周周一 00:00:00 往前推 7 天为上一周周一 00:00:00
     dow=$(date +%u) # 1..7 (Mon=1)
     this_mon_date=$(date -d "today -$((dow-1)) days" +%Y-%m-%d)
     last_mon_date=$(date -d "${this_mon_date} -7 days" +%Y-%m-%d)
@@ -107,7 +118,7 @@ out_file="reports/work-report-${label}.md"
 log_file="tmp/git-logs-${label}.txt"
 patch_ctx_file="tmp/git-patch-${label}.txt"
 
-# Make git workspace safe for CI and try to ensure history availability
+# 确保可读到完整历史（CI 可能提供浅克隆或无 .git 快照）
 ensure_repo() {
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
@@ -150,7 +161,7 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ];
   (git fetch --unshallow 2>/dev/null || git fetch --depth=0 2>/dev/null || true)
 fi
 
-# Collect raw logs for the time window
+# 统计时间窗内提交（所有分支，包含 merge）
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
   git log \
     --all \
@@ -177,6 +188,7 @@ echo "" >> "${out_file}"
 # No implicit fallback; timeframes are strictly one of: yesterday, last_week, last_month
 
 # Utility: exclude patterns
+# 路径排除（用于补丁采样时过滤生成物/大文件/二进制等）
 matches_exclude() {
   local f="$1"
   local IFS=';'
@@ -191,6 +203,7 @@ matches_exclude() {
 }
 
 # Utility: redact secrets in patches
+# 补丁内容脱敏（关键密钥/令牌/授权头）
 redact() {
   sed -E \
     -e 's/(Authorization:)[[:space:]]*[^\r\n]*/\1 ***REDACTED***/Ig' \
@@ -200,6 +213,7 @@ redact() {
 }
 
 # Build rich commit context for AI (includes per-commit numstat and bodies)
+# 构建 AI 上下文：作者分布与 numstat +（可选）采样补丁片段
 ctx_file="tmp/git-context-${label}.md"
 {
   echo "# Repo Commit Context"
@@ -230,7 +244,7 @@ ctx_file="tmp/git-context-${label}.md"
   fi
 } > "${ctx_file}"
 
-# Prepare sampled/full patch context if requested
+# 采样/全量补丁上下文（受预算控制）
 > "${patch_ctx_file}"
 if ${has_commits} && [ "${diff_mode}" != "stats" ]; then
   # Collect candidate commits within window (exclude merges for patch to control size)
@@ -290,6 +304,7 @@ if ${has_commits} && [ "${diff_mode}" != "stats" ]; then
 fi
 
 # Try opencode to author a polished report from commit context
+# 调用 opencode 生成“按人员维度总结”的结构化中文汇报
 try_opencode() {
   command -v opencode >/dev/null 2>&1 || return 1
 
@@ -314,7 +329,7 @@ try_opencode() {
   prompt+="3. 横向事项：跨团队协作、阻塞项与依赖\n"
   prompt+="要求：\n- 不要逐条列出 commit 或粘贴完整 diff；\n- 以模块/文件路径和变更意图来提炼内容，可给出改动规模（增删行）作为量化；\n- 语言简练，结论先行；\n- 若无提交，明确说明“本期无提交”。\n"
 
-  # Use non-interactive CLI: place message first to avoid it being parsed as a file
+  # 非交互模式：消息作为第一个参数，避免被解析为 -f 的文件
   if opencode run "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${out_file}.ai" 2>"tmp/opencode.stderr"; then
     return 0
   fi
@@ -359,7 +374,7 @@ fi
 
 echo "report generated: ${out_file}" >&2
 
-# Publish report to external repo under ai-report/{daily|weekly|monthly}/
+# 发布：推送报告到目标仓库（ai-report/{daily|weekly|monthly}/...），同一时间窗覆盖旧文件
 publish_report() {
   # Require token and repo URL
   if [ -z "${publish_repo_url}" ] || [ -z "${CNB_TOKEN:-}" ]; then
