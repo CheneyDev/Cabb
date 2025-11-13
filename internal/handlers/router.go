@@ -5,6 +5,7 @@ import (
     "sync"
     "time"
 
+    groqp "cabb/internal/ai/providers/groq"
     openaip "cabb/internal/ai/providers/openai"
     "cabb/internal/store"
     "cabb/pkg/config"
@@ -114,6 +115,11 @@ type Handler struct {
 
 // initBranchNamer wires an AI-based branch namer if enabled and credentials are present.
 func initBranchNamer(cfg config.Config) interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) } {
+    // Prefer Groq when configured
+    if cfg.GroqAPIKey != "" {
+        return groqp.New(cfg.GroqModel, cfg.GroqAPIKey, cfg.GroqBaseURL)
+    }
+    // Fallback to OpenAI if configured
     if cfg.OpenAIAPIKey != "" {
         return openaip.New(cfg.OpenAIModel, cfg.OpenAIAPIKey, cfg.OpenAIBaseURL)
     }

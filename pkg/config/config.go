@@ -34,8 +34,12 @@ type Config struct {
     CNBIssueUpdatePath  string
     CNBIssueCommentPath string
 
-    // AI / Branch naming (OpenAI only)
+    // AI / Branch naming (prefer Groq; fallback OpenAI)
     AIBranchAutocreateEnabled bool
+    // Groq
+    GroqAPIKey    string
+    GroqBaseURL   string
+    GroqModel     string
     // OpenAI
     OpenAIAPIKey     string
     OpenAIBaseURL    string
@@ -100,8 +104,11 @@ func FromEnv() Config {
         CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
         CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
 
-        // AI / Branch naming (OpenAI only; enabled)
+        // AI / Branch naming (enabled)
         AIBranchAutocreateEnabled: true,
+        GroqAPIKey:                os.Getenv("GROQ_API_KEY"),
+        GroqBaseURL:               strFromEnv("GROQ_BASE_URL", "https://api.groq.com/openai"),
+        GroqModel:                 strFromEnv("GROQ_MODEL", "moonshotai/kimi-k2-instruct-0905"),
         OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
         OpenAIBaseURL:             os.Getenv("OPENAI_BASE_URL"),
         OpenAIModel:               strFromEnv("OPENAI_MODEL", "gpt-4o-mini"),

@@ -105,7 +105,19 @@ make build
 | `INTEGRATION_TOKEN` | 回调验证令牌 | 自行生成 (`openssl rand -hex 32`) |
 | `CNB_BASE_URL` | CNB API 地址 | 默认 `https://api.cnb.cool` |
 
-### AI/自动分支命名（OpenAI）
+### AI/自动分支命名（默认 Groq + Structured Outputs）
+
+优先使用 Groq Chat Completions 的 Structured Outputs（JSON Schema 严格校验），在模型无法使用或未配置时回退到 OpenAI（JSON 模式）。
+
+Groq（默认）
+
+| 环境变量 | 说明 | 默认值 |
+|----------|------|--------|
+| `GROQ_API_KEY` | Groq API Key | - |
+| `GROQ_BASE_URL` | Groq API 基地址（OpenAI 兼容路径） | `https://api.groq.com/openai` |
+| `GROQ_MODEL` | Groq 模型 | `moonshotai/kimi-k2-instruct-0905` |
+
+OpenAI（可选回退）
 
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
