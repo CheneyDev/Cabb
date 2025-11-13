@@ -60,6 +60,8 @@ func (p *provider) SuggestBranchName(ctx context.Context, title, description str
         "- Format: <prefix>/<slug> where slug uses [a-z0-9_/-], no spaces, 2..60 chars after prefix/.",
         "- No punctuation, no emojis, no quotes.",
         "- Keep it short and meaningful.",
+        "- Limit slug to at most 4 hyphen-separated words.",
+        "- 中文：分支名单词（用连字符-分隔）不超过4个。",
         "- If information is insufficient or missing, you must still return a branch.",
         "- Output must be ASCII; transliterate or simplify non-ASCII to ASCII.",
         "- When unsure, use prefix 'feat' and derive a short ASCII slug from the title; if the title is empty, use 'task' as the slug.",
