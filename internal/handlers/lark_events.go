@@ -964,10 +964,9 @@ func isLikelyPureBotMention(text string) bool {
 	return false
 }
 
-func buildLarkBotHelpCard(boundIssueMarkdown string) map[string]any {
+func buildLarkBotHelpCard(boundIssueMarkdown string, repoBranchMarkdown string) map[string]any {
 	commands := "- **/bind {issue_link}** - 绑定 Plane Issue 到当前话题\n" +
-		"- **/comment {text}** - 将回复内容同步为 Plane 评论\n" +
-		"- **/sync on|off** - 开启或关闭当前线程的自动同步"
+		"- **/comment {text}** - 将回复内容同步为 Plane 评论"
 	bodyElements := []any{
 		map[string]any{
 			"tag":        "markdown",
@@ -988,7 +987,7 @@ func buildLarkBotHelpCard(boundIssueMarkdown string) map[string]any {
 					"elements": []any{
 						map[string]any{
 							"tag":        "markdown",
-							"content":    "**<font color='blue'>📌 工作项与同步命令</font>**",
+							"content":    "**<font color='blue'>📌 工作项命令</font>**",
 							"element_id": "cmd_group_title",
 						},
 						map[string]any{
@@ -1008,7 +1007,7 @@ func buildLarkBotHelpCard(boundIssueMarkdown string) map[string]any {
 		},
 		map[string]any{
 			"tag":        "markdown",
-			"content":    "**使用示例**：`/bind https://app.plane.so/{workspace}/projects/{project}/issues/{issue}`\n绑定后在该线程中使用 `/comment` 同步评论，或 `/sync on` 开启自动同步。",
+			"content":    "**使用示例**：`/bind https://work.1024hub.org:4430/chen/browse/CHENE-1`\n绑定后在该线程中使用 `/comment` 同步评论。",
 			"text_align": "left",
 			"text_size":  "normal_v2",
 			"margin":     "0px 0px 0px 0px",
@@ -1034,6 +1033,39 @@ func buildLarkBotHelpCard(boundIssueMarkdown string) map[string]any {
 						map[string]any{
 							"tag":        "markdown",
 							"content":    boundIssueMarkdown,
+							"text_align": "left",
+							"text_size":  "normal_v2",
+						},
+					},
+					"padding":          "12px 12px 12px 12px",
+					"vertical_spacing": "4px",
+					"horizontal_align": "left",
+					"vertical_align":   "top",
+					"weight":           1,
+				},
+			},
+			"margin": "0px 0px 0px 0px",
+		})
+	}
+	if strings.TrimSpace(repoBranchMarkdown) != "" {
+		bodyElements = append(bodyElements, map[string]any{
+			"tag":               "column_set",
+			"flex_mode":         "stretch",
+			"horizontal_spacing": "8px",
+			"horizontal_align":  "left",
+			"columns": []any{
+				map[string]any{
+					"tag":              "column",
+					"width":            "weighted",
+					"background_style": "blue-50",
+					"elements": []any{
+						map[string]any{
+							"tag":     "markdown",
+							"content": "**<font color='blue'>🌿 关联代码仓库与分支</font>**",
+						},
+						map[string]any{
+							"tag":        "markdown",
+							"content":    repoBranchMarkdown,
 							"text_align": "left",
 							"text_size":  "normal_v2",
 						},
@@ -1113,6 +1145,7 @@ func (h *Handler) postBotHelpCard(chatID, threadID string) error {
 		return nil
 	}
 	boundIssueMarkdown := ""
+	repoBranchMarkdown := ""
 	if hHasDB(h) {
 		ctxDB, cancelDB := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancelDB()
@@ -1154,18 +1187,55 @@ func (h *Handler) postBotHelpCard(chatID, threadID string) error {
 							display = strings.TrimSpace(name)
 						}
 					} else if url != "" {
-						display = url
+						display = "[" + issueID + "](" + url + ")"
 					}
 				} else if url != "" {
-					display = url
+					display = "[" + issueID + "](" + url + ")"
 				}
 			} else if url != "" {
-				display = url
+				display = "[" + issueID + "](" + url + ")"
 			}
 			boundIssueMarkdown = "- " + display
+
+			active := true
+			if rows, err := h.db.ListBranchIssueLinks(ctxDB, issueID, "", "", &active, 5); err == nil {
+				var repoBranches []string
+				for _, r := range rows {
+					if !r.CNBRepoID.Valid || !r.Branch.Valid {
+						continue
+					}
+					repo := strings.TrimSpace(r.CNBRepoID.String)
+					branch := strings.TrimSpace(r.Branch.String)
+					if repo == "" || branch == "" {
+						continue
+					}
+					linkText := repo + " / " + branch
+					item := escapeMD(linkText)
+					if base := strings.TrimSpace(h.cfg.CNBBaseURL); base != "" {
+						if strings.Contains(base, "api.cnb.cool") {
+							base = strings.Replace(base, "api.cnb.cool", "cnb.cool", 1)
+						} else {
+							base = strings.Replace(base, "//api.", "//", 1)
+						}
+						base = strings.TrimRight(base, "/")
+						path := "/" + repo + "/-/tree/" + branch
+						item = "[" + escapeMD(linkText) + "](" + base + path + ")"
+					}
+					repoBranches = append(repoBranches, item)
+				}
+				if len(repoBranches) > 0 {
+					var b strings.Builder
+					for _, line := range repoBranches {
+						b.WriteString("- ")
+						b.WriteString(line)
+						b.WriteString("\n")
+					}
+					repoBranchMarkdown = strings.TrimSpace(b.String())
+				}
+			}
 		}
 	}
-	card := buildLarkBotHelpCard(boundIssueMarkdown)
+	card := buildLarkBotHelpCard(boundIssueMarkdown, repoBranchMarkdown)
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
