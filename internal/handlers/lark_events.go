@@ -964,7 +964,7 @@ func isLikelyPureBotMention(text string) bool {
 	return false
 }
 
-func buildLarkBotHelpCard() map[string]any {
+func buildLarkBotHelpCard(boundIssueMarkdown string) map[string]any {
 	commands := "- **/bind {issue_link}** - 绑定 Plane Issue 到当前话题\n" +
 		"- **/comment {text}** - 将回复内容同步为 Plane 评论\n" +
 		"- **/sync on|off** - 开启或关闭当前线程的自动同步"
@@ -1014,6 +1014,39 @@ func buildLarkBotHelpCard() map[string]any {
 			"margin":     "0px 0px 0px 0px",
 			"element_id": "example",
 		},
+	}
+	if strings.TrimSpace(boundIssueMarkdown) != "" {
+		bodyElements = append(bodyElements, map[string]any{
+			"tag":               "column_set",
+			"flex_mode":         "stretch",
+			"horizontal_spacing": "8px",
+			"horizontal_align":  "left",
+			"columns": []any{
+				map[string]any{
+					"tag":              "column",
+					"width":            "weighted",
+					"background_style": "blue-50",
+					"elements": []any{
+						map[string]any{
+							"tag":     "markdown",
+							"content": "**<font color='blue'>🔗 已绑定 Issue</font>**",
+						},
+						map[string]any{
+							"tag":        "markdown",
+							"content":    boundIssueMarkdown,
+							"text_align": "left",
+							"text_size":  "normal_v2",
+						},
+					},
+					"padding":          "12px 12px 12px 12px",
+					"vertical_spacing": "4px",
+					"horizontal_align": "left",
+					"vertical_align":   "top",
+					"weight":           1,
+				},
+			},
+			"margin": "0px 0px 0px 0px",
+		})
 	}
 	helpURL := "https://github.com/CheneyDev/Cabb#%E9%A3%9E%E4%B9%A6%E9%9B%86%E6%88%90"
 	bodyElements = append(bodyElements, map[string]any{
@@ -1079,7 +1112,60 @@ func (h *Handler) postBotHelpCard(chatID, threadID string) error {
 	if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
 		return nil
 	}
-	card := buildLarkBotHelpCard()
+	boundIssueMarkdown := ""
+	if hHasDB(h) {
+		ctxDB, cancelDB := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancelDB()
+		slug := ""
+		projectID := ""
+		issueID := ""
+		if threadID != "" {
+			if tl, err := h.db.GetLarkThreadLink(ctxDB, threadID); err == nil && tl != nil && tl.PlaneIssueID != "" {
+				issueID = tl.PlaneIssueID
+				if tl.WorkspaceSlug.Valid {
+					slug = tl.WorkspaceSlug.String
+				}
+				if tl.PlaneProjectID.Valid {
+					projectID = tl.PlaneProjectID.String
+				}
+			}
+		}
+		if issueID == "" && chatID != "" {
+			if cl, err := h.db.GetLarkChatIssueLink(ctxDB, chatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
+				issueID = cl.PlaneIssueID
+				if cl.WorkspaceSlug.Valid {
+					slug = cl.WorkspaceSlug.String
+				}
+				if cl.PlaneProjectID.Valid {
+					projectID = cl.PlaneProjectID.String
+				}
+			}
+		}
+		if issueID != "" {
+			url := h.planeIssueURL(slug, projectID, issueID)
+			display := issueID
+			if slug != "" && projectID != "" && h.cfg.PlaneBaseURL != "" {
+				if token, _ := h.ensurePlaneBotToken(ctxDB, slug); token != "" {
+					pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+					if name, err := pc.GetIssueName(ctxDB, token, slug, projectID, issueID); err == nil && strings.TrimSpace(name) != "" {
+						if url != "" {
+							display = "[" + escapeMD(strings.TrimSpace(name)) + "](" + url + ")"
+						} else {
+							display = strings.TrimSpace(name)
+						}
+					} else if url != "" {
+						display = url
+					}
+				} else if url != "" {
+					display = url
+				}
+			} else if url != "" {
+				display = url
+			}
+			boundIssueMarkdown = "- " + display
+		}
+	}
+	card := buildLarkBotHelpCard(boundIssueMarkdown)
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
