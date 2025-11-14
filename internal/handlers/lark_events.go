@@ -121,11 +121,10 @@ type larkTextContent struct {
 }
 
 func (h *Handler) LarkEvents(c echo.Context) error {
-    // Read raw for signature verification
-    body, err := io.ReadAll(c.Request().Body)
-    if err != nil {
-        return c.NoContent(http.StatusBadRequest)
-    }
+	body, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.NoContent(http.StatusBadRequest)
+	}
 
 	// Challenge quick path (旧版/新版均可)
 	var probe struct {
@@ -147,54 +146,48 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 		}
 	}
 
-    // Parse envelope
-    var env larkEventEnvelope
-    if err := json.Unmarshal(body, &env); err != nil {
-        return c.NoContent(http.StatusBadRequest)
-    }
-    if env.Challenge != "" { // 冗余保护
-        return c.JSON(http.StatusOK, map[string]string{"challenge": env.Challenge})
-    }
+	var env larkEventEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	if env.Challenge != "" {
+		return c.JSON(http.StatusOK, map[string]string{"challenge": env.Challenge})
+	}
 
-    // Lark events idempotency + lateness guard
-    // 1) In-memory dedupe by event_id + payload sha256
-    evtID := strings.TrimSpace(env.Header.EventID)
-    sum := sha256.Sum256(body)
-    payloadSHA := hex.EncodeToString(sum[:])
-    if evtID != "" && h.dedupe != nil && h.dedupe.CheckAndMark("lark.events", evtID, payloadSHA) {
-        LogStructured("info", map[string]any{"event": "lark.event.duplicate.mem", "event_id": evtID})
-        return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
-    }
-    // 2) Persistent dedupe when DB is available
-    if hHasDB(h) && evtID != "" {
-        if dup, err := h.db.IsDuplicateDelivery(c.Request().Context(), "lark.events", evtID, payloadSHA); err == nil && dup {
-            LogStructured("info", map[string]any{"event": "lark.event.duplicate.db", "event_id": evtID})
-            return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
-        }
-        _ = h.db.UpsertEventDelivery(c.Request().Context(), "lark.events", strings.ToLower(env.Header.EventType), evtID, payloadSHA, "seen")
-    }
-    // 3) Lateness guard: drop events older than fixed max age
-    if larkEventMaxAgeSeconds > 0 {
-        maxAge := larkEventMaxAgeSeconds
-        ct := strings.TrimSpace(env.Header.CreateTime)
-        if ct != "" {
-            if ts, err := strconv.ParseInt(ct, 10, 64); err == nil {
-                // Heuristic: treat values > 10^12 as milliseconds
-                if ts > 1_000_000_000_000 {
-                    ts = ts / 1000
-                }
-                evtT := time.Unix(ts, 0)
-                age := time.Since(evtT)
-                if age > time.Duration(maxAge)*time.Second {
-                    LogStructured("info", map[string]any{"event": "lark.event.expired", "event_id": evtID, "age_ms": age.Milliseconds(), "max_age_s": maxAge})
-                    if hHasDB(h) && evtID != "" {
-                        _ = h.db.UpdateEventDeliveryStatus(c.Request().Context(), "lark.events", evtID, "expired", nil)
-                    }
-                    return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "expired"})
-                }
-            }
-        }
-    }
+	evtID := strings.TrimSpace(env.Header.EventID)
+	sum := sha256.Sum256(body)
+	payloadSHA := hex.EncodeToString(sum[:])
+	if evtID != "" && h.dedupe != nil && h.dedupe.CheckAndMark("lark.events", evtID, payloadSHA) {
+		LogStructured("info", map[string]any{"event": "lark.event.duplicate.mem", "event_id": evtID})
+		return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+	}
+	if hHasDB(h) && evtID != "" {
+		if dup, err := h.db.IsDuplicateDelivery(c.Request().Context(), "lark.events", evtID, payloadSHA); err == nil && dup {
+			LogStructured("info", map[string]any{"event": "lark.event.duplicate.db", "event_id": evtID})
+			return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "duplicate"})
+		}
+		_ = h.db.UpsertEventDelivery(c.Request().Context(), "lark.events", strings.ToLower(env.Header.EventType), evtID, payloadSHA, "seen")
+	}
+	if larkEventMaxAgeSeconds > 0 {
+		maxAge := larkEventMaxAgeSeconds
+		ct := strings.TrimSpace(env.Header.CreateTime)
+		if ct != "" {
+			if ts, err := strconv.ParseInt(ct, 10, 64); err == nil {
+				if ts > 1_000_000_000_000 {
+					ts = ts / 1000
+				}
+				evtT := time.Unix(ts, 0)
+				age := time.Since(evtT)
+				if age > time.Duration(maxAge)*time.Second {
+					LogStructured("info", map[string]any{"event": "lark.event.expired", "event_id": evtID, "age_ms": age.Milliseconds(), "max_age_s": maxAge})
+					if hHasDB(h) && evtID != "" {
+						_ = h.db.UpdateEventDeliveryStatus(c.Request().Context(), "lark.events", evtID, "expired", nil)
+					}
+					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "status": "expired"})
+				}
+			}
+		}
+	}
 
 	switch strings.ToLower(env.Header.EventType) {
 	case "im.message.receive_v1":
@@ -210,11 +203,9 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 		var txt larkTextContent
 		_ = json.Unmarshal([]byte(ev.Message.Content), &txt)
 		text := strings.TrimSpace(txt.Text)
-		if text == "" { // nothing to do
+		if text == "" {
 			return c.NoContent(http.StatusOK)
 		}
-		// Command parse: support "/bind <url>" or "绑定 <url>" or "bind <url>"
-		// Only trigger when消息文本自身是 bind 命令（允许前置 @bot），而不是"凡是 @ 都当作 bind"
 		lower := strings.ToLower(text)
 		isBind := strings.HasPrefix(lower, "/bind") || strings.HasPrefix(lower, "bind ") || strings.HasPrefix(text, "绑定 ")
 		if !isBind && len(ev.Message.Mentions) > 0 {
@@ -227,7 +218,6 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			}
 		}
 
-		// Debug logging for troubleshooting
 		LogStructured("info", map[string]any{
 			"event":          "lark.message.debug",
 			"text":           text,
@@ -333,7 +323,6 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			threadID := ev.Message.RootID
 			tl, err := h.db.GetLarkThreadLink(c.Request().Context(), threadID)
             if err == nil && tl != nil && tl.PlaneIssueID != "" {
-				// 1) comment command: /comment or 评论
 				arg := extractCommandArg(text, "/comment")
 				if arg == "" {
 					arg = extractCommandArg(text, "评论")
@@ -346,21 +335,17 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "comment", "plane_issue_id": tl.PlaneIssueID})
 				}
 
-				// 2) sync toggle: /sync on|off, 开启同步|关闭同步
 				lct := strings.ToLower(strings.TrimSpace(text))
 				if strings.HasPrefix(lct, "/sync") || strings.HasPrefix(text, "开启同步") || strings.HasPrefix(text, "关闭同步") {
 					enable := false
-					// parse on/off
 					if strings.HasPrefix(lct, "/sync on") || strings.HasPrefix(text, "开启同步") {
 						enable = true
 					} else if strings.HasPrefix(lct, "/sync off") || strings.HasPrefix(text, "关闭同步") {
 						enable = false
 					} else {
-						// help text
 						go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "用法：/sync on 开启线程自动同步；/sync off 关闭自动同步。也可发送‘开启同步’或‘关闭同步’。")
 						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "sync_help"})
 					}
-					// persist toggle via upsert
 					slug := ""
 					if tl.WorkspaceSlug.Valid {
 						slug = tl.WorkspaceSlug.String
@@ -391,7 +376,6 @@ func (h *Handler) LarkEvents(c echo.Context) error {
                     }
                 }
             }
-		// Chat-level /sync toggle fallback when no thread context
 		if hHasDB(h) && ev.Message.RootID == "" && ev.Message.ChatID != "" {
 			lct := strings.ToLower(strings.TrimSpace(text))
 			if strings.HasPrefix(lct, "/sync") || strings.HasPrefix(text, "开启同步") || strings.HasPrefix(text, "关闭同步") {
@@ -422,11 +406,9 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 				}
 			}
 		}
-		// If user used /comment outside of a bound thread, try chat-level binding fallback
 		if arg := extractCommandArg(text, "/comment"); arg != "" {
 			if hHasDB(h) && ev.Message.ChatID != "" {
 				if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
-					// synthesize a thread link for routing
 					tl := &store.LarkThreadLink{
 						LarkThreadID:   nsToString(cl.LarkThreadID),
 						PlaneIssueID:   cl.PlaneIssueID,
@@ -435,7 +417,6 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 						SyncEnabled:    false,
 					}
                     go h.postPlaneCommentWithRetry(tl, strings.TrimSpace(arg), ev.Message.MessageID)
-					// Ack to chat or mapped thread
 					t := nsToString(cl.LarkThreadID)
 					go h.sendLarkTextToThread(ev.Message.ChatID, t, "评论已同步至 Plane")
 					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "comment", "plane_issue_id": cl.PlaneIssueID, "scope": "chat_fallback"})
@@ -449,9 +430,29 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "未绑定目标工作项。请先使用 /bind 绑定，或在绑定的话题中回复 /comment。")
 			return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "comment", "error": "no_binding"})
 		}
+		if len(ev.Message.Mentions) > 0 && isLikelyPureBotMention(text) {
+			threadID := ev.Message.RootID
+			if threadID == "" {
+				threadID = ev.Message.MessageID
+			}
+			go func() { _ = h.postBotHelpCard(ev.Message.ChatID, threadID) }()
+			return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "help_card"})
+		}
 		return c.NoContent(http.StatusOK)
+	case "im.chat.member.bot.added_v1":
+		var ev struct {
+			ChatID string `json:"chat_id"`
+		}
+		if err := json.Unmarshal(env.Event, &ev); err != nil {
+			return c.NoContent(http.StatusBadRequest)
+		}
+		chatID := strings.TrimSpace(ev.ChatID)
+		if chatID == "" {
+			return c.NoContent(http.StatusOK)
+		}
+		go func() { _ = h.postBotHelpCard(chatID, "") }()
+		return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bot_added"})
 	case "card.action.trigger", "card.action.trigger_v1":
-		// Handle card interaction callbacks even if routed to /webhooks/lark/events
 		var act struct {
 			Token  string `json:"token"`
 			Action struct {
@@ -790,31 +791,30 @@ func (h *Handler) notifyLarkThreadBound(chatID, threadID, issueID string) {
 
 // sendLarkTextToThread sends a text to a specific thread; falls back to chat if reply fails.
 func (h *Handler) sendLarkTextToThread(chatID, threadID, text string) error {
-    ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-    LogStructured("info", map[string]any{"event": "lark.send.text.start", "chat_id": chatID, "thread_id": threadID})
-    token, _, err := cli.TenantAccessToken(ctx)
+	LogStructured("info", map[string]any{"event": "lark.send.text.start", "chat_id": chatID, "thread_id": threadID})
+	token, _, err := cli.TenantAccessToken(ctx)
 	if err != nil {
-        LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
+		LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
 		return err
 	}
-	// Prefer replying in thread
 	if threadID != "" {
-        if err := cli.ReplyTextInThread(ctx, token, threadID, text); err == nil {
-            LogStructured("info", map[string]any{"event": "lark.send.text.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
+		if err := cli.ReplyTextInThread(ctx, token, threadID, text); err == nil {
+			LogStructured("info", map[string]any{"event": "lark.send.text.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
 			return nil
-        } else {
-            LogStructured("warn", map[string]any{"event": "lark.send.text.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+		} else {
+			LogStructured("warn", map[string]any{"event": "lark.send.text.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
 		}
 	}
 	if chatID != "" {
-        if err := cli.SendTextToChat(ctx, token, chatID, text); err != nil {
-            LogStructured("error", map[string]any{"event": "lark.send.text.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
-            return err
-        }
-        LogStructured("info", map[string]any{"event": "lark.send.text.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
-        return nil
+		if err := cli.SendTextToChat(ctx, token, chatID, text); err != nil {
+			LogStructured("error", map[string]any{"event": "lark.send.text.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+			return err
+		}
+		LogStructured("info", map[string]any{"event": "lark.send.text.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
+		return nil
 	}
 	return nil
 }
@@ -938,6 +938,175 @@ func extractBrowseSequence(s string) string {
 	return ""
 }
 
+func isLikelyPureBotMention(text string) bool {
+	t := strings.TrimSpace(text)
+	if t == "" {
+		return false
+	}
+	parts := strings.Fields(t)
+	if len(parts) == 0 {
+		return false
+	}
+	if !strings.HasPrefix(parts[0], "@") {
+		return false
+	}
+	if len(parts) == 1 {
+		return true
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(t, parts[0]))
+	if rest == "" {
+		return true
+	}
+	l := strings.ToLower(rest)
+	if l == "help" || l == "/help" || l == "帮助" {
+		return true
+	}
+	return false
+}
+
+func buildLarkBotHelpCard() map[string]any {
+	commands := "- **/bind {issue_link}** - 绑定 Plane Issue 到当前话题\n" +
+		"- **/comment {text}** - 将回复内容同步为 Plane 评论\n" +
+		"- **/sync on|off** - 开启或关闭当前线程的自动同步"
+	bodyElements := []any{
+		map[string]any{
+			"tag":        "markdown",
+			"content":    "机器人支持的常用命令：",
+			"margin":     "0px 0px 0px 0px",
+			"element_id": "intro",
+		},
+		map[string]any{
+			"tag":               "column_set",
+			"flex_mode":         "stretch",
+			"horizontal_spacing": "8px",
+			"horizontal_align":  "left",
+			"columns": []any{
+				map[string]any{
+					"tag":              "column",
+					"width":            "weighted",
+					"background_style": "blue-50",
+					"elements": []any{
+						map[string]any{
+							"tag":        "markdown",
+							"content":    "**<font color='blue'>📌 工作项与同步命令</font>**",
+							"element_id": "cmd_group_title",
+						},
+						map[string]any{
+							"tag":        "markdown",
+							"content":    commands,
+							"element_id": "cmd_group_body",
+						},
+					},
+					"padding":          "12px 12px 12px 12px",
+					"vertical_spacing": "8px",
+					"horizontal_align": "left",
+					"vertical_align":   "top",
+					"weight":           1,
+				},
+			},
+			"margin": "0px 0px 0px 0px",
+		},
+		map[string]any{
+			"tag":        "markdown",
+			"content":    "**使用示例**：`/bind https://app.plane.so/{workspace}/projects/{project}/issues/{issue}`\n绑定后在该线程中使用 `/comment` 同步评论，或 `/sync on` 开启自动同步。",
+			"text_align": "left",
+			"text_size":  "normal_v2",
+			"margin":     "0px 0px 0px 0px",
+			"element_id": "example",
+		},
+	}
+	helpURL := "https://github.com/CheneyDev/Cabb#%E9%A3%9E%E4%B9%A6%E9%9B%86%E6%88%90"
+	bodyElements = append(bodyElements, map[string]any{
+		"tag": "button",
+		"text": map[string]any{
+			"tag":     "plain_text",
+			"content": "查看教程",
+		},
+		"type": "primary_filled",
+		"width": "fill",
+		"size":  "large",
+		"behaviors": []any{
+			map[string]any{
+				"type":        "open_url",
+				"default_url": helpURL,
+				"pc_url":      "",
+				"ios_url":     "",
+				"android_url": "",
+			},
+		},
+		"margin":     "4px 0px 4px 0px",
+		"element_id": "btn_help",
+	})
+	card := map[string]any{
+		"schema": "2.0",
+		"config": map[string]any{
+			"update_multi": true,
+			"style": map[string]any{
+				"text_size": map[string]any{
+					"normal_v2": map[string]any{
+						"default": "normal",
+						"pc":      "normal",
+						"mobile":  "heading",
+					},
+				},
+			},
+		},
+		"body": map[string]any{
+			"direction": "vertical",
+			"elements":  bodyElements,
+		},
+		"header": map[string]any{
+			"title": map[string]any{
+				"tag":     "plain_text",
+				"content": "机器人使用指南",
+			},
+			"subtitle": map[string]any{
+				"tag":     "plain_text",
+				"content": "",
+			},
+			"template": "blue",
+			"icon": map[string]any{
+				"tag":   "standard_icon",
+				"token": "robot_outlined",
+			},
+			"padding": "12px 8px 12px 8px",
+		},
+	}
+	return card
+}
+
+func (h *Handler) postBotHelpCard(chatID, threadID string) error {
+	if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
+		return nil
+	}
+	card := buildLarkBotHelpCard()
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+	LogStructured("info", map[string]any{"event": "lark.send.help_card.start", "chat_id": chatID, "thread_id": threadID})
+	token, _, err := cli.TenantAccessToken(ctx)
+	if err != nil {
+		LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
+		return err
+	}
+	if threadID != "" {
+		if err := cli.ReplyCardInThread(ctx, token, threadID, card); err == nil {
+			LogStructured("info", map[string]any{"event": "lark.send.help_card.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
+			return nil
+		}
+		LogStructured("warn", map[string]any{"event": "lark.send.help_card.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+	}
+	if chatID != "" {
+		if err := cli.SendCardToChat(ctx, token, chatID, card); err != nil {
+			LogStructured("error", map[string]any{"event": "lark.send.help_card.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+			return err
+		}
+		LogStructured("info", map[string]any{"event": "lark.send.help_card.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
+		return nil
+	}
+	return nil
+}
+
 // nsToString returns the string value of a sql.NullString or empty when invalid
 func nsToString(ns sql.NullString) string {
 	if ns.Valid {
@@ -967,17 +1136,16 @@ func (h *Handler) postBoundAlready(chatID, threadID, slug, projectID, issueID st
 		}
 	}
 	if title != "" && h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
-        return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定（无需重复绑定）")
+		return h.sendLarkPostToThread(chatID, threadID, title, url, "已绑定（无需重复绑定）")
 	}
-	// fallback text
-    msg := "已绑定："
+	msg := "已绑定："
 	if url != "" {
 		msg += url
 	} else {
 		msg += issueID
 	}
-    msg += "（无需重复绑定）"
-    return h.sendLarkTextToThread(chatID, threadID, msg)
+	msg += "（无需重复绑定）"
+	return h.sendLarkTextToThread(chatID, threadID, msg)
 }
 
 // postBindAck best-effort sends a rich anchor link with issue title; fallback to plain text
@@ -1022,13 +1190,12 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffi
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-    LogStructured("info", map[string]any{"event": "lark.send.post.start", "chat_id": chatID, "thread_id": threadID})
-    token, _, err := cli.TenantAccessToken(ctx)
+	LogStructured("info", map[string]any{"event": "lark.send.post.start", "chat_id": chatID, "thread_id": threadID})
+	token, _, err := cli.TenantAccessToken(ctx)
 	if err != nil {
-        LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
+		LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
 		return err
 	}
-	// build post content: ISSUE {anchor(title)} 绑定成功
 	line := []map[string]any{
 		{"tag": "text", "text": "ISSUE "},
 		{"tag": "a", "text": anchorText, "href": href},
@@ -1040,166 +1207,239 @@ func (h *Handler) sendLarkPostToThread(chatID, threadID, anchorText, href, suffi
 			"content": []any{line},
 		},
 	}
-	// Prefer thread reply
-    if threadID != "" {
-        if err := cli.ReplyPostInThread(ctx, token, threadID, post); err == nil {
-            LogStructured("info", map[string]any{"event": "lark.send.post.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
-            return nil
-        } else {
-            LogStructured("warn", map[string]any{"event": "lark.send.post.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
-        }
-    }
-    if chatID != "" {
-        if err := cli.SendPostToChat(ctx, token, chatID, post); err != nil {
-            LogStructured("error", map[string]any{"event": "lark.send.post.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
-            return err
-        }
-        LogStructured("info", map[string]any{"event": "lark.send.post.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
-        return nil
-    }
-    return nil
+	if threadID != "" {
+		if err := cli.ReplyPostInThread(ctx, token, threadID, post); err == nil {
+			LogStructured("info", map[string]any{"event": "lark.send.post.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
+			return nil
+		} else {
+			LogStructured("warn", map[string]any{"event": "lark.send.post.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+		}
+	}
+	if chatID != "" {
+		if err := cli.SendPostToChat(ctx, token, chatID, post); err != nil {
+			LogStructured("error", map[string]any{"event": "lark.send.post.fail", "way": "chat", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+			return err
+		}
+		LogStructured("info", map[string]any{"event": "lark.send.post.ok", "way": "chat", "chat_id": chatID, "thread_id": threadID})
+		return nil
+	}
+	return nil
 }
 
 // postRebindConfirmCard sends an interactive card to confirm switching binding to a new issue.
 func (h *Handler) postRebindConfirmCard(chatID, threadID, currSlug, currProjectID, currIssueID, newSlug, newProjectID, newIssueID string) error {
-    if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
-        return nil
-    }
-    currURL := h.planeIssueURL(currSlug, currProjectID, currIssueID)
-    newURL := h.planeIssueURL(newSlug, newProjectID, newIssueID)
-    // Fetch issue titles for better readability
-    currTitle, newTitle := "", ""
-    if currSlug != "" && currProjectID != "" && currIssueID != "" && hHasDB(h) {
-        rctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-        defer cancel()
-        if token, _ := h.ensurePlaneBotToken(rctx, currSlug); token != "" {
-            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
-            if name, err := pc.GetIssueName(rctx, token, currSlug, currProjectID, currIssueID); err == nil {
-                currTitle = name
-            }
-        }
-    }
-    if newSlug != "" && newProjectID != "" && newIssueID != "" && hHasDB(h) {
-        rctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-        defer cancel()
-        if token, _ := h.ensurePlaneBotToken(rctx, newSlug); token != "" {
-            pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
-            if name, err := pc.GetIssueName(rctx, token, newSlug, newProjectID, newIssueID); err == nil {
-                newTitle = name
-            }
-        }
-    }
-    // Build markdown lines with hyperlinks when possible
-    currDisplay := currIssueID
-    if currTitle != "" && currURL != "" {
-        currDisplay = "[" + escapeMD(currTitle) + "](" + currURL + ")"
-    } else if currURL != "" { // fallback to bare URL
-        currDisplay = currURL
-    }
-    newDisplay := newIssueID
-    if newTitle != "" && newURL != "" {
-        newDisplay = "[" + escapeMD(newTitle) + "](" + newURL + ")"
-    } else if newURL != "" {
-        newDisplay = newURL
-    }
-    // Build Feishu Card JSON 2.0 (schema=2.0), improved layout per docs
-    summary := "确认Issue绑定请求"
-    if currTitle != "" && newTitle != "" {
-        summary = "确认：" + currTitle + " → " + newTitle
-    }
-    // Compose markdown detail lines (titles only, no time / no "Issue:" prefix)
-    currDetail := "**" + currDisplay + "**"
-    newDetail := "**" + newDisplay + "**"
-    card := map[string]any{
-        "schema": "2.0",
-        "config": map[string]any{
-            "update_multi": true,
-            "style": map[string]any{
-                "text_size": map[string]any{
-                    "normal_v2": map[string]any{"default": "normal", "pc": "normal", "mobile": "heading"},
-                },
-            },
-            "summary": map[string]any{"content": summary},
-        },
-        "body": map[string]any{
-            "direction": "vertical",
-            "elements": []any{
-                map[string]any{ "tag": "markdown", "content": "您发起了新的 Issue 绑定请求，是否确认更换绑定关系？", "text_align": "left", "text_size": "normal_v2", "margin": "0px 0px 0px 0px", "element_id": "intro" },
-                map[string]any{
-                    "tag": "column_set", "flex_mode": "stretch", "horizontal_spacing": "12px", "horizontal_align": "left", "columns": []any{
-                        map[string]any{
-                            "tag": "column", "width": "weighted", "background_style": "blue-50", "padding": "12px 12px 12px 12px", "vertical_spacing": "4px", "horizontal_align": "left", "vertical_align": "top", "weight": 1,
-                            "elements": []any{
-                                map[string]any{ "tag": "div", "text": map[string]any{"tag": "plain_text", "content": "当前绑定", "text_align": "left", "text_size": "normal_v2", "text_color": "blue"}, "icon": map[string]any{"tag": "standard_icon", "token": "info_outlined", "color": "grey"}},
-                                map[string]any{ "tag": "markdown", "content": currDetail, "text_align": "left", "text_size": "normal_v2", "element_id": "curr_detail" },
-                            },
-                        },
-                        map[string]any{
-                            "tag": "column", "width": "weighted", "background_style": "violet-50", "padding": "12px 12px 12px 12px", "vertical_spacing": "4px", "horizontal_align": "left", "vertical_align": "top", "weight": 1,
-                            "elements": []any{
-                                map[string]any{ "tag": "div", "text": map[string]any{"tag": "plain_text", "content": "新的请求", "text_align": "left", "text_size": "normal_v2", "text_color": "violet"}, "icon": map[string]any{"tag": "standard_icon", "token": "more-add_outlined", "color": "grey"}},
-                                map[string]any{ "tag": "markdown", "content": newDetail, "text_align": "left", "text_size": "normal_v2", "element_id": "new_detail" },
-                            },
-                        },
-                    },
-                    "margin": "0px 0px 0px 0px",
-                },
-                map[string]any{ "tag": "hr", "margin": "0px 0px 0px 0px", "element_id": "divider" },
-                map[string]any{
-                    "tag": "column_set", "flex_mode": "stretch", "horizontal_spacing": "8px", "horizontal_align": "left",
-                    "columns": []any{
-                        map[string]any{
-                            "tag": "column", "width": "auto", "vertical_spacing": "8px", "horizontal_align": "left", "vertical_align": "top",
-                            "elements": []any{
-                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "确认换绑"}, "type": "primary_filled", "width": "default", "size": "large", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{
-                                    "op": "rebind_confirm", "chat_id": chatID, "thread_id": threadID, "curr_issue_id": currIssueID, "curr_project_id": currProjectID, "curr_slug": currSlug, "new_issue_id": newIssueID, "new_project_id": newProjectID, "new_slug": newSlug,
-                                }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_confirm" },
-                            },
-                        },
-                        map[string]any{
-                            "tag": "column", "width": "auto", "vertical_spacing": "8px", "horizontal_align": "left", "vertical_align": "top",
-                            "elements": []any{
-                                map[string]any{ "tag": "button", "text": map[string]any{"tag": "plain_text", "content": "保持当前绑定"}, "type": "default", "width": "default", "size": "large", "behaviors": []any{ map[string]any{ "type": "callback", "value": map[string]any{ "op": "rebind_cancel", "chat_id": chatID, "thread_id": threadID }}}, "margin": "4px 0px 4px 0px", "element_id": "btn_cancel" },
-                            },
-                        },
-                    },
-                    "margin": "0px 0px 0px 0px",
-                },
-            },
-        },
-        "header": map[string]any{
-            "title": map[string]any{"tag": "plain_text", "content": "确认Issue绑定请求"},
-            "subtitle": map[string]any{"tag": "plain_text", "content": ""},
-            "template": "blue",
-            "icon": map[string]any{"tag": "standard_icon", "token": "link-copy_outlined"},
-            "padding": "12px 12px 12px 12px",
-        },
-    }
-    ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-    defer cancel()
-    cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
-    LogStructured("info", map[string]any{"event": "lark.send.card.start", "chat_id": chatID, "thread_id": threadID})
-    token, _, err := cli.TenantAccessToken(ctx)
-    if err != nil {
-        LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
-        return err
-    }
-    if err := cli.ReplyCardInThread(ctx, token, threadID, card); err != nil {
-        LogStructured("error", map[string]any{"event": "lark.send.card.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
-        // Fallback: send to chat directly
-        if chatID != "" {
-            LogStructured("info", map[string]any{"event": "lark.send.card.fallback_to_chat.start", "chat_id": chatID, "thread_id": threadID})
-            if e2 := cli.SendCardToChat(ctx, token, chatID, card); e2 != nil {
-                LogStructured("error", map[string]any{"event": "lark.send.card.fallback_to_chat.fail", "chat_id": chatID, "thread_id": threadID, "error": e2.Error()})
-                return err
-            }
-            LogStructured("info", map[string]any{"event": "lark.send.card.fallback_to_chat.ok", "chat_id": chatID, "thread_id": threadID})
-            return nil
-        }
-        return err
-    }
-    LogStructured("info", map[string]any{"event": "lark.send.card.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
-    return nil
+	if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
+		return nil
+	}
+	currURL := h.planeIssueURL(currSlug, currProjectID, currIssueID)
+	newURL := h.planeIssueURL(newSlug, newProjectID, newIssueID)
+	currTitle := ""
+	newTitle := ""
+	if currSlug != "" && currProjectID != "" && currIssueID != "" && hHasDB(h) {
+		rctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer cancel()
+		if token, _ := h.ensurePlaneBotToken(rctx, currSlug); token != "" {
+			pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+			if name, err := pc.GetIssueName(rctx, token, currSlug, currProjectID, currIssueID); err == nil {
+				currTitle = name
+			}
+		}
+	}
+	if newSlug != "" && newProjectID != "" && newIssueID != "" && hHasDB(h) {
+		rctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer cancel()
+		if token, _ := h.ensurePlaneBotToken(rctx, newSlug); token != "" {
+			pc := &plane.Client{BaseURL: h.cfg.PlaneBaseURL}
+			if name, err := pc.GetIssueName(rctx, token, newSlug, newProjectID, newIssueID); err == nil {
+				newTitle = name
+			}
+		}
+	}
+	currDisplay := currIssueID
+	if currTitle != "" && currURL != "" {
+		currDisplay = "[" + escapeMD(currTitle) + "](" + currURL + ")"
+	} else if currURL != "" {
+		currDisplay = currURL
+	}
+	newDisplay := newIssueID
+	if newTitle != "" && newURL != "" {
+		newDisplay = "[" + escapeMD(newTitle) + "](" + newURL + ")"
+	} else if newURL != "" {
+		newDisplay = newURL
+	}
+	summary := "确认Issue绑定请求"
+	if currTitle != "" && newTitle != "" {
+		summary = "确认：" + currTitle + " → " + newTitle
+	}
+	currDetail := "**" + currDisplay + "**"
+	newDetail := "**" + newDisplay + "**"
+	card := map[string]any{
+		"schema": "2.0",
+		"config": map[string]any{
+			"update_multi": true,
+			"style": map[string]any{
+				"text_size": map[string]any{
+					"normal_v2": map[string]any{"default": "normal", "pc": "normal", "mobile": "heading"},
+				},
+			},
+			"summary": map[string]any{"content": summary},
+		},
+		"body": map[string]any{
+			"direction": "vertical",
+			"elements": []any{
+				map[string]any{"tag": "markdown", "content": "您发起了新的 Issue 绑定请求，是否确认更换绑定关系？", "text_align": "left", "text_size": "normal_v2", "margin": "0px 0px 0px 0px", "element_id": "intro"},
+				map[string]any{
+					"tag":               "column_set",
+					"flex_mode":         "stretch",
+					"horizontal_spacing": "12px",
+					"horizontal_align":  "left",
+					"columns": []any{
+						map[string]any{
+							"tag":              "column",
+							"width":            "weighted",
+							"background_style": "blue-50",
+							"padding":          "12px 12px 12px 12px",
+							"vertical_spacing": "4px",
+							"horizontal_align": "left",
+							"vertical_align":   "top",
+							"weight":           1,
+							"elements": []any{
+								map[string]any{"tag": "div", "text": map[string]any{"tag": "plain_text", "content": "当前绑定", "text_align": "left", "text_size": "normal_v2", "text_color": "blue"}, "icon": map[string]any{"tag": "standard_icon", "token": "info_outlined", "color": "grey"}},
+								map[string]any{"tag": "markdown", "content": currDetail, "text_align": "left", "text_size": "normal_v2", "element_id": "curr_detail"},
+							},
+						},
+						map[string]any{
+							"tag":              "column",
+							"width":            "weighted",
+							"background_style": "violet-50",
+							"padding":          "12px 12px 12px 12px",
+							"vertical_spacing": "4px",
+							"horizontal_align": "left",
+							"vertical_align":   "top",
+							"weight":           1,
+							"elements": []any{
+								map[string]any{"tag": "div", "text": map[string]any{"tag": "plain_text", "content": "新的请求", "text_align": "left", "text_size": "normal_v2", "text_color": "violet"}, "icon": map[string]any{"tag": "standard_icon", "token": "more-add_outlined", "color": "grey"}},
+								map[string]any{"tag": "markdown", "content": newDetail, "text_align": "left", "text_size": "normal_v2", "element_id": "new_detail"},
+							},
+						},
+					},
+					"margin": "0px 0px 0px 0px",
+				},
+				map[string]any{"tag": "hr", "margin": "0px 0px 0px 0px", "element_id": "divider"},
+				map[string]any{
+					"tag":               "column_set",
+					"flex_mode":         "stretch",
+					"horizontal_spacing": "8px",
+					"horizontal_align":  "left",
+					"columns": []any{
+						map[string]any{
+							"tag":             "column",
+							"width":           "auto",
+							"vertical_spacing": "8px",
+							"horizontal_align": "left",
+							"vertical_align":   "top",
+							"elements": []any{
+								map[string]any{
+									"tag": "button",
+									"text": map[string]any{
+										"tag":     "plain_text",
+										"content": "确认换绑",
+									},
+									"type":  "primary_filled",
+									"width": "default",
+									"size":  "large",
+									"behaviors": []any{
+										map[string]any{
+											"type": "callback",
+											"value": map[string]any{
+												"op":              "rebind_confirm",
+												"chat_id":         chatID,
+												"thread_id":       threadID,
+												"curr_issue_id":   currIssueID,
+												"curr_project_id": currProjectID,
+												"curr_slug":       currSlug,
+												"new_issue_id":    newIssueID,
+												"new_project_id":  newProjectID,
+												"new_slug":        newSlug,
+											},
+										},
+									},
+									"margin":     "4px 0px 4px 0px",
+									"element_id": "btn_confirm",
+								},
+							},
+						},
+						map[string]any{
+							"tag":             "column",
+							"width":           "auto",
+							"vertical_spacing": "8px",
+							"horizontal_align": "left",
+							"vertical_align":   "top",
+							"elements": []any{
+								map[string]any{
+									"tag": "button",
+									"text": map[string]any{
+										"tag":     "plain_text",
+										"content": "保持当前绑定",
+									},
+									"type":  "default",
+									"width": "default",
+									"size":  "large",
+									"behaviors": []any{
+										map[string]any{
+											"type": "callback",
+											"value": map[string]any{
+												"op":        "rebind_cancel",
+												"chat_id":   chatID,
+												"thread_id": threadID,
+											},
+										},
+									},
+									"margin":     "4px 0px 4px 0px",
+									"element_id": "btn_cancel",
+								},
+							},
+						},
+					},
+					"margin": "0px 0px 0px 0px",
+				},
+			},
+		},
+		"header": map[string]any{
+			"title": map[string]any{"tag": "plain_text", "content": "确认Issue绑定请求"},
+			"subtitle": map[string]any{
+				"tag":     "plain_text",
+				"content": "",
+			},
+			"template": "blue",
+			"icon":     map[string]any{"tag": "standard_icon", "token": "link-copy_outlined"},
+			"padding":  "12px 12px 12px 12px",
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	cli := &lark.Client{AppID: h.cfg.LarkAppID, AppSecret: h.cfg.LarkAppSecret}
+	LogStructured("info", map[string]any{"event": "lark.send.card.start", "chat_id": chatID, "thread_id": threadID})
+	token, _, err := cli.TenantAccessToken(ctx)
+	if err != nil {
+		LogStructured("error", map[string]any{"event": "lark.token.error", "error": err.Error()})
+		return err
+	}
+	if err := cli.ReplyCardInThread(ctx, token, threadID, card); err != nil {
+		LogStructured("error", map[string]any{"event": "lark.send.card.fail", "way": "thread", "chat_id": chatID, "thread_id": threadID, "error": err.Error()})
+		if chatID != "" {
+			LogStructured("info", map[string]any{"event": "lark.send.card.fallback_to_chat.start", "chat_id": chatID, "thread_id": threadID})
+			if e2 := cli.SendCardToChat(ctx, token, chatID, card); e2 != nil {
+				LogStructured("error", map[string]any{"event": "lark.send.card.fallback_to_chat.fail", "chat_id": chatID, "thread_id": threadID, "error": e2.Error()})
+				return err
+			}
+			LogStructured("info", map[string]any{"event": "lark.send.card.fallback_to_chat.ok", "chat_id": chatID, "thread_id": threadID})
+			return nil
+		}
+		return err
+	}
+	LogStructured("info", map[string]any{"event": "lark.send.card.ok", "way": "thread", "chat_id": chatID, "thread_id": threadID})
+	return nil
 }
 
 // escapeMD escapes square brackets and parentheses in markdown link text
