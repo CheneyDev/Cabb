@@ -28,6 +28,9 @@ publish_repo_url="${PROGRESS_REPO_URL:-https://cnb.cool/1024hub/plane-test}"
 publish_branch="${PROGRESS_BRANCH:-main}"
 publish_dir_root="${PROGRESS_DIR:-issue-progress}"
 template_file="scripts/issue_progress_template.json"
+target_repo_url="${TARGET_REPO_URL:-}"
+target_repo_branch="${TARGET_REPO_BRANCH:-main}"
+target_repo_path="${repo_root}"
 
 if [ -z "${api_base}" ] || [ -z "${integration_token}" ]; then
   echo "[error] CABB_API_BASE or INTEGRATION_TOKEN is missing; cannot proceed." >&2
@@ -37,8 +40,33 @@ fi
 command -v curl >/dev/null 2>&1 || { echo "[error] curl is required"; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "[error] jq is required"; exit 1; }
 
-# Ensure git history available
+# Ensure git history available (for current repo)
 git fetch --all --prune --tags >/dev/null 2>&1 || true
+
+# Optional: clone target repo for analysis
+if [ -n "${target_repo_url}" ]; then
+  target_repo_path="tmp/target-repo"
+  rm -rf "${target_repo_path}"
+  mkdir -p "${target_repo_path}"
+  auth_hdr=""
+  if [ -n "${CNB_TOKEN:-}" ]; then
+    auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
+  fi
+  if [ -n "${auth_hdr}" ]; then
+    GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" clone "${target_repo_url}" "${target_repo_path}" >/dev/null 2>&1 || true
+  else
+    git clone "${target_repo_url}" "${target_repo_path}" >/dev/null 2>&1 || true
+  fi
+  if [ ! -d "${target_repo_path}/.git" ]; then
+    echo "[error] failed to clone target repo ${target_repo_url}" >&2
+    exit 1
+  fi
+  git -C "${target_repo_path}" fetch --all --prune --tags >/dev/null 2>&1 || true
+  git -C "${target_repo_path}" checkout "${target_repo_branch}" >/dev/null 2>&1 || true
+  git -C "${target_repo_path}" config --global --add safe.directory "$(cd "${target_repo_path}" && pwd)" || true
+fi
+
+git_ctx_repo="${target_repo_path}"
 
 start_ts=$(date -d "today 00:00:00" +'%Y-%m-%dT00:00:00')
 end_ts=$(date +'%Y-%m-%dT%H:%M:%S')
@@ -88,9 +116,9 @@ if [ "${branch_links_count}" -gt 0 ]; then
     fi
 
     # Ensure branch exists locally
-    if ! git rev-parse --verify --quiet "${branch}" >/dev/null; then
+    if ! git -C "${git_ctx_repo}" rev-parse --verify --quiet "${branch}" >/dev/null; then
       echo "[warn] branch ${branch} missing locally; fetching from origin..." >&2
-      git fetch origin "${branch}:${branch}" >/dev/null 2>&1 || true
+      git -C "${git_ctx_repo}" fetch origin "${branch}:${branch}" >/dev/null 2>&1 || true
     fi
 
     ctx_file="${workdir}/ctx-${issue_id}.md"
@@ -102,7 +130,7 @@ if [ "${branch_links_count}" -gt 0 ]; then
       echo "- Window: ${start_ts} .. ${end_ts} (${TZ})"
       echo
       echo "## Commits (today)"
-      git log "${branch}" --since="${start_ts}" --until="${end_ts}" --date=iso-local \
+      git -C "${git_ctx_repo}" log "${branch}" --since="${start_ts}" --until="${end_ts}" --date=iso-local \
         --numstat --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
         | sed -e 's/(Bearer)[[:space:]]+[A-Za-z0-9._-]\+/\1 ***REDACTED***/Ig' \
         | head -n 4000 || true

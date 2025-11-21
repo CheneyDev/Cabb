@@ -130,6 +130,8 @@ main:
         PROGRESS_REPO_URL: "https://cnb.cool/1024hub/plane-test"
         PROGRESS_BRANCH: "main"
         PROGRESS_DIR: "issue-progress"
+        TARGET_REPO_URL: ""
+        TARGET_REPO_BRANCH: "main"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Generate issue progress & code review report
@@ -267,6 +269,8 @@ main:
         PROGRESS_REPO_URL: "https://cnb.cool/1024hub/plane-test"
         PROGRESS_BRANCH: "main"
         PROGRESS_DIR: "issue-progress"
+        TARGET_REPO_URL: ""
+        TARGET_REPO_BRANCH: "main"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Generate issue progress & code review report
