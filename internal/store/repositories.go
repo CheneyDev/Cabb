@@ -1313,6 +1313,11 @@ LIMIT 1`
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+		// If the table is missing (migration not yet applied), degrade gracefully.
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "42P01" { // undefined_table
+			return nil, nil
+		}
 		return nil, err
 	}
 	cfg.PlaneStatuses = []string(statuses)
