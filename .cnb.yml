@@ -9,6 +9,8 @@ include:
 main:
   "crontab: 0 3 * * *":
     - name: daily-opencode-report
+  dispatch:
+    - name: manual-opencode-report
       env:
         TZ: Asia/Shanghai
         RUNNER_ARCH: cnb:arch:amd64
@@ -52,10 +54,10 @@ main:
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
               bash scripts/opencode_daily_report.sh
-              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+              if [ -d reports ] && ls -1 reports/*.json >/dev/null 2>&1; then
                 ls -lah reports
                 echo "----- 汇报预览 -----"
-                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
+                head -n 80 $(ls -1t reports/*.json | head -n 1) || true
                 echo "----- 预览结束 -----"
               else
                 echo "no report generated" >&2
@@ -107,10 +109,10 @@ main:
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
               bash scripts/opencode_daily_report.sh
-              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+              if [ -d reports ] && ls -1 reports/*.json >/dev/null 2>&1; then
                 ls -lah reports
                 echo "----- 汇报预览 -----"
-                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
+                head -n 80 $(ls -1t reports/*.json | head -n 1) || true
                 echo "----- 预览结束 -----"
               else
                 echo "no report generated" >&2
@@ -159,10 +161,10 @@ main:
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
               bash scripts/opencode_daily_report.sh
-              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+              if [ -d reports ] && ls -1 reports/*.json >/dev/null 2>&1; then
                 ls -lah reports
                 echo "----- 汇报预览 -----"
-                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
+                head -n 80 $(ls -1t reports/*.json | head -n 1) || true
                 echo "----- 预览结束 -----"
               else
                 echo "no report generated" >&2
@@ -212,10 +214,10 @@ main:
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
               bash scripts/opencode_daily_report.sh
-              if [ -d reports ] && ls -1 reports/*.md >/dev/null 2>&1; then
+              if [ -d reports ] && ls -1 reports/*.json >/dev/null 2>&1; then
                 ls -lah reports
                 echo "----- 汇报预览 -----"
-                head -n 80 $(ls -1t reports/*.md | head -n 1) || true
+                head -n 80 $(ls -1t reports/*.json | head -n 1) || true
                 echo "----- 预览结束 -----"
               else
                 echo "no report generated" >&2

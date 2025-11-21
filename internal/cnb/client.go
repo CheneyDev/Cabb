@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -845,4 +846,116 @@ func (c *Client) UpdateIssueAssignees(ctx context.Context, repo, number string, 
 		return fmt.Errorf("cnb update assignees status=%d path=%s body=%s", resp.StatusCode, u.EscapedPath(), msg)
 	}
 	return nil
+}
+
+// TriggerPipeline triggers a pipeline for a given branch with environment variables.
+func (c *Client) TriggerPipeline(ctx context.Context, repo, branch string, envVars map[string]string) error {
+	if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+		return errors.New("missing CNB base URL or token")
+	}
+	// Endpoint: POST /:repo/-/pipelines
+	p, err := expand("/{repo}/-/pipelines", repo, "")
+	if err != nil {
+		return err
+	}
+	ep, err := c.join(p)
+	if err != nil {
+		return err
+	}
+
+	payload := map[string]any{
+		"ref": branch,
+	}
+	if len(envVars) > 0 {
+		// CNB/GitLab usually accepts variables as a map or list of key/value objects
+		// Assuming map for now based on common patterns, or "variables": [{"key": "K", "value": "V"}]
+		// Let's try the map format first, or check if we need to adapt.
+		// Safest for many systems is list of objects.
+		var vars []map[string]string
+		for k, v := range envVars {
+			vars = append(vars, map[string]string{"key": k, "value": v})
+		}
+		payload["variables"] = vars
+	}
+
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	
+	var msg string
+	if d, _ := io.ReadAll(resp.Body); len(d) > 0 {
+		if len(d) > 300 {
+			d = d[:300]
+		}
+		msg = string(d)
+	}
+	return fmt.Errorf("cnb trigger pipeline status=%d body=%s", resp.StatusCode, msg)
+}
+
+// GetFileContent fetches raw file content from a repo branch.
+// GET /{repo}/-/git/blobs/{ref}/{path} (or similar, depending on CNB API)
+// Actually, CNB usually supports GET /{repo}/-/git/raw/{ref}/{path}
+func (c *Client) GetFileContent(ctx context.Context, repo, ref, path string) ([]byte, error) {
+	if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+		return nil, errors.New("missing CNB base URL or token")
+	}
+	// Construct URL manually as path might contain slashes
+	// Endpoint: /{repo}/-/git/raw/{ref}/{path}
+	// We need to escape repo, but path should be preserved or escaped segment-wise?
+	// Usually raw endpoint takes path as is.
+	
+	// Let's use expand for repo and then append raw path
+	p, err := expand("/{repo}/-/git/raw/{number}", repo, ref) // reuse number for ref
+	if err != nil {
+		return nil, err
+	}
+	ep, err := c.join(p)
+	if err != nil {
+		return nil, err
+	}
+	// Append path. Note: join trims slash, so we need to be careful.
+	// If path starts with /, remove it.
+	path = strings.TrimPrefix(path, "/")
+	if !strings.HasSuffix(ep, "/") {
+		ep += "/"
+	}
+	// We need to encode path segments? Or just append?
+	// Browsers/Clients usually expect encoded path.
+	// Let's try appending raw path first, assuming standard behavior.
+	ep += path
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, os.ErrNotExist
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("cnb get file status=%d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
 }

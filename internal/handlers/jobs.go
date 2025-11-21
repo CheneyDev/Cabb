@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +11,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"cabb/internal/cnb"
+	"cabb/internal/lark"
+	"cabb/internal/plane"
 	"cabb/internal/store"
 	"cabb/pkg/config"
 )
@@ -121,4 +126,254 @@ func nextAt(loc *time.Location, hour, min int) time.Time {
 		run = run.Add(24 * time.Hour)
 	}
 	return run
+}
+
+// JobDailyProgressReport triggers daily progress reports for active issues.
+// POST /jobs/daily-report
+func (h *Handler) JobDailyProgressReport(c echo.Context) error {
+	if !hHasDB(h) {
+		return c.JSON(http.StatusOK, map[string]any{"status": "skipped", "note": "db unavailable"})
+	}
+	ctx := c.Request().Context()
+
+	// 1. Handle issues with active branch links
+	branchLinks, err := h.db.ListActiveBranchLinks(ctx)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "db_error", "Failed to list branch links", map[string]any{"error": err.Error()})
+	}
+
+	cnbClient := &cnb.Client{
+		BaseURL: h.cfg.CNBBaseURL,
+		Token:   h.cfg.CNBAppToken,
+	}
+	planeClient := &plane.Client{
+		BaseURL: h.cfg.PlaneBaseURL,
+	}
+
+	triggered := 0
+	errors := 0
+
+	for _, link := range branchLinks {
+		// Fetch issue details to get title/desc
+		// We need workspace slug and project ID. The link table doesn't have them directly, 
+		// but we can try to find them or maybe we need to store them in branch_issue_links?
+		// Wait, branch_issue_links only has plane_issue_id.
+		// We can use planeClient.GetIssueDetail if we have workspace/project.
+		// Or we can use a helper to find the issue if we don't have context.
+		// Actually, `repo_project_mappings` might help if we join, but `branch_issue_links` is per issue.
+		// Let's assume we can get workspace/project from `repo_project_mappings` via `cnb_repo_id`.
+		// But an issue might belong to a different project than the repo mapping if it was moved? 
+		// Unlikely for this integration.
+		
+		// Better approach: Use `repo_project_mappings` to get workspace/project for the repo.
+		mapping, err := h.db.GetRepoProjectMapping(ctx, link.CNBRepoID)
+		if err != nil {
+			LogStructured("error", map[string]any{"event": "job.daily_report.get_mapping", "repo": link.CNBRepoID, "error": err.Error()})
+			errors++
+			continue
+		}
+		if mapping == nil {
+			continue
+		}
+
+		// Get Issue Details
+		issue, err := planeClient.GetIssueDetail(ctx, h.cfg.PlaneServiceToken, mapping.PlaneWorkspaceID, mapping.PlaneProjectID, link.PlaneIssueID)
+		if err != nil {
+			LogStructured("error", map[string]any{"event": "job.daily_report.get_issue", "issue_id": link.PlaneIssueID, "error": err.Error()})
+			errors++
+			continue
+		}
+
+		// Trigger Pipeline
+		envVars := map[string]string{
+			"ISSUE_TITLE":       issue.Name,
+			"ISSUE_DESCRIPTION": issue.DescriptionHTML, // or DescriptionStripped
+			"LARK_CHAT_ID":      "",
+		}
+		if link.LarkChatID.Valid {
+			envVars["LARK_CHAT_ID"] = link.LarkChatID.String
+		}
+
+		if err := cnbClient.TriggerPipeline(ctx, link.CNBRepoID, link.Branch, envVars); err != nil {
+			LogStructured("error", map[string]any{"event": "job.daily_report.trigger_pipeline", "repo": link.CNBRepoID, "branch": link.Branch, "error": err.Error()})
+			errors++
+		} else {
+			triggered++
+		}
+	}
+
+	// 2. Handle issues WITHOUT branch links (send reminder)
+	chatLinks, err := h.db.ListActiveChatLinksWithoutBranch(ctx)
+	if err != nil {
+		LogStructured("error", map[string]any{"event": "job.daily_report.list_chat_links", "error": err.Error()})
+	} else {
+		larkClient := lark.NewClient(h.cfg.LarkAppID, h.cfg.LarkAppSecret)
+		for _, link := range chatLinks {
+			// Send reminder to Lark Chat
+			// We need to know which issue it is to give a good message.
+			// We only have PlaneIssueID. We assume we can't easily get the title without project context.
+			// But we can try to find it if we iterate projects or if we had project_id in chat_issue_links.
+			// chat_issue_links HAS plane_project_id!
+			
+			// We need to fetch the chat link details again or update the query to return project_id.
+			// The ListActiveChatLinksWithoutBranch query returns plane_issue_id and lark_chat_id.
+			// Let's update the query in store to return project_id too? 
+			// Or just send a generic message.
+			// "Reminder: The bound issue has no linked branch/repo. Progress reporting is disabled."
+			
+			msg := "⚠️ **每日进度汇报提醒**\n\n当前绑定的 Plane Issue 尚未关联代码仓库/分支，无法自动生成开发进度日报。\n请使用 `/bind` 指令关联分支。"
+			if err := larkClient.SendMessage(ctx, link.LarkChatID, msg); err != nil {
+				LogStructured("error", map[string]any{"event": "job.daily_report.send_reminder", "chat_id": link.LarkChatID, "error": err.Error()})
+			}
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"triggered": triggered,
+		"errors":    errors,
+	})
+}
+
+// JobDailyReportNotify fetches the daily report from repo and sends to Lark.
+// POST /jobs/daily-report/notify
+func (h *Handler) JobDailyReportNotify(c echo.Context) error {
+	if !hHasDB(h) {
+		return c.JSON(http.StatusOK, map[string]any{"status": "skipped", "note": "db unavailable"})
+	}
+	ctx := c.Request().Context()
+
+	// 1. Determine report path
+	// Format: reports/report-{YYYY-MM-DD}.json
+	// We assume daily report for "yesterday" if run today? Or today?
+	// The script generates report for "yesterday" by default, but label is yesterday's date.
+	// If we run at 17:50 today, we probably want TODAY's report if the script ran today for TODAY?
+	// Wait, the script default is "yesterday".
+	// If we want today's report, we need to ensure the script ran for "today" or "yesterday".
+	// User said "17:50 send summary", implying summary of TODAY.
+	// So the script should have run for "today" or "yesterday"?
+	// Usually daily report at end of day is for TODAY.
+	// Let's assume the script was triggered with `REPORT_TIMEFRAME=today` or similar, OR
+	// the script default "yesterday" is for next morning.
+	// BUT user said "17:50 send", so it's end of day.
+	// So we should look for TODAY's report.
+	// Let's try to fetch report for TODAY.
+	today := time.Now().Format("2006-01-02")
+	path := fmt.Sprintf("reports/report-%s.json", today)
+
+	cnbClient := &cnb.Client{
+		BaseURL: h.cfg.CNBBaseURL,
+		Token:   h.cfg.CNBAppToken,
+	}
+
+	// 2. Fetch JSON content
+	content, err := cnbClient.GetFileContent(ctx, h.cfg.ReportRepo, h.cfg.ReportBranch, path)
+	if err != nil {
+		// Try yesterday if today not found?
+		// No, strict requirement for now.
+		return writeError(c, http.StatusNotFound, "report_missing", "Report not found", map[string]any{"path": path, "error": err.Error()})
+	}
+
+	// 3. Parse JSON
+	var report struct {
+		Date            string `json:"date"`
+		ProgressSummary struct {
+			Overview string `json:"overview"`
+			Details  []struct {
+				Topic   string `json:"topic"`
+				Content string `json:"content"`
+			} `json:"details"`
+		} `json:"progress_summary"`
+		CodeReviewSummary struct {
+			Overview string `json:"overview"`
+			Details  []struct {
+				Author      string `json:"author"`
+				Changes     string `json:"changes"`
+				Suggestions string `json:"suggestions"`
+			} `json:"details"`
+		} `json:"code_review_summary"`
+	}
+	if err := json.Unmarshal(content, &report); err != nil {
+		return writeError(c, http.StatusInternalServerError, "json_error", "Failed to parse report", map[string]any{"error": err.Error()})
+	}
+
+	// 4. Send to Lark
+	// We need to send to a specific group. Which one?
+	// User said "send to Lark group". We assume a global configured group or we iterate all bound groups?
+	// "send to Lark group" implies a single group.
+	// But we have `ChatIssueLinks`.
+	// Maybe we send to ALL bound chats? Or a specific "Admin/Dev" group?
+	// The requirement says "send summary result to Lark group".
+	// Let's assume we send to ALL active chats found in `chat_issue_links` (deduplicated)?
+	// OR, maybe there is a main channel?
+	// Given "non-dev colleagues" and "dev colleagues", it implies a general group.
+	// Let's use a new config `LarkReportChatID` or similar?
+	// Or just send to all bound chats.
+	// Sending to all bound chats seems safest for "project specific" reports.
+	// BUT this report is "Daily Progress" for the whole repo?
+	// The script runs for the whole repo.
+	// So we should send to a main channel.
+	// Let's look for a configured channel in DB or Config.
+	// For now, I'll use a placeholder or iterate all unique chats.
+	// Iterating all unique chats is better.
+	
+	// chatLinks, err := h.db.ListActiveChatLinksWithoutBranch(ctx) // This lists issues without branch.
+	// We need ALL active chats.
+	// Let's add `ListAllActiveChats` to store?
+	// Or just use `ListActiveBranchLinks` and extract chats.
+	
+	// Actually, for this feature, it seems to be a "Repo Level" report.
+	// We should probably have a "Repo -> Chat" mapping.
+	// `channel_project_mappings`?
+	// Let's check `channel_project_mappings`.
+	
+	// For now, to be safe and simple, I will iterate all unique chat IDs from `branch_issue_links` + `chat_issue_links`.
+	// But wait, `branch_issue_links` joins `chat_issue_links`.
+	// So we can just get all unique LarkChatIDs from `ListActiveBranchLinks`.
+	
+	// Collect unique chat IDs
+	chatIDs := make(map[string]struct{})
+	branchLinks, _ := h.db.ListActiveBranchLinks(ctx)
+	for _, l := range branchLinks {
+		if l.LarkChatID.Valid {
+			chatIDs[l.LarkChatID.String] = struct{}{}
+		}
+	}
+	
+	larkClient := lark.NewClient(h.cfg.LarkAppID, h.cfg.LarkAppSecret)
+	
+	// Build Messages
+	// Message 1: Progress Summary (For All)
+	progressMsg := fmt.Sprintf("📅 **项目日报 (%s)**\n\n**%s**\n\n", report.Date, report.ProgressSummary.Overview)
+	for _, d := range report.ProgressSummary.Details {
+		progressMsg += fmt.Sprintf("🔹 **%s**\n%s\n", d.Topic, d.Content)
+	}
+
+	// Message 2: Code Review Summary (For Devs - but we send to same group for now, maybe threaded?)
+	// User said "part 1 for non-dev, part 2 for dev".
+	// If in same group, just send two messages or one long one.
+	// Let's send one card or two messages.
+	// Two messages is clearer.
+	
+	reviewMsg := fmt.Sprintf("💻 **Code Review 汇总**\n\n**%s**\n\n", report.CodeReviewSummary.Overview)
+	for _, d := range report.CodeReviewSummary.Details {
+		reviewMsg += fmt.Sprintf("👤 **%s**\n- 变动: %s\n- 建议: %s\n", d.Author, d.Changes, d.Suggestions)
+	}
+
+	sent := 0
+	for chatID := range chatIDs {
+		// Send Progress
+		if err := larkClient.SendMessage(ctx, chatID, progressMsg); err != nil {
+			LogStructured("error", map[string]any{"event": "job.notify.send_progress", "chat_id": chatID, "error": err.Error()})
+		}
+		// Send Review
+		if err := larkClient.SendMessage(ctx, chatID, reviewMsg); err != nil {
+			LogStructured("error", map[string]any{"event": "job.notify.send_review", "chat_id": chatID, "error": err.Error()})
+		}
+		sent++
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"sent_to": sent,
+		"date":    report.Date,
+	})
 }

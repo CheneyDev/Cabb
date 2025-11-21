@@ -22,6 +22,21 @@ type Client struct {
 	HTTP      *http.Client
 }
 
+func NewClient(appID, appSecret string) *Client {
+	return &Client{
+		AppID:     appID,
+		AppSecret: appSecret,
+	}
+}
+
+func (c *Client) SendMessage(ctx context.Context, chatID, text string) error {
+	token, _, err := c.TenantAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+	return c.SendTextToChat(ctx, token, chatID, text)
+}
+
 type Chat struct {
 	ID        string   `json:"chat_id"`
 	Name      string   `json:"name"`

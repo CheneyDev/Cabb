@@ -33,6 +33,10 @@ type Config struct {
     CNBIssueCreatePath  string
     CNBIssueUpdatePath  string
     CNBIssueCommentPath string
+    
+    // Report
+    ReportRepo   string
+    ReportBranch string
 
     // AI / Branch naming (prefer Groq; fallback OpenAI)
     AIBranchAutocreateEnabled bool
@@ -88,6 +92,9 @@ func FromEnv() Config {
 		CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
 		CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),
         CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
+        
+        ReportRepo:   strFromEnv("REPORT_REPO", "1024hub/plane-test"),
+        ReportBranch: strFromEnv("REPORT_BRANCH", "main"),
 
         EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
 

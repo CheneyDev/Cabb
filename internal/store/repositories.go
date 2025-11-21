@@ -799,9 +799,79 @@ func (d *DB) UpsertBranchIssueLink(ctx context.Context, planeIssueID, cnbRepoID,
 	if n, _ := res.RowsAffected(); n > 0 {
 		return nil
 	}
-	const ins = `INSERT INTO branch_issue_links (plane_issue_id, cnb_repo_id, branch, is_primary, created_at, active) VALUES ($1::uuid,$2,$3,$4,now(),true)`
+	const ins = `INSERT INTO branch_issue_links (plane_issue_id, cnb_repo_id, branch, is_primary, active, created_at, updated_at) VALUES ($1::uuid,$2,$3,$4,true,now(),now())`
 	_, err = d.SQL.ExecContext(ctx, ins, planeIssueID, cnbRepoID, branch, isPrimary)
 	return err
+}
+
+type ActiveBranchLink struct {
+	PlaneIssueID string
+	CNBRepoID    string
+	Branch       string
+	LarkChatID   sql.NullString
+}
+
+func (d *DB) ListActiveBranchLinks(ctx context.Context) ([]ActiveBranchLink, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	// Join with chat_issue_links to get the bound chat ID if any
+	const q = `
+SELECT bil.plane_issue_id::text, bil.cnb_repo_id, bil.branch, cil.lark_chat_id
+FROM branch_issue_links bil
+LEFT JOIN chat_issue_links cil ON cil.plane_issue_id = bil.plane_issue_id
+WHERE bil.active = true AND bil.deleted_at IS NULL
+`
+	rows, err := d.SQL.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ActiveBranchLink
+	for rows.Next() {
+		var r ActiveBranchLink
+		if err := rows.Scan(&r.PlaneIssueID, &r.CNBRepoID, &r.Branch, &r.LarkChatID); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+type ActiveChatLink struct {
+	PlaneIssueID string
+	LarkChatID   string
+}
+
+// ListActiveChatLinksWithoutBranch returns chat links where the issue does NOT have an active branch link
+func (d *DB) ListActiveChatLinksWithoutBranch(ctx context.Context) ([]ActiveChatLink, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT cil.plane_issue_id::text, cil.lark_chat_id
+FROM chat_issue_links cil
+WHERE NOT EXISTS (
+    SELECT 1 FROM branch_issue_links bil 
+    WHERE bil.plane_issue_id = cil.plane_issue_id 
+      AND bil.active = true 
+      AND bil.deleted_at IS NULL
+)
+`
+	rows, err := d.SQL.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ActiveChatLink
+	for rows.Next() {
+		var r ActiveChatLink
+		if err := rows.Scan(&r.PlaneIssueID, &r.LarkChatID); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 func (d *DB) DeactivateBranchIssueLink(ctx context.Context, cnbRepoID, branch string) error {
