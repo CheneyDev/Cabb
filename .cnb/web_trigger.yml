@@ -48,8 +48,8 @@ branch:
           BRANCH: "develop"
         inputs:
           SERVICES_LIST: *services_list_input
-      - name: 生成汇报
-        description: 汇总 git 提交并生成工作汇报
+      - name: 生成日报(进度+CodeReview)
+        description: 生成包含开发进度和 Code Review 的 JSON 汇报并推送
         event: web_trigger_daily_report
         env:
           RUNNER_ARCH: cnb:arch:amd64
