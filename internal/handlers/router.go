@@ -1,16 +1,16 @@
 package handlers
 
 import (
-    "context"
-    "sync"
-    "time"
+	"context"
+	"sync"
+	"time"
 
-    groqp "cabb/internal/ai/providers/groq"
-    openaip "cabb/internal/ai/providers/openai"
-    "cabb/internal/store"
-    "cabb/pkg/config"
+	groqp "cabb/internal/ai/providers/groq"
+	openaip "cabb/internal/ai/providers/openai"
+	"cabb/internal/store"
+	"cabb/pkg/config"
 
-    "github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4"
 )
 
 func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
@@ -26,18 +26,18 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 		ttl = 12 * time.Hour
 	}
 
-    // Optional AI namer
-    varNamer := initBranchNamer(cfg)
+	// Optional AI namer
+	varNamer := initBranchNamer(cfg)
 
-    h := &Handler{
-        cfg:                 cfg,
-        dedupe:              d,
-        db:                  db,
-        sessionCookieName:   sessionCookie,
-        sessionTTL:          ttl,
-        sessionCookieSecure: cfg.AdminSessionSecure,
-        aiNamer:             varNamer,
-    }
+	h := &Handler{
+		cfg:                 cfg,
+		dedupe:              d,
+		db:                  db,
+		sessionCookieName:   sessionCookie,
+		sessionTTL:          ttl,
+		sessionCookieSecure: cfg.AdminSessionSecure,
+		aiNamer:             varNamer,
+	}
 
 	// Health
 	e.GET("/healthz", h.Healthz)
@@ -82,11 +82,11 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.GET("/links/issues", h.AdminIssueLinksList)
 	admin.POST("/links/issues", h.AdminIssueLinksUpsert)
 	admin.DELETE("/links/issues", h.AdminIssueLinksDelete)
-    admin.GET("/links/lark-threads", h.AdminLarkThreadLinksList)
-    admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
-    admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
-    admin.GET("/links/branches", h.AdminBranchIssueLinksList)
-	
+	admin.GET("/links/lark-threads", h.AdminLarkThreadLinksList)
+	admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
+	admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
+	admin.GET("/links/branches", h.AdminBranchIssueLinksList)
+
 	// Plane data APIs
 	admin.GET("/plane/workspaces", h.AdminPlaneWorkspaces)
 	admin.GET("/plane/projects", h.AdminPlaneProjects)
@@ -101,29 +101,35 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	e.POST("/jobs/issue-summary/daily", h.JobIssueSummaryDaily)
 	e.POST("/jobs/daily-report", h.JobDailyProgressReport)
 	e.POST("/jobs/daily-report/notify", h.JobDailyReportNotify)
+	e.GET("/jobs/issue-progress/tasks", h.JobIssueProgressTasks)
+	e.POST("/jobs/issue-progress/send", h.JobIssueProgressSend)
 	e.POST("/jobs/cleanup/thread-links", h.JobCleanupThreadLinks)
 }
 
 type Handler struct {
-    cfg                 config.Config
-    dedupe              *Deduper
-    db                  *store.DB
-    sessionCookieName   string
-    sessionTTL          time.Duration
-    sessionCookieSecure bool
-    createLocks         sync.Map // key: repo|planeIssueID -> *sync.Mutex
-    aiNamer             interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) }
+	cfg                 config.Config
+	dedupe              *Deduper
+	db                  *store.DB
+	sessionCookieName   string
+	sessionTTL          time.Duration
+	sessionCookieSecure bool
+	createLocks         sync.Map // key: repo|planeIssueID -> *sync.Mutex
+	aiNamer             interface {
+		SuggestBranchName(ctx context.Context, title, description string) (string, string, error)
+	}
 }
 
 // initBranchNamer wires an AI-based branch namer if enabled and credentials are present.
-func initBranchNamer(cfg config.Config) interface{ SuggestBranchName(ctx context.Context, title, description string) (string, string, error) } {
-    // Prefer Groq when configured
-    if cfg.GroqAPIKey != "" {
-        return groqp.New(cfg.GroqModel, cfg.GroqAPIKey, cfg.GroqBaseURL)
-    }
-    // Fallback to OpenAI if configured
-    if cfg.OpenAIAPIKey != "" {
-        return openaip.New(cfg.OpenAIModel, cfg.OpenAIAPIKey, cfg.OpenAIBaseURL)
-    }
-    return nil
+func initBranchNamer(cfg config.Config) interface {
+	SuggestBranchName(ctx context.Context, title, description string) (string, string, error)
+} {
+	// Prefer Groq when configured
+	if cfg.GroqAPIKey != "" {
+		return groqp.New(cfg.GroqModel, cfg.GroqAPIKey, cfg.GroqBaseURL)
+	}
+	// Fallback to OpenAI if configured
+	if cfg.OpenAIAPIKey != "" {
+		return openaip.New(cfg.OpenAIModel, cfg.OpenAIAPIKey, cfg.OpenAIBaseURL)
+	}
+	return nil
 }

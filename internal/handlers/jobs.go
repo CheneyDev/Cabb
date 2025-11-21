@@ -155,16 +155,16 @@ func (h *Handler) JobDailyProgressReport(c echo.Context) error {
 
 	for _, link := range branchLinks {
 		// Fetch issue details to get title/desc
-		// We need workspace slug and project ID. The link table doesn't have them directly, 
+		// We need workspace slug and project ID. The link table doesn't have them directly,
 		// but we can try to find them or maybe we need to store them in branch_issue_links?
 		// Wait, branch_issue_links only has plane_issue_id.
 		// We can use planeClient.GetIssueDetail if we have workspace/project.
 		// Or we can use a helper to find the issue if we don't have context.
 		// Actually, `repo_project_mappings` might help if we join, but `branch_issue_links` is per issue.
 		// Let's assume we can get workspace/project from `repo_project_mappings` via `cnb_repo_id`.
-		// But an issue might belong to a different project than the repo mapping if it was moved? 
+		// But an issue might belong to a different project than the repo mapping if it was moved?
 		// Unlikely for this integration.
-		
+
 		// Better approach: Use `repo_project_mappings` to get workspace/project for the repo.
 		mapping, err := h.db.GetRepoProjectMapping(ctx, link.CNBRepoID)
 		if err != nil {
@@ -214,13 +214,13 @@ func (h *Handler) JobDailyProgressReport(c echo.Context) error {
 			// We only have PlaneIssueID. We assume we can't easily get the title without project context.
 			// But we can try to find it if we iterate projects or if we had project_id in chat_issue_links.
 			// chat_issue_links HAS plane_project_id!
-			
+
 			// We need to fetch the chat link details again or update the query to return project_id.
 			// The ListActiveChatLinksWithoutBranch query returns plane_issue_id and lark_chat_id.
-			// Let's update the query in store to return project_id too? 
+			// Let's update the query in store to return project_id too?
 			// Or just send a generic message.
 			// "Reminder: The bound issue has no linked branch/repo. Progress reporting is disabled."
-			
+
 			msg := "⚠️ **每日进度汇报提醒**\n\n当前绑定的 Plane Issue 尚未关联代码仓库/分支，无法自动生成开发进度日报。\n请使用 `/bind` 指令关联分支。"
 			if err := larkClient.SendMessage(ctx, link.LarkChatID, msg); err != nil {
 				LogStructured("error", map[string]any{"event": "job.daily_report.send_reminder", "chat_id": link.LarkChatID, "error": err.Error()})
@@ -315,21 +315,21 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 	// Let's look for a configured channel in DB or Config.
 	// For now, I'll use a placeholder or iterate all unique chats.
 	// Iterating all unique chats is better.
-	
+
 	// chatLinks, err := h.db.ListActiveChatLinksWithoutBranch(ctx) // This lists issues without branch.
 	// We need ALL active chats.
 	// Let's add `ListAllActiveChats` to store?
 	// Or just use `ListActiveBranchLinks` and extract chats.
-	
+
 	// Actually, for this feature, it seems to be a "Repo Level" report.
 	// We should probably have a "Repo -> Chat" mapping.
 	// `channel_project_mappings`?
 	// Let's check `channel_project_mappings`.
-	
+
 	// For now, to be safe and simple, I will iterate all unique chat IDs from `branch_issue_links` + `chat_issue_links`.
 	// But wait, `branch_issue_links` joins `chat_issue_links`.
 	// So we can just get all unique LarkChatIDs from `ListActiveBranchLinks`.
-	
+
 	// Collect unique chat IDs
 	chatIDs := make(map[string]struct{})
 	branchLinks, _ := h.db.ListActiveBranchLinks(ctx)
@@ -338,9 +338,9 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 			chatIDs[l.LarkChatID.String] = struct{}{}
 		}
 	}
-	
+
 	larkClient := lark.NewClient(h.cfg.LarkAppID, h.cfg.LarkAppSecret)
-	
+
 	// Build Messages
 	// Message 1: Progress Summary (For All)
 	progressMsg := fmt.Sprintf("📅 **项目日报 (%s)**\n\n**%s**\n\n", report.Date, report.ProgressSummary.Overview)
@@ -353,7 +353,7 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 	// If in same group, just send two messages or one long one.
 	// Let's send one card or two messages.
 	// Two messages is clearer.
-	
+
 	reviewMsg := fmt.Sprintf("💻 **Code Review 汇总**\n\n**%s**\n\n", report.CodeReviewSummary.Overview)
 	for _, d := range report.CodeReviewSummary.Details {
 		reviewMsg += fmt.Sprintf("👤 **%s**\n- 变动: %s\n- 建议: %s\n", d.Author, d.Changes, d.Suggestions)
@@ -376,4 +376,91 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 		"sent_to": sent,
 		"date":    report.Date,
 	})
+}
+
+// JobIssueProgressTasks exposes active branch-linked issues with optional Lark chat bindings for CI to consume.
+// Auth: Bearer INTEGRATION_TOKEN (same as CNB ingest). Returns snapshots when available for title/description.
+func (h *Handler) JobIssueProgressTasks(c echo.Context) error {
+	if !h.authorizeIntegration(c) {
+		return writeError(c, http.StatusUnauthorized, "unauthorized", "invalid integration token", nil)
+	}
+	if !hHasDB(h) {
+		return c.JSON(http.StatusOK, map[string]any{"branch_links": []any{}, "unbound_chats": []any{}, "note": "db unavailable"})
+	}
+	ctx := c.Request().Context()
+
+	links, err := h.db.ListActiveBranchLinks(ctx)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "db_error", "failed to list branch links", map[string]any{"error": err.Error()})
+	}
+	var out []map[string]any
+	for _, l := range links {
+		if !l.LarkChatID.Valid || strings.TrimSpace(l.LarkChatID.String) == "" {
+			// 没有关联群聊则跳过生成任务，提醒由无分支列表处理
+			continue
+		}
+		title, desc := "", ""
+		if snap, err := h.db.GetPlaneIssueSnapshot(ctx, l.PlaneIssueID); err == nil {
+			if v, ok := snap["name"].(string); ok {
+				title = v
+			}
+			if v, ok := snap["description_html"].(string); ok {
+				desc = v
+			}
+		}
+		out = append(out, map[string]any{
+			"plane_issue_id":    l.PlaneIssueID,
+			"cnb_repo_id":       l.CNBRepoID,
+			"branch":            l.Branch,
+			"issue_title":       title,
+			"issue_description": desc,
+			"lark_chat_id":      l.LarkChatID.String,
+		})
+	}
+
+	unbound, _ := h.db.ListActiveChatLinksWithoutBranch(ctx)
+	var reminders []map[string]any
+	for _, r := range unbound {
+		reminders = append(reminders, map[string]any{
+			"plane_issue_id": r.PlaneIssueID,
+			"lark_chat_id":   r.LarkChatID,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"branch_links":  out,
+		"unbound_chats": reminders,
+	})
+}
+
+// JobIssueProgressSend sends a plain text message to the specified Lark chat.
+// Expected payload: { "chat_id": "...", "issue_title": "...", "date": "YYYY-MM-DD", "message": "..." }
+func (h *Handler) JobIssueProgressSend(c echo.Context) error {
+	if !h.authorizeIntegration(c) {
+		return writeError(c, http.StatusUnauthorized, "unauthorized", "invalid integration token", nil)
+	}
+	var req struct {
+		ChatID     string `json:"chat_id"`
+		IssueTitle string `json:"issue_title"`
+		Date       string `json:"date"`
+		Message    string `json:"message"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return writeError(c, http.StatusBadRequest, "invalid_json", "无法解析请求体", map[string]any{"error": err.Error()})
+	}
+	if strings.TrimSpace(req.ChatID) == "" || strings.TrimSpace(req.Message) == "" {
+		return writeError(c, http.StatusBadRequest, "invalid_param", "chat_id 和 message 不能为空", nil)
+	}
+	lc := lark.NewClient(h.cfg.LarkAppID, h.cfg.LarkAppSecret)
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 8*time.Second)
+	defer cancel()
+
+	msg := req.Message
+	if strings.TrimSpace(req.IssueTitle) != "" || strings.TrimSpace(req.Date) != "" {
+		msg = strings.TrimSpace(fmt.Sprintf("📅 %s %s\n\n%s", req.Date, req.IssueTitle, req.Message))
+	}
+	if err := lc.SendMessage(ctx, req.ChatID, msg); err != nil {
+		return writeError(c, http.StatusInternalServerError, "lark_send_failed", "发送失败", map[string]any{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"sent": true})
 }

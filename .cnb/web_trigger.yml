@@ -48,11 +48,17 @@ branch:
           BRANCH: "develop"
         inputs:
           SERVICES_LIST: *services_list_input
-      - name: 生成日报(进度+CodeReview)
-        description: 生成包含开发进度和 Code Review 的 JSON 汇报并推送
+      - name: 生成通用日报(进度+CodeReview)
+        description: 生成包含整体开发进度和 Code Review 的 JSON 汇报并推送
         event: web_trigger_daily_report
         env:
           RUNNER_ARCH: cnb:arch:amd64
           ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml"
         inputs:
           REPORT_TIMEFRAME: *report_timeframe_input
+      - name: 生成需求进度+CodeReview
+        description: 针对已关联分支的需求生成进度与代码评审汇报（未绑定仓库则发送提醒）
+        event: web_trigger_issue_progress_report
+        env:
+          RUNNER_ARCH: cnb:arch:amd64
+          ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml"
