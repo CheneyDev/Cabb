@@ -64,12 +64,12 @@ func (d *DB) UpdateEventDeliveryStatus(ctx context.Context, source, deliveryID, 
 
 // UpdateEventDeliveryRetry increments retries and sets next_retry_at with status='retry'.
 func (d *DB) UpdateEventDeliveryRetry(ctx context.Context, source, deliveryID string, nextRetryAt time.Time) error {
-    if d == nil || d.SQL == nil {
-        return nil
-    }
-    const q = `UPDATE event_deliveries SET status='retry', retries=retries+1, next_retry_at=$3 WHERE source=$1 AND delivery_id=$2`
-    _, err := d.SQL.ExecContext(ctx, q, source, deliveryID, nextRetryAt)
-    return err
+	if d == nil || d.SQL == nil {
+		return nil
+	}
+	const q = `UPDATE event_deliveries SET status='retry', retries=retries+1, next_retry_at=$3 WHERE source=$1 AND delivery_id=$2`
+	_, err := d.SQL.ExecContext(ctx, q, source, deliveryID, nextRetryAt)
+	return err
 }
 
 // RepoProjectMappings repo
@@ -885,50 +885,50 @@ func (d *DB) DeactivateBranchIssueLink(ctx context.Context, cnbRepoID, branch st
 
 // BranchIssueLinkRow represents a row from branch_issue_links joined with repo_project_mappings for Plane metadata.
 type BranchIssueLinkRow struct {
-    PlaneIssueID      string
-    CNBRepoID         sql.NullString
-    Branch            sql.NullString
-    IsPrimary         bool
-    Active            bool
-    CreatedAt         time.Time
-    DeletedAt         sql.NullTime
-    PlaneProjectID    sql.NullString
-    PlaneWorkspaceID  sql.NullString
-    WorkspaceSlug     sql.NullString
+	PlaneIssueID     string
+	CNBRepoID        sql.NullString
+	Branch           sql.NullString
+	IsPrimary        bool
+	Active           bool
+	CreatedAt        time.Time
+	DeletedAt        sql.NullTime
+	PlaneProjectID   sql.NullString
+	PlaneWorkspaceID sql.NullString
+	WorkspaceSlug    sql.NullString
 }
 
 // ListBranchIssueLinks lists branch links with optional filters.
 func (d *DB) ListBranchIssueLinks(ctx context.Context, planeIssueID, cnbRepoID, branch string, active *bool, limit int) ([]BranchIssueLinkRow, error) {
-    if d == nil || d.SQL == nil {
-        return nil, sql.ErrConnDone
-    }
-    if limit <= 0 || limit > 500 {
-        limit = 50
-    }
-    where := "WHERE 1=1"
-    args := []any{}
-    ai := 1
-    if strings.TrimSpace(planeIssueID) != "" {
-        where += fmt.Sprintf(" AND bil.plane_issue_id=$%d::uuid", ai)
-        args = append(args, planeIssueID)
-        ai++
-    }
-    if strings.TrimSpace(cnbRepoID) != "" {
-        where += fmt.Sprintf(" AND bil.cnb_repo_id=$%d", ai)
-        args = append(args, cnbRepoID)
-        ai++
-    }
-    if strings.TrimSpace(branch) != "" {
-        where += fmt.Sprintf(" AND bil.branch=$%d", ai)
-        args = append(args, branch)
-        ai++
-    }
-    if active != nil {
-        where += fmt.Sprintf(" AND bil.active=$%d", ai)
-        args = append(args, *active)
-        ai++
-    }
-    q := fmt.Sprintf(`
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	where := "WHERE 1=1"
+	args := []any{}
+	ai := 1
+	if strings.TrimSpace(planeIssueID) != "" {
+		where += fmt.Sprintf(" AND bil.plane_issue_id=$%d::uuid", ai)
+		args = append(args, planeIssueID)
+		ai++
+	}
+	if strings.TrimSpace(cnbRepoID) != "" {
+		where += fmt.Sprintf(" AND bil.cnb_repo_id=$%d", ai)
+		args = append(args, cnbRepoID)
+		ai++
+	}
+	if strings.TrimSpace(branch) != "" {
+		where += fmt.Sprintf(" AND bil.branch=$%d", ai)
+		args = append(args, branch)
+		ai++
+	}
+	if active != nil {
+		where += fmt.Sprintf(" AND bil.active=$%d", ai)
+		args = append(args, *active)
+		ai++
+	}
+	q := fmt.Sprintf(`
         SELECT bil.plane_issue_id::text,
                bil.cnb_repo_id,
                bil.branch,
@@ -944,20 +944,20 @@ func (d *DB) ListBranchIssueLinks(ctx context.Context, planeIssueID, cnbRepoID, 
         %s
         ORDER BY bil.created_at DESC
         LIMIT %d`, where, limit)
-    rows, err := d.SQL.QueryContext(ctx, q, args...)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-    var out []BranchIssueLinkRow
-    for rows.Next() {
-        var r BranchIssueLinkRow
-        if err := rows.Scan(&r.PlaneIssueID, &r.CNBRepoID, &r.Branch, &r.IsPrimary, &r.Active, &r.CreatedAt, &r.DeletedAt, &r.PlaneProjectID, &r.PlaneWorkspaceID, &r.WorkspaceSlug); err != nil {
-            return nil, err
-        }
-        out = append(out, r)
-    }
-    return out, rows.Err()
+	rows, err := d.SQL.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BranchIssueLinkRow
+	for rows.Next() {
+		var r BranchIssueLinkRow
+		if err := rows.Scan(&r.PlaneIssueID, &r.CNBRepoID, &r.Branch, &r.IsPrimary, &r.Active, &r.CreatedAt, &r.DeletedAt, &r.PlaneProjectID, &r.PlaneWorkspaceID, &r.WorkspaceSlug); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 // ===== Lark (Feishu) mappings =====
@@ -1281,6 +1281,73 @@ func nullTime(s string) any {
 		return nil
 	}
 	return s
+}
+
+// ===== Automation config =====
+
+type AutomationConfig struct {
+	ID               int64
+	TargetRepoURL    string
+	TargetRepoBranch string
+	PlaneStatuses    []string
+	OutputRepoURL    string
+	OutputBranch     string
+	OutputDir        string
+	ReportRepoSlug   string
+	UpdatedAt        time.Time
+}
+
+func (d *DB) GetAutomationConfig(ctx context.Context) (*AutomationConfig, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, updated_at
+FROM automation_configs
+ORDER BY id ASC
+LIMIT 1`
+	var cfg AutomationConfig
+	var statuses pq.StringArray
+	err := d.SQL.QueryRowContext(ctx, q).Scan(&cfg.ID, &cfg.TargetRepoURL, &cfg.TargetRepoBranch, &statuses, &cfg.OutputRepoURL, &cfg.OutputBranch, &cfg.OutputDir, &cfg.ReportRepoSlug, &cfg.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	cfg.PlaneStatuses = []string(statuses)
+	return &cfg, nil
+}
+
+func (d *DB) UpsertAutomationConfig(ctx context.Context, cfg AutomationConfig) error {
+	if d == nil || d.SQL == nil {
+		return sql.ErrConnDone
+	}
+	now := time.Now()
+	const q = `
+INSERT INTO automation_configs (id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, created_at, updated_at)
+VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $8)
+ON CONFLICT (id) DO UPDATE SET
+  target_repo_url    = EXCLUDED.target_repo_url,
+  target_repo_branch = EXCLUDED.target_repo_branch,
+  plane_statuses     = EXCLUDED.plane_statuses,
+  output_repo_url    = EXCLUDED.output_repo_url,
+  output_branch      = EXCLUDED.output_branch,
+  output_dir         = EXCLUDED.output_dir,
+  report_repo_slug   = EXCLUDED.report_repo_slug,
+  updated_at         = EXCLUDED.updated_at
+`
+	_, err := d.SQL.ExecContext(ctx, q,
+		cfg.TargetRepoURL,
+		nullIfEmpty(cfg.TargetRepoBranch),
+		pq.StringArray(cfg.PlaneStatuses),
+		cfg.OutputRepoURL,
+		nullIfEmpty(cfg.OutputBranch),
+		nullIfEmpty(cfg.OutputDir),
+		cfg.ReportRepoSlug,
+		now,
+	)
+	return err
 }
 
 // ChannelProjectLink represents a channel-project mapping

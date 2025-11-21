@@ -389,6 +389,17 @@ func (h *Handler) JobIssueProgressTasks(c echo.Context) error {
 	}
 	ctx := c.Request().Context()
 
+	// Load automation config for status filtering
+	var allowedStatuses []string
+	if cfg, err := h.db.GetAutomationConfig(ctx); err == nil && cfg != nil {
+		for _, s := range cfg.PlaneStatuses {
+			v := strings.TrimSpace(strings.ToLower(s))
+			if v != "" {
+				allowedStatuses = append(allowedStatuses, v)
+			}
+		}
+	}
+
 	links, err := h.db.ListActiveBranchLinks(ctx)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "db_error", "failed to list branch links", map[string]any{"error": err.Error()})
@@ -400,12 +411,21 @@ func (h *Handler) JobIssueProgressTasks(c echo.Context) error {
 			continue
 		}
 		title, desc := "", ""
+		var stateName string
 		if snap, err := h.db.GetPlaneIssueSnapshot(ctx, l.PlaneIssueID); err == nil {
 			if v, ok := snap["name"].(string); ok {
 				title = v
 			}
 			if v, ok := snap["description_html"].(string); ok {
 				desc = v
+			}
+			if v, ok := snap["state_name"].(string); ok {
+				stateName = v
+			}
+		}
+		if len(allowedStatuses) > 0 {
+			if !statusAllowed(stateName, allowedStatuses) {
+				continue
 			}
 		}
 		out = append(out, map[string]any{
@@ -431,6 +451,19 @@ func (h *Handler) JobIssueProgressTasks(c echo.Context) error {
 		"branch_links":  out,
 		"unbound_chats": reminders,
 	})
+}
+
+func statusAllowed(state string, allowed []string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	s := strings.ToLower(strings.TrimSpace(state))
+	for _, v := range allowed {
+		if s == strings.ToLower(strings.TrimSpace(v)) {
+			return true
+		}
+	}
+	return false
 }
 
 // JobIssueProgressSend sends a plain text message to the specified Lark chat.

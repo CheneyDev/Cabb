@@ -86,6 +86,8 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.POST("/links/lark-threads", h.AdminLarkThreadLinksUpsert)
 	admin.DELETE("/links/lark-threads", h.AdminLarkThreadLinksDelete)
 	admin.GET("/links/branches", h.AdminBranchIssueLinksList)
+	admin.GET("/automation/config", h.AdminAutomationGet)
+	admin.POST("/automation/config", h.AdminAutomationSave)
 
 	// Plane data APIs
 	admin.GET("/plane/workspaces", h.AdminPlaneWorkspaces)
