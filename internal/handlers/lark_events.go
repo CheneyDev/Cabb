@@ -294,14 +294,9 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 						LogStructured("info", map[string]any{"event": "bind.duplicate.same_issue", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID})
 						return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "duplicate", "plane_issue_id": issueID})
 					}
-					// Different issue already bound → show confirm rebind card
-					slugCurr := nsToString(cl.WorkspaceSlug)
-					projCurr := nsToString(cl.PlaneProjectID)
-					go func() {
-						_ = h.postRebindConfirmCard(ev.Message.ChatID, threadID, slugCurr, projCurr, cl.PlaneIssueID, slug, projectID, issueID)
-					}()
-					LogStructured("info", map[string]any{"event": "bind.different.show_card", "chat_id": ev.Message.ChatID, "thread_id": threadID, "current_issue_id": cl.PlaneIssueID, "new_issue_id": issueID})
-					return c.JSON(http.StatusOK, map[string]any{"result": "ok", "action": "bind", "status": "confirm_rebind_shown", "current_plane_issue_id": cl.PlaneIssueID, "new_plane_issue_id": issueID})
+					// Different issue already bound → overwrite directly (no confirmation needed)
+					LogStructured("info", map[string]any{"event": "bind.different.overwrite", "chat_id": ev.Message.ChatID, "thread_id": threadID, "current_issue_id": cl.PlaneIssueID, "new_issue_id": issueID})
+					// Fall through to persist new binding
 				}
 			}
 
