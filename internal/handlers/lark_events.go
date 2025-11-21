@@ -281,9 +281,14 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 				LogStructured("error", map[string]any{"event": "bind.error.db_unavailable", "chat_id": ev.Message.ChatID, "thread_id": threadID})
 				return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "plane_issue_id": issueID, "error": "db_unavailable"})
 			}
+
+			// Use detached context for DB operations to prevent failure on request timeout
+			dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
 			// Prevent duplicate binding within the same chat
 			if hHasDB(h) && ev.Message.ChatID != "" {
-				if cl, err := h.db.GetLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
+				if cl, err := h.db.GetLarkChatIssueLink(dbCtx, ev.Message.ChatID); err == nil && cl != nil && cl.PlaneIssueID != "" {
 					// Same issue already bound for this chat
 					if strings.EqualFold(cl.PlaneIssueID, issueID) {
 						// Reply "ISSUE {title} 已绑定" and do not create duplicate thread link
@@ -301,13 +306,13 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 			}
 
 			// Persist link
-			if err := h.db.UpsertLarkThreadLink(c.Request().Context(), threadID, issueID, projectID, slug, false); err != nil {
+			if err := h.db.UpsertLarkThreadLink(dbCtx, threadID, issueID, projectID, slug, false); err != nil {
 				LogStructured("error", map[string]any{"event": "bind.persist.thread_link.error", "chat_id": ev.Message.ChatID, "thread_id": threadID, "issue_id": issueID, "error": err.Error()})
 				go h.sendLarkTextToThread(ev.Message.ChatID, threadID, "绑定失败：内部错误，请稍后重试。")
 				return c.JSON(http.StatusOK, map[string]any{"result": "error", "action": "bind", "plane_issue_id": issueID, "error": "upsert_failed"})
 			}
 			// Also bind chat -> issue for out-of-thread commands
-			_ = h.db.UpsertLarkChatIssueLink(c.Request().Context(), ev.Message.ChatID, threadID, issueID, projectID, slug)
+			_ = h.db.UpsertLarkChatIssueLink(dbCtx, ev.Message.ChatID, threadID, issueID, projectID, slug)
 			// Success ack with details; prefer rich post with anchor title when possible
 			go h.postBindAck(ev.Message.ChatID, threadID, slug, projectID, issueID)
 			// Post share link to Plane issue as comment
