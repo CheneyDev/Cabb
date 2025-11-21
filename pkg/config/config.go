@@ -35,11 +35,12 @@ type Config struct {
     CNBIssueCommentPath string
     
     // Report
-    ReportRepo   string
-    ReportBranch string
+	ReportRepo   string
+	ReportBranch string
+	ProgressDir  string
 
-    // AI / Branch naming (prefer Groq; fallback OpenAI)
-    AIBranchAutocreateEnabled bool
+	// AI / Branch naming (prefer Groq; fallback OpenAI)
+	AIBranchAutocreateEnabled bool
     // Groq
     GroqAPIKey    string
     GroqBaseURL   string
@@ -95,6 +96,7 @@ func FromEnv() Config {
         
         ReportRepo:   strFromEnv("REPORT_REPO", "1024hub/plane-test"),
         ReportBranch: strFromEnv("REPORT_BRANCH", "main"),
+        ProgressDir:  strFromEnv("PROGRESS_DIR", "issue-progress"),
 
         EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
 

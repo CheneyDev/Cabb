@@ -464,3 +464,92 @@ func (h *Handler) JobIssueProgressSend(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]any{"sent": true})
 }
+
+// JobIssueProgressNotify reads per-issue progress JSON files from report repo and posts to Lark chats.
+// Path pattern: {ProgressDir}/daily/{date}/issue-{issue_id}.json (issue_id raw UUID).
+// Request: POST /jobs/issue-progress/notify?date=YYYY-MM-DD (default today in TZ)
+func (h *Handler) JobIssueProgressNotify(c echo.Context) error {
+	if !h.authorizeIntegration(c) {
+		return writeError(c, http.StatusUnauthorized, "unauthorized", "invalid integration token", nil)
+	}
+	if !hHasDB(h) {
+		return c.JSON(http.StatusOK, map[string]any{"status": "skipped", "note": "db unavailable"})
+	}
+	date := strings.TrimSpace(c.QueryParam("date"))
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	progressDir := strings.Trim(strings.TrimSpace(h.cfg.ProgressDir), "/")
+	if progressDir == "" {
+		progressDir = "issue-progress"
+	}
+
+	ctx := c.Request().Context()
+	links, err := h.db.ListActiveBranchLinks(ctx)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "db_error", "Failed to list branch links", map[string]any{"error": err.Error()})
+	}
+	if len(links) == 0 {
+		return c.JSON(http.StatusOK, map[string]any{"sent": 0, "note": "no active branch links"})
+	}
+	cnbClient := &cnb.Client{
+		BaseURL: h.cfg.CNBBaseURL,
+		Token:   h.cfg.CNBAppToken,
+	}
+	larkClient := lark.NewClient(h.cfg.LarkAppID, h.cfg.LarkAppSecret)
+
+	sent := 0
+	for _, l := range links {
+		if !l.LarkChatID.Valid || strings.TrimSpace(l.LarkChatID.String) == "" {
+			continue
+		}
+		path := fmt.Sprintf("%s/daily/%s/issue-%s.json", progressDir, date, l.PlaneIssueID)
+		content, err := cnbClient.GetFileContent(ctx, h.cfg.ReportRepo, h.cfg.ReportBranch, path)
+		if err != nil {
+			LogStructured("warn", map[string]any{"event": "job.issue_progress.notify.missing", "path": path, "issue_id": l.PlaneIssueID, "error": truncate(err.Error(), 200)})
+			continue
+		}
+		var payload struct {
+			Date       string `json:"date"`
+			IssueID    string `json:"issue_id"`
+			IssueTitle string `json:"issue_title"`
+			Progress   struct {
+				Overview string `json:"overview"`
+				Details  []struct {
+					Topic   string `json:"topic"`
+					Content string `json:"content"`
+				} `json:"details"`
+			} `json:"progress_summary"`
+			CodeReview struct {
+				Overview string `json:"overview"`
+				Details  []struct {
+					Author      string `json:"author"`
+					Changes     string `json:"changes"`
+					Suggestions string `json:"suggestions"`
+				} `json:"details"`
+			} `json:"code_review_summary"`
+		}
+		if err := json.Unmarshal(content, &payload); err != nil {
+			LogStructured("error", map[string]any{"event": "job.issue_progress.notify.json_error", "path": path, "error": truncate(err.Error(), 200)})
+			continue
+		}
+		progMsg := fmt.Sprintf("📅 %s 需求进度\n**%s**\n\n%s\n", payload.Date, payload.IssueTitle, payload.Progress.Overview)
+		for _, d := range payload.Progress.Details {
+			progMsg += fmt.Sprintf("🔹 %s\n%s\n", d.Topic, d.Content)
+		}
+		reviewMsg := fmt.Sprintf("💻 Code Review\n%s\n\n", payload.CodeReview.Overview)
+		for _, d := range payload.CodeReview.Details {
+			reviewMsg += fmt.Sprintf("👤 %s\n- 变动: %s\n- 建议: %s\n", d.Author, d.Changes, d.Suggestions)
+		}
+		if err := larkClient.SendMessage(ctx, l.LarkChatID.String, progMsg); err != nil {
+			LogStructured("error", map[string]any{"event": "job.issue_progress.notify.send_progress", "chat_id": l.LarkChatID.String, "error": truncate(err.Error(), 200)})
+		} else {
+			sent++
+		}
+		if err := larkClient.SendMessage(ctx, l.LarkChatID.String, reviewMsg); err != nil {
+			LogStructured("error", map[string]any{"event": "job.issue_progress.notify.send_review", "chat_id": l.LarkChatID.String, "error": truncate(err.Error(), 200)})
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{"sent": sent, "date": date})
+}

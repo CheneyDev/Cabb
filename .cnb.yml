@@ -126,6 +126,10 @@ main:
         OPENCODE_MODEL: "opencode/grok-code"
         REPORT_TIMEFRAME: "today"
         CABB_API_BASE: "https://cabb.onrender.com" # 按环境覆盖
+        PROGRESS_PUBLISH_ENABLE: "1"
+        PROGRESS_REPO_URL: "https://cnb.cool/1024hub/plane-test"
+        PROGRESS_BRANCH: "main"
+        PROGRESS_DIR: "issue-progress"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Generate issue progress & code review report
@@ -143,7 +147,7 @@ main:
                 npm i -g opencode-ai || true
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
-              bash scripts/opencode_issue_progress.sh
+              bash ./scripts/opencode_issue_progress.sh
 
   "crontab: 0 5 * * 1":
     - name: weekly-opencode-report
@@ -259,6 +263,10 @@ main:
         OPENCODE_MODEL: "opencode/grok-code"
         REPORT_TIMEFRAME: "today"
         CABB_API_BASE: "https://cabb.onrender.com" # 按环境覆盖
+        PROGRESS_PUBLISH_ENABLE: "1"
+        PROGRESS_REPO_URL: "https://cnb.cool/1024hub/plane-test"
+        PROGRESS_BRANCH: "main"
+        PROGRESS_DIR: "issue-progress"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Generate issue progress & code review report
@@ -276,4 +284,25 @@ main:
                 npm i -g opencode-ai || true
                 export PATH="$(npm root -g)/.bin:$PATH"
               fi
-              bash scripts/opencode_issue_progress.sh
+              bash ./scripts/opencode_issue_progress.sh
+
+  "crontab: 50 17 * * *":
+    - name: daily-issue-progress-notify
+      env:
+        TZ: Asia/Shanghai
+        RUNNER_ARCH: cnb:arch:amd64
+        CABB_API_BASE: "https://cabb.onrender.com" # 按环境覆盖
+      imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
+      stages:
+        - name: Notify issue progress to Lark
+          image: node:20
+          timeout: 10m
+          script:
+            - |
+              set -eu
+              apt-get update -y >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates tzdata >/dev/null
+              : "${INTEGRATION_TOKEN:?integration token required}"
+              : "${CABB_API_BASE:?api base required}"
+              today=$(date +%Y-%m-%d)
+              curl -sfSL -X POST -H "Authorization: Bearer ${INTEGRATION_TOKEN}" "${CABB_API_BASE%/}/jobs/issue-progress/notify?date=${today}"
