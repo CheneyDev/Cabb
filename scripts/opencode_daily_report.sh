@@ -388,6 +388,14 @@ if [ "${#repo_entries[@]}" -eq 0 ]; then
 fi
 
 repo_count=${#repo_entries[@]}
+echo "[info] report repo entries (raw JSON): ${report_repo_list}" >&2
+echo "[info] report repo count: ${repo_count}" >&2
+for entry in "${repo_entries[@]}"; do
+  slug_dbg=$(echo "${entry}" | jq -r '.slug // ""')
+  url_dbg=$(echo "${entry}" | jq -r '.repo_url // ""')
+  branch_dbg=$(echo "${entry}" | jq -r '.branch // ""')
+  echo "[info] repo entry -> slug=${slug_dbg:-<empty>} url=${url_dbg:-<empty>} branch=${branch_dbg:-<all>}" >&2
+done
 budget_per_repo="${char_budget}"
 if [ "${repo_count}" -gt 0 ] && [ "${char_budget}" -gt 0 ]; then
   budget_per_repo=$(( char_budget / repo_count ))
