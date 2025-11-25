@@ -42,6 +42,16 @@ report_config_from_api="${REPORT_CONFIG_FROM_API:-1}"
 report_repo_list="${REPORT_REPO_LIST:-}"
 cabb_api_base="${CABB_API_BASE:-}"
 integration_token="${INTEGRATION_TOKEN:-}"
+token_present="no"
+if [ -n "${integration_token}" ]; then
+  token_present="yes"
+fi
+echo "[info] cfg: report_config_from_api=${report_config_from_api} cabb_api_base=${cabb_api_base:-<empty>} token_present=${token_present}" >&2
+if [ -n "${CNB_TOKEN:-}" ]; then
+  echo "[info] cfg: CNB_TOKEN present (length ${#CNB_TOKEN})" >&2
+else
+  echo "[warn] cfg: CNB_TOKEN missing" >&2
+fi
 echo "[info] cfg: report_config_from_api=${report_config_from_api} cabb_api_base=${cabb_api_base:-<empty>} token_present=$([ -n \"${integration_token}\" ] && echo yes || echo no)" >&2
 # API Key 检测：支持多种变量名，最终导出为 OPENCODE_API_KEY（opencode CLI 将读取这一变量）。
 api_key="${OPENCODE_API_KEY:-}"
@@ -163,10 +173,11 @@ sanitize_slug() {
 # Pull report config from API if requested
 load_report_config() {
   local resp
-  if [ "${report_config_from_api}" = "1" ] && { [ -z "${cabb_api_base}" ] || [ -z "${integration_token}" ]; }; then
-    echo "[warn] skip fetching report config: cabb_api_base='${cabb_api_base:-<empty>}' token_present=$([ -n \"${integration_token}\" ] && echo yes || echo no)" >&2
-  fi
-  if [ -z "${report_repo_list}" ] && [ "${report_config_from_api}" = "1" ] && [ -n "${cabb_api_base}" ] && [ -n "${integration_token}" ]; then
+  if [ -z "${report_repo_list}" ] && [ "${report_config_from_api}" = "1" ]; then
+    if [ -z "${cabb_api_base}" ] || [ -z "${integration_token}" ]; then
+      echo "[warn] skip fetching report config: cabb_api_base='${cabb_api_base:-<empty>}' token_present=${token_present}" >&2
+      return
+    fi
     echo "[info] fetching report config from ${cabb_api_base%/}/jobs/report/config" >&2
     resp=$(curl -w "\n%{http_code}" -sSL -H "Authorization: Bearer ${integration_token}" "${cabb_api_base%/}/jobs/report/config" || true)
     local http_status body
@@ -259,6 +270,13 @@ collect_repo_context() {
   echo "- slug: ${slug}" >> "${ctx_file}"
   if [ -n "${repo_url}" ]; then
     echo "- repo_url: ${repo_url}" >> "${ctx_file}"
+    if [ -n "${CNB_TOKEN:-}" ]; then
+      echo "[info] checking access for ${repo_url}" >&2
+      auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
+      if curl -I -H "${auth_hdr}" "${repo_url%/}/-/raw/${branch:-main}/README.md" -o /dev/null -w "status=%{http_code}\n" -s; then
+        :
+      fi
+    fi
   fi
   if [ -n "${branch}" ]; then
     if git -C "${repo_path}" rev-parse --verify --quiet "${branch}" >/dev/null 2>&1; then
