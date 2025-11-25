@@ -489,7 +489,12 @@ try_opencode() {
     last_month) period_label="月报" ;;
     *) period_label="汇报" ;;
   esac
+  
+  # Extract commit summary from ctx_file to include in prompt
+  commit_summary=$(grep '本仓库在此时间范围内共有.*条提交记录' "${ctx_file}" 2>/dev/null | sed 's/\*\*//g' || echo "")
+  
   prompt="你是资深工程经理，需基于多个仓库的提交记录（含 numstat/补丁采样）生成中文 ${period_label} 的 Markdown 文档。\n"
+  prompt+="【重要】以下是各仓库的提交统计，请务必为每个有提交的仓库生成详细总结：\n${commit_summary}\n\n"
   prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
   prompt+="格式严格使用 Markdown（不要输出代码块标记，不要 JSON），参考以下结构：\n"
   prompt+="# 项目工作汇报（<日期标签>)\n- 时间范围：<start> 至 <end> (<TZ>)\n- 仓库：列出本次覆盖的仓库 slug\n\n"
@@ -497,7 +502,7 @@ try_opencode() {
   prompt+="## 人员汇总（按仓库分组）\n### [repo-slug] 成员名\n- 角色/主题：一句话\n- 完成要点：分条描述关键改动，包含模块/文件/风险；精炼。\n- 影响与价值：一句话说明业务/质量价值。\n- 风险与待办：如无可写“无”。\n"
   prompt+="可有多个仓库、小节。\n\n"
   prompt+="## 横向事项\n跨团队协作、依赖、阻塞、后续计划。\n\n"
-  prompt+="要求：\n- 结论先行，语言简练。\n- 明确标注仓库（用 [slug] 前缀或小标题）。\n- 若无提交，输出“无提交”说明。\n"
+  prompt+="要求：\n- 结论先行，语言简练。\n- 明确标注仓库（用 [slug] 前缀或小标题）。\n- 每个仓库的提交数据都在对应的 Repo 部分，请逐一总结，不要遗漏任何有提交的仓库。\n"
 
   # 非交互模式：消息作为第一个参数，避免被解析为 -f 的文件
   # Pass template content as context too if needed, or just rely on prompt description.
