@@ -104,9 +104,6 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	e.POST("/jobs/daily-report", h.JobDailyProgressReport)
 	e.POST("/jobs/daily-report/notify", h.JobDailyReportNotify)
 	e.GET("/jobs/report/config", h.JobReportConfig)
-	e.GET("/jobs/issue-progress/tasks", h.JobIssueProgressTasks)
-	e.POST("/jobs/issue-progress/send", h.JobIssueProgressSend)
-	e.POST("/jobs/issue-progress/notify", h.JobIssueProgressNotify)
 	e.POST("/jobs/cleanup/thread-links", h.JobCleanupThreadLinks)
 }
 

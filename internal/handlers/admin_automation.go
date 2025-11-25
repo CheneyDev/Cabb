@@ -70,7 +70,7 @@ func (h *Handler) AdminAutomationGet(c echo.Context) error {
 			PlaneStatuses:    []string{},
 			OutputRepoURL:    "https://cnb.cool/1024hub/plane-test",
 			OutputBranch:     "main",
-			OutputDir:        "issue-progress",
+			OutputDir:        "ai-report",
 			ReportRepoSlug:   "1024hub/plane-test",
 			ReportRepos:      []store.ReportRepoConfig{},
 		})

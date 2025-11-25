@@ -15,40 +15,39 @@ type Config struct {
 	// Plane (Webhook-only)
 	PlaneBaseURL       string
 	PlaneWebhookSecret string
-    PlaneServiceToken  string // Global Service Token for outbound API calls
+	PlaneServiceToken  string // Global Service Token for outbound API calls
 
-    // Feishu (Lark)
-    LarkAppID             string
-    LarkAppSecret         string
-    LarkEncryptKey        string
-    LarkVerificationToken string
+	// Feishu (Lark)
+	LarkAppID             string
+	LarkAppSecret         string
+	LarkEncryptKey        string
+	LarkVerificationToken string
 
-    // CNB
-    CNBAppToken        string
-    IntegrationToken   string
-    CNBBaseURL         string
-    CNBOutboundEnabled bool
+	// CNB
+	CNBAppToken        string
+	IntegrationToken   string
+	CNBBaseURL         string
+	CNBOutboundEnabled bool
 
-    // Optional CNB path overrides
-    CNBIssueCreatePath  string
-    CNBIssueUpdatePath  string
-    CNBIssueCommentPath string
-    
-    // Report
+	// Optional CNB path overrides
+	CNBIssueCreatePath  string
+	CNBIssueUpdatePath  string
+	CNBIssueCommentPath string
+
+	// Report
 	ReportRepo   string
 	ReportBranch string
-	ProgressDir  string
 
 	// AI / Branch naming (prefer Groq; fallback OpenAI)
 	AIBranchAutocreateEnabled bool
-    // Groq
-    GroqAPIKey    string
-    GroqBaseURL   string
-    GroqModel     string
-    // OpenAI
-    OpenAIAPIKey     string
-    OpenAIBaseURL    string
-    OpenAIModel      string
+	// Groq
+	GroqAPIKey  string
+	GroqBaseURL string
+	GroqModel   string
+	// OpenAI
+	OpenAIAPIKey  string
+	OpenAIBaseURL string
+	OpenAIModel   string
 
 	// Crypto
 	EncryptionKey string
@@ -71,7 +70,7 @@ type Config struct {
 }
 
 func FromEnv() Config {
-    cfg := Config{
+	cfg := Config{
 		Port:        intFromEnv("PORT", 8080),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		Timezone:    strFromEnv("TIMEZONE", "Local"),
@@ -80,25 +79,24 @@ func FromEnv() Config {
 		PlaneWebhookSecret: os.Getenv("PLANE_WEBHOOK_SECRET"),
 		PlaneServiceToken:  os.Getenv("PLANE_SERVICE_TOKEN"),
 
-        LarkAppID:             os.Getenv("LARK_APP_ID"),
-        LarkAppSecret:         os.Getenv("LARK_APP_SECRET"),
-        LarkEncryptKey:        os.Getenv("LARK_ENCRYPT_KEY"),
-        LarkVerificationToken: os.Getenv("LARK_VERIFICATION_TOKEN"),
+		LarkAppID:             os.Getenv("LARK_APP_ID"),
+		LarkAppSecret:         os.Getenv("LARK_APP_SECRET"),
+		LarkEncryptKey:        os.Getenv("LARK_ENCRYPT_KEY"),
+		LarkVerificationToken: os.Getenv("LARK_VERIFICATION_TOKEN"),
 
 		CNBAppToken:        os.Getenv("CNB_APP_TOKEN"),
 		IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),
 		CNBBaseURL:         os.Getenv("CNB_BASE_URL"),
-        CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", true),
+		CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", true),
 
 		CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
 		CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),
-        CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
-        
-        ReportRepo:   strFromEnv("REPORT_REPO", "1024hub/plane-test"),
-        ReportBranch: strFromEnv("REPORT_BRANCH", "main"),
-        ProgressDir:  strFromEnv("PROGRESS_DIR", "issue-progress"),
+		CNBIssueCommentPath: os.Getenv("CNB_ISSUE_COMMENT_PATH"),
 
-        EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
+		ReportRepo:   strFromEnv("REPORT_REPO", "1024hub/plane-test"),
+		ReportBranch: strFromEnv("REPORT_BRANCH", "main"),
+
+		EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
 
 		FrontendBaseURL: os.Getenv("FRONTEND_BASE_URL"),
 
@@ -107,22 +105,22 @@ func FromEnv() Config {
 		AdminSessionSecure:     boolFromEnv("ADMIN_SESSION_SECURE", false),
 		AdminBootstrapEmail:    os.Getenv("ADMIN_BOOTSTRAP_EMAIL"),
 		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
-        AdminBootstrapName:     strFromEnv("ADMIN_BOOTSTRAP_NAME", "Plane Admin"),
+		AdminBootstrapName:     strFromEnv("ADMIN_BOOTSTRAP_NAME", "Plane Admin"),
 
-        CleanupThreadLinksEnabled: boolFromEnv("CLEANUP_THREAD_LINKS_ENABLED", true),
-        CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
-        CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
+		CleanupThreadLinksEnabled: boolFromEnv("CLEANUP_THREAD_LINKS_ENABLED", true),
+		CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
+		CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
 
-        // AI / Branch naming (enabled)
-        AIBranchAutocreateEnabled: true,
-        GroqAPIKey:                os.Getenv("GROQ_API_KEY"),
-        GroqBaseURL:               strFromEnv("GROQ_BASE_URL", "https://api.groq.com/openai"),
-        GroqModel:                 strFromEnv("GROQ_MODEL", "moonshotai/kimi-k2-instruct-0905"),
-        OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
-        OpenAIBaseURL:             os.Getenv("OPENAI_BASE_URL"),
-        OpenAIModel:               strFromEnv("OPENAI_MODEL", "gpt-4o-mini"),
-    }
-    return cfg
+		// AI / Branch naming (enabled)
+		AIBranchAutocreateEnabled: true,
+		GroqAPIKey:                os.Getenv("GROQ_API_KEY"),
+		GroqBaseURL:               strFromEnv("GROQ_BASE_URL", "https://api.groq.com/openai"),
+		GroqModel:                 strFromEnv("GROQ_MODEL", "moonshotai/kimi-k2-instruct-0905"),
+		OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
+		OpenAIBaseURL:             os.Getenv("OPENAI_BASE_URL"),
+		OpenAIModel:               strFromEnv("OPENAI_MODEL", "gpt-4o-mini"),
+	}
+	return cfg
 }
 
 func (c Config) Address() string {

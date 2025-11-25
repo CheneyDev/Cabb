@@ -1319,12 +1319,16 @@ LIMIT 1`
 	var repoJSON []byte
 	err := d.SQL.QueryRowContext(ctx, q).Scan(&cfg.ID, &cfg.TargetRepoURL, &cfg.TargetRepoBranch, &statuses, &cfg.OutputRepoURL, &cfg.OutputBranch, &cfg.OutputDir, &cfg.ReportRepoSlug, &repoJSON, &cfg.UpdatedAt)
 	if err != nil {
+		// Fallback for missing column (report_repos) on older schema
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "42703" { // undefined_column
+			return d.getAutomationConfigLegacy(ctx)
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		// If the table is missing (migration not yet applied), degrade gracefully.
-		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && (pqErr.Code == "42P01" || pqErr.Code == "42703") { // undefined_table or undefined_column
+		if errors.As(err, &pqErr) && pqErr.Code == "42P01" { // undefined_table
 			return nil, nil
 		}
 		return nil, err
@@ -1336,6 +1340,30 @@ LIMIT 1`
 	if err := json.Unmarshal(repoJSON, &cfg.ReportRepos); err != nil {
 		cfg.ReportRepos = []ReportRepoConfig{}
 	}
+	return &cfg, nil
+}
+
+// Legacy query without report_repos column (backward compatible if migration未执行)
+func (d *DB) getAutomationConfigLegacy(ctx context.Context) (*AutomationConfig, error) {
+	const qLegacy = `
+SELECT id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, updated_at
+FROM automation_configs
+ORDER BY id ASC
+LIMIT 1`
+	var cfg AutomationConfig
+	var statuses pq.StringArray
+	if err := d.SQL.QueryRowContext(ctx, qLegacy).Scan(&cfg.ID, &cfg.TargetRepoURL, &cfg.TargetRepoBranch, &statuses, &cfg.OutputRepoURL, &cfg.OutputBranch, &cfg.OutputDir, &cfg.ReportRepoSlug, &cfg.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "42P01" { // undefined_table
+			return nil, nil
+		}
+		return nil, err
+	}
+	cfg.PlaneStatuses = []string(statuses)
+	cfg.ReportRepos = []ReportRepoConfig{}
 	return &cfg, nil
 }
 
@@ -1373,6 +1401,37 @@ ON CONFLICT (id) DO UPDATE SET
 		repoJSON,
 		now,
 	)
+	if err == nil {
+		return nil
+	}
+	// Fallback for missing report_repos column (older schema)
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "42703" {
+		const qLegacy = `
+INSERT INTO automation_configs (id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, created_at, updated_at)
+VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $8)
+ON CONFLICT (id) DO UPDATE SET
+  target_repo_url    = EXCLUDED.target_repo_url,
+  target_repo_branch = EXCLUDED.target_repo_branch,
+  plane_statuses     = EXCLUDED.plane_statuses,
+  output_repo_url    = EXCLUDED.output_repo_url,
+  output_branch      = EXCLUDED.output_branch,
+  output_dir         = EXCLUDED.output_dir,
+  report_repo_slug   = EXCLUDED.report_repo_slug,
+  updated_at         = EXCLUDED.updated_at
+`
+		_, errLegacy := d.SQL.ExecContext(ctx, qLegacy,
+			cfg.TargetRepoURL,
+			nullIfEmpty(cfg.TargetRepoBranch),
+			pq.StringArray(cfg.PlaneStatuses),
+			cfg.OutputRepoURL,
+			nullIfEmpty(cfg.OutputBranch),
+			nullIfEmpty(cfg.OutputDir),
+			cfg.ReportRepoSlug,
+			now,
+		)
+		return errLegacy
+	}
 	return err
 }
 
