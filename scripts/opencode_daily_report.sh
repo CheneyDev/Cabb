@@ -319,6 +319,10 @@ collect_repo_context() {
 
   has_commits=true
 
+  # Explicitly state commit count for AI to recognize
+  echo "**本仓库在此时间范围内共有 ${commit_count} 条提交记录。**" >> "${ctx_file}"
+  echo "" >> "${ctx_file}"
+
   echo "### Author counts" >> "${ctx_file}"
   awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
     | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s: %d commits\n", $0, c)}' >> "${ctx_file}"
