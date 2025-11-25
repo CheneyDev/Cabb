@@ -228,8 +228,9 @@ prepare_repo() {
       mkdir -p "tmp/repos"
       echo "[info] cloning ${repo_url} into ${repo_path}..." >&2
       if [ -n "${CNB_TOKEN:-}" ]; then
-        auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
-        GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" clone --no-tags --filter=blob:none "${repo_url}" "${repo_path}" >/dev/null 2>&1 || true
+        # Use URL-embedded credentials (more reliable than http.extraHeader)
+        auth_url="${repo_url/https:\/\//https://cnb:${CNB_TOKEN}@}"
+        git clone --no-tags --filter=blob:none "${auth_url}" "${repo_path}" >/dev/null 2>&1 || true
       fi
       if [ ! -d "${repo_path}/.git" ]; then
         git clone --no-tags --filter=blob:none "${repo_url}" "${repo_path}" >/dev/null 2>&1 || true
@@ -575,9 +576,9 @@ publish_report() {
 
   workdir="tmp/publish"
   rm -rf "${workdir}" && mkdir -p "${workdir}"
-  auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
-  # Clone target
-  GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" clone "${publish_repo_url}" "${workdir}" >/dev/null 2>&1 || return 0
+  # Use URL-embedded credentials for clone (more reliable)
+  auth_url="${publish_repo_url/https:\/\//https://cnb:${CNB_TOKEN}@}"
+  git clone "${auth_url}" "${workdir}" >/dev/null 2>&1 || return 0
   cd "${workdir}"
   git config --global --add safe.directory "$(pwd)" || true
   # Checkout branch (create if missing)
@@ -587,7 +588,7 @@ publish_report() {
     git checkout -b "${publish_branch}" >/dev/null 2>&1 || true
   fi
   # Rebase onto latest remote to avoid non-fast-forward on push
-  GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" pull --rebase origin "${publish_branch}" >/dev/null 2>&1 || true
+  git pull --rebase origin "${publish_branch}" >/dev/null 2>&1 || true
   mkdir -p "${target_subdir}"
   cp -f "${OLDPWD}/${out_file}" "${target_subdir}/${target_filename}"
   git config user.name "cabb-report-bot"
@@ -599,10 +600,10 @@ publish_report() {
     return 0
   fi
   git commit -m "chore(report): ${report_type} ${range_text}" >/dev/null 2>&1 || true
-  if ! GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" push origin "${publish_branch}" >/dev/null 2>&1; then
+  if ! git push origin "${publish_branch}" >/dev/null 2>&1; then
     # Try one rebase cycle then push again
-    GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" pull --rebase origin "${publish_branch}" >/dev/null 2>&1 || true
-    GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" push origin "${publish_branch}" >/dev/null 2>&1 || true
+    git pull --rebase origin "${publish_branch}" >/dev/null 2>&1 || true
+    git push origin "${publish_branch}" >/dev/null 2>&1 || true
   fi
   cd - >/dev/null 2>&1 || true
 }
