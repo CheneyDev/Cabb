@@ -29,7 +29,7 @@ publish_enable="${REPORT_PUBLISH_ENABLE:-1}"
 publish_repo_url="${REPORT_PUBLISH_REPO_URL:-https://cnb.cool/1024hub/plane-test}"
 publish_branch="${REPORT_PUBLISH_BRANCH:-main}"
 publish_dir_root="${REPORT_PUBLISH_DIR:-reports}"
-template_file="scripts/template.json"
+template_file="scripts/template.md"
 # diff context controls (manual trigger can override via web_trigger inputs)
 diff_mode="${REPORT_DIFF_MODE:-stats}" # stats | sampled_patch | full_patch
 char_budget="${REPORT_DIFF_CHAR_BUDGET:-200000}"
@@ -119,7 +119,7 @@ fi
 
 mkdir -p reports tmp || true
 
-out_file="reports/report-${label}.json"
+out_file="reports/report-${label}.md"
 ctx_file="tmp/git-context-${label}.md"
 
 # jq is required for template updates and config parsing
@@ -380,15 +380,6 @@ collect_repo_context() {
   fi
 }
 
-# Initialize output file from template
-if [ -f "${template_file}" ]; then
-  cp "${template_file}" "${out_file}"
-  tmp=$(mktemp)
-  jq --arg d "${label}" '.date = $d' "${out_file}" > "$tmp" && mv "$tmp" "${out_file}"
-else
-  echo "{}" > "${out_file}"
-fi
-
 load_report_config
 mapfile -t repo_entries < <(echo "${report_repo_list}" | jq -c '.[]')
 if [ "${#repo_entries[@]}" -eq 0 ]; then
@@ -437,7 +428,7 @@ for entry in "${repo_entries[@]}"; do
 done
 
 # Try opencode to author a polished report from commit context
-# 调用 opencode 生成“按人员维度总结”的结构化中文汇报
+# 调用 opencode 生成“按人员维度总结”的结构化中文 Markdown 汇报
 try_opencode() {
   command -v opencode >/dev/null 2>&1 || return 1
 
@@ -454,33 +445,28 @@ try_opencode() {
     last_month) period_label="月报" ;;
     *) period_label="汇报" ;;
   esac
-  prompt="你是资深工程经理，需基于提交记录（含 numstat 以及必要时的采样补丁片段）生成 JSON 格式的${period_label}。\n"
+  prompt="你是资深工程经理，需基于多个仓库的提交记录（含 numstat/补丁采样）生成中文 ${period_label} 的 Markdown 文档。\n"
   prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
-  prompt+="输入包含多个仓库的提交，请在概述与细项中标注仓库归属（建议用 [repo] 前缀），按“仓库 + 人员”维度组织。\n"
-  prompt+="请读取提供的 template.json 结构，并输出填充后的 JSON 内容（不要包含 markdown 代码块标记）。\n"
-  prompt+="内容要求：\n"
-  prompt+="1. progress_summary: 针对非开发岗位的汇报。\n"
-  prompt+="   - overview: 本期主题、亮点、重要进展（通俗易懂）。\n"
-  prompt+="   - details: 数组，每项包含 { \"topic\": \"...\", \"content\": \"...\" }，按功能/业务模块划分。\n"
-  prompt+="2. code_review_summary: 针对开发岗位的 Code Review 总结。\n"
-  prompt+="   - overview: 代码质量、架构变动、技术风险概述。\n"
-  prompt+="   - details: 数组，每项包含 { \"author\": \"...\", \"changes\": \"...\", \"suggestions\": \"...\" }，按人员汇总。\n"
-  prompt+="要求：\n- 严格遵守 JSON 格式；\n- 语言简练，结论先行；\n- 若无提交，在 overview 中说明。\n"
+  prompt+="格式严格使用 Markdown（不要输出代码块标记，不要 JSON），参考以下结构：\n"
+  prompt+="# 项目工作汇报（<日期标签>)\n- 时间范围：<start> 至 <end> (<TZ>)\n- 仓库：列出本次覆盖的仓库 slug\n\n"
+  prompt+="## 概览\n简要主题、亮点、重要进展，必要时注明风险/阻塞。\n\n"
+  prompt+="## 人员汇总（按仓库分组）\n### [repo-slug] 成员名\n- 角色/主题：一句话\n- 完成要点：分条描述关键改动，包含模块/文件/风险；精炼。\n- 影响与价值：一句话说明业务/质量价值。\n- 风险与待办：如无可写“无”。\n"
+  prompt+="可有多个仓库、小节。\n\n"
+  prompt+="## 横向事项\n跨团队协作、依赖、阻塞、后续计划。\n\n"
+  prompt+="要求：\n- 结论先行，语言简练。\n- 明确标注仓库（用 [slug] 前缀或小标题）。\n- 若无提交，输出“无提交”说明。\n"
 
   # 非交互模式：消息作为第一个参数，避免被解析为 -f 的文件
   # Pass template content as context too if needed, or just rely on prompt description.
   # Let's pass template as a file to opencode context? No, opencode -f takes one file.
   # We can append template to ctx_file.
-  echo -e "\n\n# Template JSON Structure\n\`\`\`json" >> "${ctx_file}"
-  cat "${template_file}" >> "${ctx_file}"
-  echo -e "\n\`\`\`" >> "${ctx_file}"
+  if [ -f "${template_file}" ]; then
+    echo -e "\n\n# Markdown Template Hint\n" >> "${ctx_file}"
+    cat "${template_file}" >> "${ctx_file}"
+  fi
 
-  if opencode run --format json "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${out_file}.tmp" 2>"tmp/opencode.stderr"; then
-     # Validate JSON
-     if jq . "${out_file}.tmp" >/dev/null 2>&1; then
-       mv "${out_file}.tmp" "${out_file}"
-       return 0
-     fi
+  if opencode run "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${out_file}.tmp" 2>"tmp/opencode.stderr"; then
+    mv "${out_file}.tmp" "${out_file}"
+    return 0
   fi
   # Surface concise error context without secrets
   {
@@ -501,16 +487,22 @@ if try_opencode; then
 else
   # Fallback: native grouped summary
   if [ "${require_ai}" = "1" ]; then
-    echo "## AI 汇总生成失败" >> "${out_file}"
-    echo "本次手动触发配置要求生成 AI 汇总，但调用失败。请检查 OPENCODE_API_KEY 与网络后重试。" >> "${out_file}"
+    {
+      echo "# 项目工作汇报（${label})"
+      echo ""
+      echo "AI 汇总生成失败。请检查 OPENCODE_API_KEY/网络后重试。"
+    } > "${out_file}"
     exit 1
   else
-    if ${has_commits}; then
-      # Fallback JSON
-      jq '.progress_summary.overview = "AI generation failed, but commits exist."' "${out_file}" > "${out_file}.tmp" && mv "${out_file}.tmp" "${out_file}"
-    else
-      jq '.progress_summary.overview = "No commits found in configured repos."' "${out_file}" > "${out_file}.tmp" && mv "${out_file}.tmp" "${out_file}"
-    fi
+    {
+      echo "# 项目工作汇报（${label})"
+      echo ""
+      if ${has_commits}; then
+        echo "AI 汇总生成失败，但检测到提交。"
+      else
+        echo "无提交。"
+      fi
+    } > "${out_file}"
   fi
 fi
 
@@ -527,24 +519,24 @@ publish_report() {
   target_subdir="${publish_dir_root}/${report_type}"
   case "${report_type}" in
     daily)
-      target_filename="report-${label}.json"
+      target_filename="report-${label}.md"
       range_text="${label}"
       ;;
     weekly)
       if [ -n "${week_start_date:-}" ] && [ -n "${week_end_date:-}" ]; then
-        target_filename="report-${week_start_date}_to_${week_end_date}.json"
+        target_filename="report-${week_start_date}_to_${week_end_date}.md"
         range_text="${week_start_date}~${week_end_date}"
       else
-        target_filename="report-${label}.json"
+        target_filename="report-${label}.md"
         range_text="${label}"
       fi
       ;;
     monthly)
-      target_filename="report-${label}.json"
+      target_filename="report-${label}.md"
       range_text="${label}"
       ;;
     *)
-      target_filename="report-${label}.json"
+      target_filename="report-${label}.md"
       range_text="${label}"
       ;;
   esac

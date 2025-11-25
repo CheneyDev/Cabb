@@ -243,7 +243,7 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	// 1. Determine report path
-	// Format: reports/report-{YYYY-MM-DD}.json
+	// Format: reports/report-{YYYY-MM-DD}.md
 	// We assume daily report for "yesterday" if run today? Or today?
 	// The script generates report for "yesterday" by default, but label is yesterday's date.
 	// If we run at 17:50 today, we probably want TODAY's report if the script ran today for TODAY?
@@ -258,45 +258,21 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 	// So we should look for TODAY's report.
 	// Let's try to fetch report for TODAY.
 	today := time.Now().Format("2006-01-02")
-	path := fmt.Sprintf("reports/report-%s.json", today)
+	path := fmt.Sprintf("reports/report-%s.md", today)
 
 	cnbClient := &cnb.Client{
 		BaseURL: h.cfg.CNBBaseURL,
 		Token:   h.cfg.CNBAppToken,
 	}
 
-	// 2. Fetch JSON content
+	// 2. Fetch Markdown content
 	content, err := cnbClient.GetFileContent(ctx, h.cfg.ReportRepo, h.cfg.ReportBranch, path)
 	if err != nil {
-		// Try yesterday if today not found?
-		// No, strict requirement for now.
 		return writeError(c, http.StatusNotFound, "report_missing", "Report not found", map[string]any{"path": path, "error": err.Error()})
 	}
+	md := string(content)
 
-	// 3. Parse JSON
-	var report struct {
-		Date            string `json:"date"`
-		ProgressSummary struct {
-			Overview string `json:"overview"`
-			Details  []struct {
-				Topic   string `json:"topic"`
-				Content string `json:"content"`
-			} `json:"details"`
-		} `json:"progress_summary"`
-		CodeReviewSummary struct {
-			Overview string `json:"overview"`
-			Details  []struct {
-				Author      string `json:"author"`
-				Changes     string `json:"changes"`
-				Suggestions string `json:"suggestions"`
-			} `json:"details"`
-		} `json:"code_review_summary"`
-	}
-	if err := json.Unmarshal(content, &report); err != nil {
-		return writeError(c, http.StatusInternalServerError, "json_error", "Failed to parse report", map[string]any{"error": err.Error()})
-	}
-
-	// 4. Send to Lark
+	// 3. Send to Lark
 	// We need to send to a specific group. Which one?
 	// User said "send to Lark group". We assume a global configured group or we iterate all bound groups?
 	// "send to Lark group" implies a single group.
@@ -341,40 +317,17 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 
 	larkClient := lark.NewClient(h.cfg.LarkAppID, h.cfg.LarkAppSecret)
 
-	// Build Messages
-	// Message 1: Progress Summary (For All)
-	progressMsg := fmt.Sprintf("📅 **项目日报 (%s)**\n\n**%s**\n\n", report.Date, report.ProgressSummary.Overview)
-	for _, d := range report.ProgressSummary.Details {
-		progressMsg += fmt.Sprintf("🔹 **%s**\n%s\n", d.Topic, d.Content)
-	}
-
-	// Message 2: Code Review Summary (For Devs - but we send to same group for now, maybe threaded?)
-	// User said "part 1 for non-dev, part 2 for dev".
-	// If in same group, just send two messages or one long one.
-	// Let's send one card or two messages.
-	// Two messages is clearer.
-
-	reviewMsg := fmt.Sprintf("💻 **Code Review 汇总**\n\n**%s**\n\n", report.CodeReviewSummary.Overview)
-	for _, d := range report.CodeReviewSummary.Details {
-		reviewMsg += fmt.Sprintf("👤 **%s**\n- 变动: %s\n- 建议: %s\n", d.Author, d.Changes, d.Suggestions)
-	}
-
 	sent := 0
 	for chatID := range chatIDs {
-		// Send Progress
-		if err := larkClient.SendMessage(ctx, chatID, progressMsg); err != nil {
-			LogStructured("error", map[string]any{"event": "job.notify.send_progress", "chat_id": chatID, "error": err.Error()})
-		}
-		// Send Review
-		if err := larkClient.SendMessage(ctx, chatID, reviewMsg); err != nil {
-			LogStructured("error", map[string]any{"event": "job.notify.send_review", "chat_id": chatID, "error": err.Error()})
+		if err := larkClient.SendMessage(ctx, chatID, md); err != nil {
+			LogStructured("error", map[string]any{"event": "job.notify.send_markdown", "chat_id": chatID, "error": err.Error()})
 		}
 		sent++
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"sent_to": sent,
-		"date":    report.Date,
+		"date":    today,
 	})
 }
 
