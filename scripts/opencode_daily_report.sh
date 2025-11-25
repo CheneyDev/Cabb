@@ -404,6 +404,7 @@ fi
   echo "- Time window: ${start_ts} .. ${end_ts} (${TZ})"
   echo "- Branch (trigger): ${CNB_BRANCH:-}"
   echo "- Repos configured: ${repo_count}"
+  echo "- Repo entries raw: ${report_repo_list}"
   echo
 } > "${ctx_file}"
 
