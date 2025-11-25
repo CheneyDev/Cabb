@@ -32,6 +32,9 @@ main:
         REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
         REPORT_PUBLISH_BRANCH: "main"
         REPORT_PUBLISH_DIR: "ai-report"
+        # 从后端拉取多仓配置
+        REPORT_CONFIG_FROM_API: "1"
+        CABB_API_BASE: "https://cabb.onrender.com"
       # 秘钥仓库导入（参考 .cnb/web_trigger.yml 的 ENV_URL）
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
@@ -43,7 +46,7 @@ main:
               # use POSIX sh options (dash) — avoid pipefail
               set -eu
               apt-get update -y >/dev/null
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata jq >/dev/null
               git --version
               # Install opencode CLI
               if ! command -v opencode >/dev/null 2>&1; then
@@ -88,6 +91,8 @@ main:
         REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
         REPORT_PUBLISH_BRANCH: "main"
         REPORT_PUBLISH_DIR: "ai-report"
+        REPORT_CONFIG_FROM_API: "1"
+        CABB_API_BASE: "https://cabb.onrender.com"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate daily report
@@ -98,7 +103,7 @@ main:
               # use POSIX sh options (dash) — avoid pipefail
               set -eu
               apt-get update -y >/dev/null
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata jq >/dev/null
               git --version
               # Install opencode CLI
               if ! command -v opencode >/dev/null 2>&1; then
@@ -174,6 +179,8 @@ main:
         REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
         REPORT_PUBLISH_BRANCH: "main"
         REPORT_PUBLISH_DIR: "ai-report"
+        REPORT_CONFIG_FROM_API: "1"
+        CABB_API_BASE: "https://cabb.onrender.com"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate weekly report
@@ -184,7 +191,7 @@ main:
               # use POSIX sh options (dash) — avoid pipefail
               set -eu
               apt-get update -y >/dev/null
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata jq >/dev/null
               git --version
               # Install opencode CLI
               if ! command -v opencode >/dev/null 2>&1; then
@@ -227,6 +234,8 @@ main:
         REPORT_PUBLISH_REPO_URL: "https://cnb.cool/1024hub/plane-test"
         REPORT_PUBLISH_BRANCH: "main"
         REPORT_PUBLISH_DIR: "ai-report"
+        REPORT_CONFIG_FROM_API: "1"
+        CABB_API_BASE: "https://cabb.onrender.com"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate monthly report
@@ -237,7 +246,7 @@ main:
               # use POSIX sh options (dash) — avoid pipefail
               set -eu
               apt-get update -y >/dev/null
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git curl ca-certificates tzdata jq >/dev/null
               git --version
               # Install opencode CLI
               if ! command -v opencode >/dev/null 2>&1; then

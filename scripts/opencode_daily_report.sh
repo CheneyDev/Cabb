@@ -38,6 +38,10 @@ max_hunks_per_file="${REPORT_DIFF_HUNKS_PER_FILE:-3}"
 max_commits="${REPORT_DIFF_MAX_COMMITS:-100}"
 exclude_globs="${REPORT_EXCLUDE_GLOBS:-node_modules/**;dist/**;vendor/**;*.min.*;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg;*.mp4;*.mov;*.zip;*.tar;*.gz;*.lock;*.class;*.bin;*.exe;*.dylib;*.so;*.dll}"
 numstat_lines="${REPORT_NUMSTAT_LINES:-5000}"
+report_config_from_api="${REPORT_CONFIG_FROM_API:-1}"
+report_repo_list="${REPORT_REPO_LIST:-}"
+cabb_api_base="${CABB_API_BASE:-}"
+integration_token="${INTEGRATION_TOKEN:-}"
 # API Key 检测：支持多种变量名，最终导出为 OPENCODE_API_KEY（opencode CLI 将读取这一变量）。
 api_key="${OPENCODE_API_KEY:-}"
 if [ -z "${api_key}" ]; then
@@ -116,84 +120,15 @@ fi
 mkdir -p reports tmp || true
 
 out_file="reports/report-${label}.json"
-log_file="tmp/git-logs-${label}.txt"
-patch_ctx_file="tmp/git-patch-${label}.txt"
+ctx_file="tmp/git-context-${label}.md"
 
-# 确保可读到完整历史（CI 可能提供浅克隆或无 .git 快照）
-ensure_repo() {
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    return 0
-  fi
-  # If workspace is not a git repo (some CI snapshots omit .git), clone a fresh copy
-  if [ -n "${CNB_REPO_URL_HTTPS:-}" ] && [ -n "${CNB_TOKEN:-}" ]; then
-    echo "[fallback] cloning repo to tmp/clone for history..." >&2
-    mkdir -p tmp/clone
-    # Avoid leaking token to logs; use header auth instead of embedding in URL
-    git -c http.extraHeader="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')" \
-      clone --no-tags --filter=blob:none --mirror "${CNB_REPO_URL_HTTPS}" tmp/clone 2>/dev/null || {
-        echo "[warn] clone via header failed, trying credential-in-url (may be masked)" >&2
-        git clone --no-tags --filter=blob:none --mirror "https://cnb:${CNB_TOKEN}@${CNB_REPO_URL_HTTPS#https://}" tmp/clone 2>/dev/null || true
-      }
-    if [ -d tmp/clone ]; then
-      # Use a worktree from the mirror to query logs
-      mkdir -p tmp/work
-      git --git-dir=tmp/clone --work-tree=tmp/work init 2>/dev/null || true
-      (cd tmp/work && git config --local core.bare false >/dev/null 2>&1 || true)
-      export GIT_DIR="$(pwd)/tmp/clone"
-      export GIT_WORK_TREE="$(pwd)/tmp/work"
-      return 0
-    fi
-  fi
-  return 1
-}
-
-ensure_repo || true
-
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
-  git_root=$(git rev-parse --show-toplevel)
-  git config --global --add safe.directory "${git_root}" || true
-  # Best‑effort: fetch full history and all branches, even if CI did a partial clone
-  # Ensure remote tracks all branches
-  if git remote get-url origin >/dev/null 2>&1; then
-    (git remote set-branches origin "*" 2>/dev/null || true)
-  fi
-  # Fetch all refs and unshallow if needed
-  (git fetch --all --prune --tags --recurse-submodules=no 2>/dev/null || true)
-  (git fetch --unshallow 2>/dev/null || git fetch --depth=0 2>/dev/null || true)
+# jq is required for template updates and config parsing
+if ! command -v jq >/dev/null 2>&1; then
+  echo "[error] jq is required but not found" >&2
+  exit 1
 fi
-
-# 统计时间窗内提交（所有分支，包含 merge）
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ -n "${GIT_DIR:-}" ]; then
-  git log \
-    --all \
-    --since="${start_ts}" \
-    --until="${end_ts}" \
-    --date=format:'%Y-%m-%d %H:%M' \
-    --pretty=format:'%H%x09%an%x09%ad%x09%s' \
-    > "${log_file}" || true
-else
-  : > "${log_file}"
-fi
-
-has_commits=false
-if [ -s "${log_file}" ]; then
-  has_commits=true
-fi
-
-# Initialize output file from template
-if [ -f "${template_file}" ]; then
-  cp "${template_file}" "${out_file}"
-  # Update date field
-  tmp=$(mktemp)
-  jq --arg d "${label}" '.date = $d' "${out_file}" > "$tmp" && mv "$tmp" "${out_file}"
-else
-  echo "{}" > "${out_file}"
-fi
-
-# No implicit fallback; timeframes are strictly one of: yesterday, last_week, last_month
 
 # Utility: exclude patterns
-# 路径排除（用于补丁采样时过滤生成物/大文件/二进制等）
 matches_exclude() {
   local f="$1"
   local IFS=';'
@@ -208,7 +143,6 @@ matches_exclude() {
 }
 
 # Utility: redact secrets in patches
-# 补丁内容脱敏（关键密钥/令牌/授权头）
 redact() {
   sed -E \
     -e 's/(Authorization:)[[:space:]]*[^\r\n]*/\1 ***REDACTED***/Ig' \
@@ -217,64 +151,201 @@ redact() {
     -e 's/(CNB_TOKEN=)[^\r\n& ]+/\1***REDACTED***/g'
 }
 
-# Build rich commit context for AI (includes per-commit numstat and bodies)
-# 构建 AI 上下文：作者分布与 numstat +（可选）采样补丁片段
-ctx_file="tmp/git-context-${label}.md"
-{
-  echo "# Repo Commit Context"
-  echo "- Time window: ${start_ts} .. ${end_ts} (${TZ})"
-  echo "- Repo: ${repo_slug}"
-  echo "- Branch (trigger): ${CNB_BRANCH:-}"
-  echo
-  if ${has_commits}; then
-    echo "## Author counts"
-    awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
-      | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s: %d commits\n", $0, c)}'
-    echo
-    echo "## Commit details (numstat + message)"
-    echo "NOTE: This is a summary (numstat) view, not full patches."
-    git log --all \
+sanitize_slug() {
+  local s="$1"
+  s="${s// /-}"
+  s="${s//\//-}"
+  s="${s//[^A-Za-z0-9._-]/-}"
+  echo "$s"
+}
+
+# Pull report config from API if requested
+load_report_config() {
+  local resp
+  if [ -z "${report_repo_list}" ] && [ "${report_config_from_api}" = "1" ] && [ -n "${cabb_api_base}" ] && [ -n "${integration_token}" ]; then
+    resp=$(curl -sfSL -H "Authorization: Bearer ${integration_token}" "${cabb_api_base%/}/jobs/report/config" || true)
+    if [ -n "${resp}" ]; then
+      report_repo_list=$(echo "${resp}" | jq -c '.report_repos // []' 2>/dev/null)
+      api_publish_repo=$(echo "${resp}" | jq -r '.output_repo_url // empty' 2>/dev/null)
+      api_publish_branch=$(echo "${resp}" | jq -r '.output_branch // empty' 2>/dev/null)
+      api_publish_dir=$(echo "${resp}" | jq -r '.output_dir // empty' 2>/dev/null)
+      if [ -n "${api_publish_repo}" ] && [ -z "${REPORT_PUBLISH_REPO_URL:-}" ]; then
+        publish_repo_url="${api_publish_repo}"
+      fi
+      if [ -n "${api_publish_branch}" ] && [ -z "${REPORT_PUBLISH_BRANCH:-}" ]; then
+        publish_branch="${api_publish_branch}"
+      fi
+      if [ -n "${api_publish_dir}" ] && [ -z "${REPORT_PUBLISH_DIR:-}" ]; then
+        publish_dir_root="${api_publish_dir}"
+      fi
+    fi
+  fi
+  if [ -z "${report_repo_list}" ]; then
+    report_repo_list=$(printf '[{"slug":"%s","repo_url":"","branch":""}]' "${repo_slug}")
+  fi
+  if ! echo "${report_repo_list}" | jq empty >/dev/null 2>&1; then
+    echo "[warn] invalid REPORT_REPO_LIST JSON; falling back to current repo only" >&2
+    report_repo_list=$(printf '[{"slug":"%s","repo_url":"","branch":""}]' "${repo_slug}")
+  fi
+}
+
+# Prepare repo locally (clone if needed) and ensure history exists
+prepare_repo() {
+  local slug="$1"
+  local repo_url="$2"
+  local branch="$3"
+  local repo_path=""
+  if [ -z "${repo_url}" ]; then
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      repo_path=$(git rev-parse --show-toplevel)
+    fi
+  else
+    repo_path="tmp/repos/${slug}"
+    if [ ! -d "${repo_path}/.git" ]; then
+      mkdir -p "tmp/repos"
+      echo "[info] cloning ${repo_url} into ${repo_path}..." >&2
+      if [ -n "${CNB_TOKEN:-}" ]; then
+        auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
+        GIT_CURL_VERBOSE=0 git -c http.extraHeader="${auth_hdr}" clone --no-tags --filter=blob:none "${repo_url}" "${repo_path}" >/dev/null 2>&1 || true
+      fi
+      if [ ! -d "${repo_path}/.git" ]; then
+        git clone --no-tags --filter=blob:none "${repo_url}" "${repo_path}" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+  if [ -z "${repo_path}" ] || [ ! -d "${repo_path}/.git" ]; then
+    echo "[warn] repo ${slug} unavailable" >&2
+    echo ""
+    return
+  fi
+  git -C "${repo_path}" config --global --add safe.directory "$(cd "${repo_path}" && pwd)" >/dev/null 2>&1 || true
+  if git -C "${repo_path}" remote get-url origin >/dev/null 2>&1; then
+    (git -C "${repo_path}" remote set-branches origin "*" >/dev/null 2>&1 || true)
+  fi
+  (git -C "${repo_path}" fetch --all --prune --tags --recurse-submodules=no >/dev/null 2>&1 || true)
+  (git -C "${repo_path}" fetch --unshallow >/dev/null 2>&1 || git -C "${repo_path}" fetch --depth=0 >/dev/null 2>&1 || true)
+  if [ -n "${branch}" ]; then
+    (git -C "${repo_path}" fetch origin "${branch}" --depth=0 >/dev/null 2>&1 || true)
+  fi
+  echo "${repo_path}"
+}
+
+has_commits=false
+
+# Collect repo-specific commit context and patch samples
+collect_repo_context() {
+  local slug="$1"
+  local repo_path="$2"
+  local branch="$3"
+  local display_name="$4"
+  local repo_url="$5"
+  local budget="$6"
+  local title="${display_name:-$slug}"
+  local revset="--all"
+
+  echo "## Repo: ${title}" >> "${ctx_file}"
+  echo "- slug: ${slug}" >> "${ctx_file}"
+  if [ -n "${repo_url}" ]; then
+    echo "- repo_url: ${repo_url}" >> "${ctx_file}"
+  fi
+  if [ -n "${branch}" ]; then
+    if git -C "${repo_path}" rev-parse --verify --quiet "${branch}" >/dev/null 2>&1; then
+      revset="${branch}"
+    elif git -C "${repo_path}" rev-parse --verify --quiet "origin/${branch}" >/dev/null 2>&1; then
+      revset="origin/${branch}"
+    else
+      echo "> branch ${branch} not found; skipping" >> "${ctx_file}"
+      echo >> "${ctx_file}"
+      return
+    fi
+    echo "- branch scope: ${branch}" >> "${ctx_file}"
+  else
+    echo "- branch scope: all branches" >> "${ctx_file}"
+  fi
+
+  local log_file="tmp/${slug}-git-logs-${label}.txt"
+  if [ "${revset}" = "--all" ]; then
+    git -C "${repo_path}" log --all \
+      --since="${start_ts}" \
+      --until="${end_ts}" \
+      --date=format:'%Y-%m-%d %H:%M' \
+      --pretty=format:'%H%x09%an%x09%ad%x09%s' \
+      > "${log_file}" || true
+  else
+    git -C "${repo_path}" log "${revset}" \
+      --since="${start_ts}" \
+      --until="${end_ts}" \
+      --date=format:'%Y-%m-%d %H:%M' \
+      --pretty=format:'%H%x09%an%x09%ad%x09%s' \
+      > "${log_file}" || true
+  fi
+
+  if [ ! -s "${log_file}" ]; then
+    echo "> No commits found in this repo for the selected window." >> "${ctx_file}"
+    echo >> "${ctx_file}"
+    return
+  fi
+
+  has_commits=true
+
+  echo "### Author counts" >> "${ctx_file}"
+  awk -F "\t" '{print $2}' "${log_file}" | sed '/^$/d' | sort | uniq -c | sort -nr \
+    | awk '{c=$1; $1=""; sub(/^ /, ""); printf("- %s: %d commits\n", $0, c)}' >> "${ctx_file}"
+  echo >> "${ctx_file}"
+
+  echo "### Commit details (numstat + message)" >> "${ctx_file}"
+  if [ "${revset}" = "--all" ]; then
+    git -C "${repo_path}" log --all \
       --since="${start_ts}" --until="${end_ts}" \
       --date=iso-local \
       --numstat \
       --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
-      | head -n "${numstat_lines}"
-    echo
-    if [ "${diff_mode}" != "stats" ]; then
-      echo "## Patch samples"
-      echo "Budget: chars=${char_budget}, top_files=${top_files}, hunks_per_file=${max_hunks_per_file}, max_commits=${max_commits}"
-    fi
+      | head -n "${numstat_lines}" >> "${ctx_file}"
   else
-    echo "> No commits found in the selected window."
+    git -C "${repo_path}" log "${revset}" \
+      --since="${start_ts}" --until="${end_ts}" \
+      --date=iso-local \
+      --numstat \
+      --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
+      | head -n "${numstat_lines}" >> "${ctx_file}"
   fi
-} > "${ctx_file}"
+  echo >> "${ctx_file}"
 
-# 采样/全量补丁上下文（受预算控制）
-> "${patch_ctx_file}"
-if ${has_commits} && [ "${diff_mode}" != "stats" ]; then
-  # Collect candidate commits within window (exclude merges for patch to control size)
-  mapfile -t commit_list < <(git rev-list --all --since="${start_ts}" --until="${end_ts}" --no-merges)
-  tmp_scores="tmp/commit-scores-${label}.txt"
+  if [ "${diff_mode}" = "stats" ]; then
+    echo >> "${ctx_file}"
+    return
+  fi
+
+  local commit_list=()
+  if [ "${revset}" = "--all" ]; then
+    mapfile -t commit_list < <(git -C "${repo_path}" rev-list --all --since="${start_ts}" --until="${end_ts}" --no-merges)
+  else
+    mapfile -t commit_list < <(git -C "${repo_path}" rev-list "${revset}" --since="${start_ts}" --until="${end_ts}" --no-merges)
+  fi
+  local tmp_scores="tmp/commit-scores-${slug}-${label}.txt"
   : > "${tmp_scores}"
   for sha in "${commit_list[@]}"; do
-    sum=$(git show --numstat --format="" "$sha" | awk '{a=$1;b=$2; if(a=="-")a=0; if(b=="-")b=0; s+=a+b} END{print s+0}')
+    sum=$(git -C "${repo_path}" show --numstat --format="" "$sha" | awk '{a=$1;b=$2; if(a=="-")a=0; if(b=="-")b=0; s+=a+b} END{print s+0}')
     echo "$sum $sha" >> "${tmp_scores}"
   done
   mapfile -t top_commits < <(sort -nr -k1,1 "${tmp_scores}" | awk '{print $2}' | head -n "${max_commits}")
 
-  total_len=0
+  local total_len=0
+  local patch_ctx_file="tmp/git-patch-${slug}-${label}.txt"
+  : > "${patch_ctx_file}"
+
   for sha in "${top_commits[@]}"; do
-    hdr=$(git show -s --format='commit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%n' --date=iso-local "$sha")
-    entry_file="tmp/patch-entry-${sha}.txt"
+    hdr=$(git -C "${repo_path}" show -s --format='commit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%n' --date=iso-local "$sha")
+    entry_file="tmp/patch-entry-${slug}-${sha}.txt"
     printf "%s\n" "$hdr" > "$entry_file"
-    mapfile -t files < <(git show --numstat --format="" "$sha" | awk '{a=$1;b=$2;f=$3; if(a=="-")a=0; if(b=="-")b=0; print a+b, f}' | sort -nr -k1,1 | awk '{ $1=""; sub(/^ /, ""); print }')
+    mapfile -t files < <(git -C "${repo_path}" show --numstat --format="" "$sha" | awk '{a=$1;b=$2;f=$3; if(a=="-")a=0; if(b=="-")b=0; print a+b, f}' | sort -nr -k1,1 | awk '{ $1=""; sub(/^ /, ""); print }')
     count=0
     for f in "${files[@]}"; do
       [ -z "$f" ] && continue
       if matches_exclude "$f"; then
         continue
       fi
-      file_patch=$(git show --no-color --unified=3 --format="" "$sha" -- "$f" | redact)
+      file_patch=$(git -C "${repo_path}" show --no-color --unified=3 --format="" "$sha" -- "$f" | redact)
       if [ -n "$file_patch" ]; then
         if [ "${diff_mode}" = "sampled_patch" ]; then
           file_patch=$(printf "%s\n" "$file_patch" | awk -v N="${max_hunks_per_file}" 'BEGIN{h=0} { if($0 ~ /^@@/) h++; if(h==0 || h<=N) print }')
@@ -287,26 +358,83 @@ if ${has_commits} && [ "${diff_mode}" != "stats" ]; then
       fi
     done
     entry_size=$(wc -c < "$entry_file" | tr -d ' ')
-    if [ "$(( total_len + entry_size ))" -le "$char_budget" ]; then
+    if [ "$(( total_len + entry_size ))" -le "$budget" ]; then
       cat "$entry_file" >> "$patch_ctx_file"
       total_len=$(( total_len + entry_size ))
     else
-      remain=$(( char_budget - total_len ))
+      remain=$(( budget - total_len ))
       if [ "$remain" -gt 0 ]; then
         head -c "$remain" "$entry_file" >> "$patch_ctx_file" || true
-        total_len=$char_budget
+        total_len=$budget
       fi
       break
     fi
   done
   if [ -s "$patch_ctx_file" ]; then
     {
-      echo
-      echo "## Patch samples (truncated by budget if necessary)"
+      echo "### Patch samples (truncated by budget if necessary)"
+      echo "Budget: chars=${budget}, top_files=${top_files}, hunks_per_file=${max_hunks_per_file}, max_commits=${max_commits}"
       cat "$patch_ctx_file"
     } >> "$ctx_file"
+    echo >> "$ctx_file"
+  fi
+}
+
+# Initialize output file from template
+if [ -f "${template_file}" ]; then
+  cp "${template_file}" "${out_file}"
+  tmp=$(mktemp)
+  jq --arg d "${label}" '.date = $d' "${out_file}" > "$tmp" && mv "$tmp" "${out_file}"
+else
+  echo "{}" > "${out_file}"
+fi
+
+load_report_config
+mapfile -t repo_entries < <(echo "${report_repo_list}" | jq -c '.[]')
+if [ "${#repo_entries[@]}" -eq 0 ]; then
+  repo_entries=()
+  repo_entries+=("$(printf '{"slug":"%s","repo_url":"","branch":""}' "${repo_slug}")")
+fi
+
+repo_count=${#repo_entries[@]}
+budget_per_repo="${char_budget}"
+if [ "${repo_count}" -gt 0 ] && [ "${char_budget}" -gt 0 ]; then
+  budget_per_repo=$(( char_budget / repo_count ))
+  if [ "${budget_per_repo}" -lt 50000 ] && [ "${char_budget}" -ge 50000 ]; then
+    budget_per_repo=50000
+  fi
+  if [ "${budget_per_repo}" -le 0 ]; then
+    budget_per_repo="${char_budget}"
   fi
 fi
+
+{
+  echo "# Multi-repo Commit Context"
+  echo "- Time window: ${start_ts} .. ${end_ts} (${TZ})"
+  echo "- Branch (trigger): ${CNB_BRANCH:-}"
+  echo "- Repos configured: ${repo_count}"
+  echo
+} > "${ctx_file}"
+
+for entry in "${repo_entries[@]}"; do
+  repo_url=$(echo "${entry}" | jq -r '.repo_url // ""')
+  repo_branch=$(echo "${entry}" | jq -r '.branch // ""')
+  repo_display=$(echo "${entry}" | jq -r '.display_name // ""')
+  slug_raw=$(echo "${entry}" | jq -r '.slug // ""')
+  slug=$(sanitize_slug "${slug_raw}")
+  if [ -z "${slug}" ]; then
+    base_slug=$(basename "${repo_url}")
+    slug=$(sanitize_slug "${base_slug:-repo}")
+  fi
+  repo_path=$(prepare_repo "${slug}" "${repo_url}" "${repo_branch}")
+  if [ -z "${repo_path}" ]; then
+    echo "## Repo: ${slug}" >> "${ctx_file}"
+    echo "> repository unavailable; skipped" >> "${ctx_file}"
+    echo >> "${ctx_file}"
+    continue
+  fi
+  collect_repo_context "${slug}" "${repo_path}" "${repo_branch}" "${repo_display}" "${repo_url}" "${budget_per_repo}"
+done
 
 # Try opencode to author a polished report from commit context
 # 调用 opencode 生成“按人员维度总结”的结构化中文汇报
@@ -328,6 +456,7 @@ try_opencode() {
   esac
   prompt="你是资深工程经理，需基于提交记录（含 numstat 以及必要时的采样补丁片段）生成 JSON 格式的${period_label}。\n"
   prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
+  prompt+="输入包含多个仓库的提交，请在概述与细项中标注仓库归属（建议用 [repo] 前缀），按“仓库 + 人员”维度组织。\n"
   prompt+="请读取提供的 template.json 结构，并输出填充后的 JSON 内容（不要包含 markdown 代码块标记）。\n"
   prompt+="内容要求：\n"
   prompt+="1. progress_summary: 针对非开发岗位的汇报。\n"
@@ -380,7 +509,7 @@ else
       # Fallback JSON
       jq '.progress_summary.overview = "AI generation failed, but commits exist."' "${out_file}" > "${out_file}.tmp" && mv "${out_file}.tmp" "${out_file}"
     else
-      jq '.progress_summary.overview = "No commits found."' "${out_file}" > "${out_file}.tmp" && mv "${out_file}.tmp" "${out_file}"
+      jq '.progress_summary.overview = "No commits found in configured repos."' "${out_file}" > "${out_file}.tmp" && mv "${out_file}.tmp" "${out_file}"
     fi
   fi
 fi

@@ -1294,7 +1294,15 @@ type AutomationConfig struct {
 	OutputBranch     string
 	OutputDir        string
 	ReportRepoSlug   string
+	ReportRepos      []ReportRepoConfig
 	UpdatedAt        time.Time
+}
+
+type ReportRepoConfig struct {
+	RepoURL     string `json:"repo_url"`
+	Branch      string `json:"branch,omitempty"`
+	Slug        string `json:"slug"`
+	DisplayName string `json:"display_name,omitempty"`
 }
 
 func (d *DB) GetAutomationConfig(ctx context.Context) (*AutomationConfig, error) {
@@ -1302,25 +1310,32 @@ func (d *DB) GetAutomationConfig(ctx context.Context) (*AutomationConfig, error)
 		return nil, sql.ErrConnDone
 	}
 	const q = `
-SELECT id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, updated_at
+SELECT id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, COALESCE(report_repos, '[]'::jsonb), updated_at
 FROM automation_configs
 ORDER BY id ASC
 LIMIT 1`
 	var cfg AutomationConfig
 	var statuses pq.StringArray
-	err := d.SQL.QueryRowContext(ctx, q).Scan(&cfg.ID, &cfg.TargetRepoURL, &cfg.TargetRepoBranch, &statuses, &cfg.OutputRepoURL, &cfg.OutputBranch, &cfg.OutputDir, &cfg.ReportRepoSlug, &cfg.UpdatedAt)
+	var repoJSON []byte
+	err := d.SQL.QueryRowContext(ctx, q).Scan(&cfg.ID, &cfg.TargetRepoURL, &cfg.TargetRepoBranch, &statuses, &cfg.OutputRepoURL, &cfg.OutputBranch, &cfg.OutputDir, &cfg.ReportRepoSlug, &repoJSON, &cfg.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		// If the table is missing (migration not yet applied), degrade gracefully.
 		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == "42P01" { // undefined_table
+		if errors.As(err, &pqErr) && (pqErr.Code == "42P01" || pqErr.Code == "42703") { // undefined_table or undefined_column
 			return nil, nil
 		}
 		return nil, err
 	}
 	cfg.PlaneStatuses = []string(statuses)
+	if len(repoJSON) == 0 {
+		repoJSON = []byte("[]")
+	}
+	if err := json.Unmarshal(repoJSON, &cfg.ReportRepos); err != nil {
+		cfg.ReportRepos = []ReportRepoConfig{}
+	}
 	return &cfg, nil
 }
 
@@ -1329,9 +1344,13 @@ func (d *DB) UpsertAutomationConfig(ctx context.Context, cfg AutomationConfig) e
 		return sql.ErrConnDone
 	}
 	now := time.Now()
+	repoJSON, err := json.Marshal(cfg.ReportRepos)
+	if err != nil {
+		return err
+	}
 	const q = `
-INSERT INTO automation_configs (id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, created_at, updated_at)
-VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $8)
+INSERT INTO automation_configs (id, target_repo_url, target_repo_branch, plane_statuses, output_repo_url, output_branch, output_dir, report_repo_slug, report_repos, created_at, updated_at)
+VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 ON CONFLICT (id) DO UPDATE SET
   target_repo_url    = EXCLUDED.target_repo_url,
   target_repo_branch = EXCLUDED.target_repo_branch,
@@ -1340,9 +1359,10 @@ ON CONFLICT (id) DO UPDATE SET
   output_branch      = EXCLUDED.output_branch,
   output_dir         = EXCLUDED.output_dir,
   report_repo_slug   = EXCLUDED.report_repo_slug,
+  report_repos       = EXCLUDED.report_repos,
   updated_at         = EXCLUDED.updated_at
 `
-	_, err := d.SQL.ExecContext(ctx, q,
+	_, err = d.SQL.ExecContext(ctx, q,
 		cfg.TargetRepoURL,
 		nullIfEmpty(cfg.TargetRepoBranch),
 		pq.StringArray(cfg.PlaneStatuses),
@@ -1350,6 +1370,7 @@ ON CONFLICT (id) DO UPDATE SET
 		nullIfEmpty(cfg.OutputBranch),
 		nullIfEmpty(cfg.OutputDir),
 		cfg.ReportRepoSlug,
+		repoJSON,
 		now,
 	)
 	return err

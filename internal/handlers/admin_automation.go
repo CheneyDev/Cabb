@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"path"
 	"strings"
 
 	"cabb/internal/store"
@@ -10,13 +11,14 @@ import (
 )
 
 type automationPayload struct {
-	TargetRepoURL    string   `json:"target_repo_url"`
-	TargetRepoBranch string   `json:"target_repo_branch"`
-	PlaneStatuses    []string `json:"plane_statuses"`
-	OutputRepoURL    string   `json:"output_repo_url"`
-	OutputBranch     string   `json:"output_branch"`
-	OutputDir        string   `json:"output_dir"`
-	ReportRepoSlug   string   `json:"report_repo_slug"`
+	TargetRepoURL    string                   `json:"target_repo_url"`
+	TargetRepoBranch string                   `json:"target_repo_branch"`
+	PlaneStatuses    []string                 `json:"plane_statuses"`
+	OutputRepoURL    string                   `json:"output_repo_url"`
+	OutputBranch     string                   `json:"output_branch"`
+	OutputDir        string                   `json:"output_dir"`
+	ReportRepoSlug   string                   `json:"report_repo_slug"`
+	ReportRepos      []store.ReportRepoConfig `json:"report_repos"`
 }
 
 func sanitizeStatuses(arr []string) []string {
@@ -26,6 +28,26 @@ func sanitizeStatuses(arr []string) []string {
 		if v != "" {
 			out = append(out, v)
 		}
+	}
+	return out
+}
+
+func sanitizeReportRepos(arr []store.ReportRepoConfig) []store.ReportRepoConfig {
+	out := []store.ReportRepoConfig{}
+	for _, r := range arr {
+		slug := strings.TrimSpace(r.Slug)
+		if slug == "" && r.RepoURL != "" {
+			slug = path.Base(strings.TrimSuffix(strings.TrimSpace(r.RepoURL), "/"))
+		}
+		if slug == "" {
+			continue
+		}
+		out = append(out, store.ReportRepoConfig{
+			RepoURL:     strings.TrimSpace(r.RepoURL),
+			Branch:      strings.TrimSpace(r.Branch),
+			Slug:        slug,
+			DisplayName: strings.TrimSpace(r.DisplayName),
+		})
 	}
 	return out
 }
@@ -50,6 +72,7 @@ func (h *Handler) AdminAutomationGet(c echo.Context) error {
 			OutputBranch:     "main",
 			OutputDir:        "issue-progress",
 			ReportRepoSlug:   "1024hub/plane-test",
+			ReportRepos:      []store.ReportRepoConfig{},
 		})
 	}
 	return c.JSON(http.StatusOK, automationPayload{
@@ -60,6 +83,7 @@ func (h *Handler) AdminAutomationGet(c echo.Context) error {
 		OutputBranch:     cfg.OutputBranch,
 		OutputDir:        cfg.OutputDir,
 		ReportRepoSlug:   cfg.ReportRepoSlug,
+		ReportRepos:      cfg.ReportRepos,
 	})
 }
 
@@ -80,6 +104,7 @@ func (h *Handler) AdminAutomationSave(c echo.Context) error {
 		OutputBranch:     strings.TrimSpace(payload.OutputBranch),
 		OutputDir:        strings.TrimSpace(payload.OutputDir),
 		ReportRepoSlug:   strings.TrimSpace(payload.ReportRepoSlug),
+		ReportRepos:      sanitizeReportRepos(payload.ReportRepos),
 	}
 	if err := h.db.UpsertAutomationConfig(c.Request().Context(), store.AutomationConfig{
 		TargetRepoURL:    cfg.TargetRepoURL,
@@ -89,6 +114,7 @@ func (h *Handler) AdminAutomationSave(c echo.Context) error {
 		OutputBranch:     cfg.OutputBranch,
 		OutputDir:        cfg.OutputDir,
 		ReportRepoSlug:   cfg.ReportRepoSlug,
+		ReportRepos:      cfg.ReportRepos,
 	}); err != nil {
 		return writeError(c, http.StatusInternalServerError, "db_error", "保存自动化配置失败", map[string]any{"error": err.Error()})
 	}

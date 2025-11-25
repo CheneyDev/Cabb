@@ -378,6 +378,40 @@ func (h *Handler) JobDailyReportNotify(c echo.Context) error {
 	})
 }
 
+// JobReportConfig exposes multi-repo reporting configuration to CI (auth: INTEGRATION_TOKEN).
+func (h *Handler) JobReportConfig(c echo.Context) error {
+	if !h.authorizeIntegration(c) {
+		return writeError(c, http.StatusUnauthorized, "unauthorized", "invalid integration token", nil)
+	}
+	if !hHasDB(h) {
+		return c.JSON(http.StatusOK, map[string]any{
+			"report_repos":    []store.ReportRepoConfig{},
+			"output_repo_url": "",
+			"output_branch":   "",
+			"output_dir":      "",
+		})
+	}
+	ctx := c.Request().Context()
+	cfg, err := h.db.GetAutomationConfig(ctx)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "db_error", "failed to load report config", map[string]any{"error": err.Error()})
+	}
+	if cfg == nil {
+		return c.JSON(http.StatusOK, map[string]any{
+			"report_repos":    []store.ReportRepoConfig{},
+			"output_repo_url": "",
+			"output_branch":   "",
+			"output_dir":      "",
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"report_repos":    cfg.ReportRepos,
+		"output_repo_url": cfg.OutputRepoURL,
+		"output_branch":   cfg.OutputBranch,
+		"output_dir":      cfg.OutputDir,
+	})
+}
+
 // JobIssueProgressTasks exposes active branch-linked issues with optional Lark chat bindings for CI to consume.
 // Auth: Bearer INTEGRATION_TOKEN (same as CNB ingest). Returns snapshots when available for title/description.
 func (h *Handler) JobIssueProgressTasks(c echo.Context) error {
