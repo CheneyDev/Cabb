@@ -504,6 +504,12 @@ try_opencode() {
     cat "${template_file}" >> "${ctx_file}"
   fi
 
+  # Debug: show ctx_file summary before calling opencode
+  echo "[debug] ctx_file path: $(pwd)/${ctx_file}" >&2
+  echo "[debug] ctx_file repos found: $(grep -c '^## Repo:' "${ctx_file}" 2>/dev/null || echo 0)" >&2
+  echo "[debug] ctx_file author sections: $(grep -c '^### Author counts' "${ctx_file}" 2>/dev/null || echo 0)" >&2
+  grep '^## Repo:' "${ctx_file}" 2>/dev/null | while read -r line; do echo "[debug] $line" >&2; done
+
   if opencode run "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${out_file}.tmp" 2>"tmp/opencode.stderr"; then
     mv "${out_file}.tmp" "${out_file}"
     return 0
