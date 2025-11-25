@@ -230,10 +230,10 @@ prepare_repo() {
       if [ -n "${CNB_TOKEN:-}" ]; then
         # Use URL-embedded credentials (more reliable than http.extraHeader)
         auth_url="${repo_url/https:\/\//https://cnb:${CNB_TOKEN}@}"
-        git clone --no-tags --filter=blob:none "${auth_url}" "${repo_path}" >/dev/null 2>&1 || true
+        git clone --no-tags "${auth_url}" "${repo_path}" >/dev/null 2>&1 || true
       fi
       if [ ! -d "${repo_path}/.git" ]; then
-        git clone --no-tags --filter=blob:none "${repo_url}" "${repo_path}" >/dev/null 2>&1 || true
+        git clone --no-tags "${repo_url}" "${repo_path}" >/dev/null 2>&1 || true
       fi
     fi
   fi
@@ -303,6 +303,13 @@ collect_repo_context() {
       --pretty=format:'%H%x09%an%x09%ad%x09%s' \
       > "${log_file}" || true
   fi
+
+  # Debug: output commit count for each repo
+  local commit_count=0
+  if [ -s "${log_file}" ]; then
+    commit_count=$(wc -l < "${log_file}" | tr -d ' ')
+  fi
+  echo "[info] repo ${slug}: ${commit_count} commits found in time window" >&2
 
   if [ ! -s "${log_file}" ]; then
     echo "> No commits found in this repo for the selected window." >> "${ctx_file}"
