@@ -270,13 +270,6 @@ collect_repo_context() {
   echo "- slug: ${slug}" >> "${ctx_file}"
   if [ -n "${repo_url}" ]; then
     echo "- repo_url: ${repo_url}" >> "${ctx_file}"
-    if [ -n "${CNB_TOKEN:-}" ]; then
-      echo "[info] checking access for ${repo_url}" >&2
-      auth_hdr="Authorization: Basic $(printf "cnb:%s" "${CNB_TOKEN}" | base64 | tr -d '\n')"
-      if curl -I -H "${auth_hdr}" "${repo_url%/}/-/raw/${branch:-main}/README.md" -o /dev/null -w "status=%{http_code}\n" -s; then
-        :
-      fi
-    fi
   fi
   if [ -n "${branch}" ]; then
     if git -C "${repo_path}" rev-parse --verify --quiet "${branch}" >/dev/null 2>&1; then
