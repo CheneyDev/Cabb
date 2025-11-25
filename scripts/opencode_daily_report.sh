@@ -163,7 +163,15 @@ sanitize_slug() {
 load_report_config() {
   local resp
   if [ -z "${report_repo_list}" ] && [ "${report_config_from_api}" = "1" ] && [ -n "${cabb_api_base}" ] && [ -n "${integration_token}" ]; then
-    resp=$(curl -sfSL -H "Authorization: Bearer ${integration_token}" "${cabb_api_base%/}/jobs/report/config" || true)
+    echo "[info] fetching report config from ${cabb_api_base%/}/jobs/report/config" >&2
+    resp=$(curl -w "\n%{http_code}" -sSL -H "Authorization: Bearer ${integration_token}" "${cabb_api_base%/}/jobs/report/config" || true)
+    local http_status body
+    http_status=$(printf "%s" "${resp}" | tail -n1)
+    body=$(printf "%s" "${resp}" | sed '$d')
+    if [ -n "${http_status}" ] && [ "${http_status}" != "200" ]; then
+      echo "[warn] report config api status=${http_status}, body=${body}" >&2
+    fi
+    resp="${body}"
     if [ -n "${resp}" ]; then
       report_repo_list=$(echo "${resp}" | jq -c '.report_repos // []' 2>/dev/null)
       api_publish_repo=$(echo "${resp}" | jq -r '.output_repo_url // empty' 2>/dev/null)
