@@ -96,6 +96,16 @@ func (h *Handler) AdminAutomationSave(c echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return writeError(c, http.StatusBadRequest, "invalid_json", "请求体无法解析", nil)
 	}
+	LogStructured("info", map[string]any{
+		"event":          "admin.automation.save.begin",
+		"report_repos":   len(payload.ReportRepos),
+		"target_repo":    strings.TrimSpace(payload.TargetRepoURL),
+		"output_repo":    strings.TrimSpace(payload.OutputRepoURL),
+		"report_repo":    strings.TrimSpace(payload.ReportRepoSlug),
+		"target_branch":  strings.TrimSpace(payload.TargetRepoBranch),
+		"output_branch":  strings.TrimSpace(payload.OutputBranch),
+		"plane_statuses": len(payload.PlaneStatuses),
+	})
 	cfg := automationPayload{
 		TargetRepoURL:    strings.TrimSpace(payload.TargetRepoURL),
 		TargetRepoBranch: strings.TrimSpace(payload.TargetRepoBranch),
@@ -116,7 +126,17 @@ func (h *Handler) AdminAutomationSave(c echo.Context) error {
 		ReportRepoSlug:   cfg.ReportRepoSlug,
 		ReportRepos:      cfg.ReportRepos,
 	}); err != nil {
+		LogStructured("error", map[string]any{
+			"event": "admin.automation.save.failed",
+			"error": err.Error(),
+		})
 		return writeError(c, http.StatusInternalServerError, "db_error", "保存自动化配置失败", map[string]any{"error": err.Error()})
 	}
+	LogStructured("info", map[string]any{
+		"event":        "admin.automation.save.success",
+		"report_repos": len(cfg.ReportRepos),
+		"target_repo":  cfg.TargetRepoURL,
+		"output_repo":  cfg.OutputRepoURL,
+	})
 	return c.JSON(http.StatusOK, map[string]any{"saved": true})
 }
