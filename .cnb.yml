@@ -34,7 +34,7 @@ main:
         REPORT_PUBLISH_DIR: "ai-report"
         # 从后端拉取多仓配置
         REPORT_CONFIG_FROM_API: "1"
-        CABB_API_BASE: "https://cabb.onrender.com"
+        CABB_API_BASE: "https://api.cnb-plane.1024hub.org"
       # 秘钥仓库导入（参考 .cnb/web_trigger.yml 的 ENV_URL）
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
@@ -92,7 +92,7 @@ main:
         REPORT_PUBLISH_BRANCH: "main"
         REPORT_PUBLISH_DIR: "ai-report"
         REPORT_CONFIG_FROM_API: "1"
-        CABB_API_BASE: "https://cabb.onrender.com"
+        CABB_API_BASE: "https://api.cnb-plane.1024hub.org"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate daily report
@@ -147,7 +147,7 @@ main:
         REPORT_PUBLISH_BRANCH: "main"
         REPORT_PUBLISH_DIR: "ai-report"
         REPORT_CONFIG_FROM_API: "1"
-        CABB_API_BASE: "https://cabb.onrender.com"
+        CABB_API_BASE: "https://api.cnb-plane.1024hub.org"
       imports: https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/main/env.yml
       stages:
         - name: Install deps and generate weekly report
