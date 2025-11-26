@@ -548,3 +548,47 @@ func (c *Client) ListProjects(ctx context.Context, bearer, workspaceSlug string)
 	}
 	return response.Results, nil
 }
+
+// Member represents a Plane workspace member
+type Member struct {
+	ID          string `json:"id"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
+}
+
+// ListWorkspaceMembers fetches all members in a workspace
+// GET /api/v1/workspaces/{workspace-slug}/members/
+func (c *Client) ListWorkspaceMembers(ctx context.Context, bearer, workspaceSlug string) ([]Member, error) {
+	if strings.TrimSpace(workspaceSlug) == "" {
+		return nil, fmt.Errorf("workspace slug is empty")
+	}
+	path := fmt.Sprintf("/api/v1/workspaces/%s/members/", url.PathEscape(workspaceSlug))
+	ep, err := c.join(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-API-Key", bearer)
+	hc := c.httpClient()
+	hc.Timeout = 10 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plane list members status=%d, body=%s", resp.StatusCode, string(body))
+	}
+	var members []Member
+	if err := json.NewDecoder(resp.Body).Decode(&members); err != nil {
+		return nil, err
+	}
+	return members, nil
+}

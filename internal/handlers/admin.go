@@ -285,6 +285,7 @@ func (h *Handler) AdminUsers(c echo.Context) error {
 		Mappings []struct {
 			CNBUserID   string `json:"cnb_user_id"`
 			PlaneUserID string `json:"plane_user_id"`
+			LarkUserID  string `json:"lark_user_id"`
 			DisplayName string `json:"display_name"`
 		} `json:"mappings"`
 	}
@@ -295,7 +296,7 @@ func (h *Handler) AdminUsers(c echo.Context) error {
 		if m.CNBUserID == "" || m.PlaneUserID == "" {
 			return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 cnb_user_id/plane_user_id", nil)
 		}
-		if err := h.db.UpsertUserMapping(c.Request().Context(), m.PlaneUserID, m.CNBUserID, m.DisplayName); err != nil {
+		if err := h.db.UpsertUserMapping(c.Request().Context(), m.PlaneUserID, m.CNBUserID, m.LarkUserID, m.DisplayName); err != nil {
 			return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
 		}
 	}

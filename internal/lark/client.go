@@ -477,3 +477,79 @@ func (c *Client) GetChatShareLink(ctx context.Context, tenantToken, chatID, vali
     }
     return &result.Data, nil
 }
+
+// User represents a Lark user
+type User struct {
+	UnionID     string `json:"union_id"`
+	UserID      string `json:"user_id"`
+	OpenID      string `json:"open_id"`
+	Name        string `json:"name"`
+	EnName      string `json:"en_name"`
+	Nickname    string `json:"nickname"`
+	Email       string `json:"email"`
+	Avatar      struct {
+		Avatar72 string `json:"avatar_72"`
+	} `json:"avatar"`
+}
+
+// FindByDepartment fetches users in a department.
+// GET /open-apis/contact/v3/users/find_by_department
+func (c *Client) FindByDepartment(ctx context.Context, tenantToken string, departmentID string, pageSize int, pageToken string) ([]User, string, bool, error) {
+	if tenantToken == "" {
+		return nil, "", false, errors.New("missing tenant token")
+	}
+	ep := strings.TrimRight(c.base(), "/") + "/open-apis/contact/v3/users/find_by_department"
+	
+	// Build query params
+	params := url.Values{}
+	params.Set("department_id", departmentID)
+	params.Set("department_id_type", "open_department_id") // Default
+	params.Set("user_id_type", "open_id") // Default
+	if pageSize > 0 {
+		params.Set("page_size", fmt.Sprintf("%d", pageSize))
+	}
+	if pageToken != "" {
+		params.Set("page_token", pageToken)
+	}
+	
+	ep += "?" + params.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, "", false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, "", false, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		var er struct{ Code int `json:"code"`; Msg string `json:"msg"` }
+		_ = json.Unmarshal(body, &er)
+		return nil, "", false, fmt.Errorf("lark find users status=%d code=%d msg=%s", resp.StatusCode, er.Code, strings.TrimSpace(er.Msg))
+	}
+
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			HasMore   bool   `json:"has_more"`
+			PageToken string `json:"page_token"`
+			Items     []User `json:"items"`
+		} `json:"data"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, "", false, err
+	}
+	
+	if result.Code != 0 {
+		return nil, "", false, fmt.Errorf("lark find users failed: %s", result.Msg)
+	}
+	
+	return result.Data.Items, result.Data.PageToken, result.Data.HasMore, nil
+}

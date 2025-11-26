@@ -549,20 +549,20 @@ type UserMapping struct {
 	UpdatedAt   time.Time
 }
 
-func (d *DB) UpsertUserMapping(ctx context.Context, planeUserID, cnbUserID, displayName string) error {
+func (d *DB) UpsertUserMapping(ctx context.Context, planeUserID, cnbUserID, larkUserID, displayName string) error {
 	if d == nil || d.SQL == nil {
 		return sql.ErrConnDone
 	}
-	const upd = `UPDATE user_mappings SET plane_user_id=$1::uuid, display_name=COALESCE($3, display_name), updated_at=now() WHERE cnb_user_id=$2`
-	res, err := d.SQL.ExecContext(ctx, upd, planeUserID, cnbUserID, nullIfEmpty(displayName))
+	const upd = `UPDATE user_mappings SET plane_user_id=$1::uuid, lark_user_id=$4, display_name=COALESCE($3, display_name), updated_at=now() WHERE cnb_user_id=$2`
+	res, err := d.SQL.ExecContext(ctx, upd, planeUserID, cnbUserID, nullIfEmpty(displayName), nullIfEmpty(larkUserID))
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
 		return nil
 	}
-	const ins = `INSERT INTO user_mappings (plane_user_id, cnb_user_id, display_name, created_at, updated_at) VALUES ($1::uuid,$2,$3,now(),now())`
-	_, err = d.SQL.ExecContext(ctx, ins, planeUserID, cnbUserID, nullIfEmpty(displayName))
+	const ins = `INSERT INTO user_mappings (plane_user_id, cnb_user_id, display_name, lark_user_id, created_at, updated_at) VALUES ($1::uuid,$2,$3,$4,now(),now())`
+	_, err = d.SQL.ExecContext(ctx, ins, planeUserID, cnbUserID, nullIfEmpty(displayName), nullIfEmpty(larkUserID))
 	return err
 }
 
