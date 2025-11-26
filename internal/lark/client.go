@@ -689,3 +689,147 @@ func (c *Client) FindAllUsers(ctx context.Context, tenantToken string) ([]User, 
 	}
 	return allUsers, nil
 }
+
+// BatchSendResult represents the result of a batch send operation
+type BatchSendResult struct {
+	MessageID            string   `json:"message_id"`
+	InvalidDepartmentIDs []string `json:"invalid_department_ids"`
+	InvalidOpenIDs       []string `json:"invalid_open_ids"`
+	InvalidUserIDs       []string `json:"invalid_user_ids"`
+	InvalidUnionIDs      []string `json:"invalid_union_ids"`
+}
+
+// BatchSendCard sends an interactive card to multiple users or departments.
+// POST /open-apis/message/v4/batch_send/
+// At least one of openIDs, userIDs, unionIDs, or departmentIDs must be provided.
+func (c *Client) BatchSendCard(ctx context.Context, tenantToken string, openIDs, departmentIDs []string, card map[string]any) (*BatchSendResult, error) {
+	if tenantToken == "" {
+		return nil, errors.New("missing tenant token")
+	}
+	if len(openIDs) == 0 && len(departmentIDs) == 0 {
+		return nil, errors.New("at least one of openIDs or departmentIDs must be provided")
+	}
+
+	ep := strings.TrimRight(c.base(), "/") + "/open-apis/message/v4/batch_send/"
+
+	payload := map[string]any{
+		"msg_type": "interactive",
+		"card":     card,
+	}
+	if len(openIDs) > 0 {
+		payload["open_ids"] = openIDs
+	}
+	if len(departmentIDs) > 0 {
+		payload["department_ids"] = departmentIDs
+	}
+
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			MessageID            string   `json:"message_id"`
+			InvalidDepartmentIDs []string `json:"invalid_department_ids"`
+			InvalidOpenIDs       []string `json:"invalid_open_ids"`
+			InvalidUserIDs       []string `json:"invalid_user_ids"`
+			InvalidUnionIDs      []string `json:"invalid_union_ids"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if result.Code != 0 {
+		return nil, fmt.Errorf("batch send failed: code=%d msg=%s", result.Code, result.Msg)
+	}
+
+	return &BatchSendResult{
+		MessageID:            result.Data.MessageID,
+		InvalidDepartmentIDs: result.Data.InvalidDepartmentIDs,
+		InvalidOpenIDs:       result.Data.InvalidOpenIDs,
+		InvalidUserIDs:       result.Data.InvalidUserIDs,
+		InvalidUnionIDs:      result.Data.InvalidUnionIDs,
+	}, nil
+}
+
+// GetDepartment fetches a single department info.
+// GET /open-apis/contact/v3/departments/:department_id
+func (c *Client) GetDepartment(ctx context.Context, tenantToken, departmentID string) (*Department, error) {
+	if tenantToken == "" {
+		return nil, errors.New("missing tenant token")
+	}
+	if departmentID == "" {
+		departmentID = "0"
+	}
+
+	pathID := url.PathEscape(departmentID)
+	ep := strings.TrimRight(c.base(), "/") + "/open-apis/contact/v3/departments/" + pathID + "?department_id_type=open_department_id"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Department Department `json:"department"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if result.Code != 0 {
+		return nil, fmt.Errorf("get department failed: %s", result.Msg)
+	}
+	return &result.Data.Department, nil
+}
+
+// ListAllDepartments fetches all departments recursively from root.
+func (c *Client) ListAllDepartments(ctx context.Context, tenantToken string) ([]Department, error) {
+	var allDepts []Department
+
+	// Add root department
+	root, err := c.GetDepartment(ctx, tenantToken, "0")
+	if err == nil && root != nil {
+		allDepts = append(allDepts, *root)
+	}
+
+	// Get all children recursively
+	pageToken := ""
+	for {
+		depts, nextToken, hasMore, err := c.GetChildrenDepartment(ctx, tenantToken, "0", true, 50, pageToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch departments: %w", err)
+		}
+		allDepts = append(allDepts, depts...)
+		if !hasMore {
+			break
+		}
+		pageToken = nextToken
+	}
+
+	return allDepts, nil
+}

@@ -1,13 +1,9 @@
 package handlers
 
 import (
-	"context"
-	"encoding/json"
 	"strings"
 	"time"
 
-	"cabb/internal/cnb"
-	"cabb/internal/lark"
 	"cabb/internal/store"
 	"cabb/pkg/config"
 )
@@ -47,9 +43,7 @@ type ReportJSON struct {
 //   - Weekly: Mon 09:55
 //   - Monthly: 1st of month 11:00
 func StartReportScheduler(cfg config.Config, db *store.DB) {
-	if !cfg.ReportNotifyEnabled || cfg.ReportNotifyChatID == "" {
-		return
-	}
+	// Check if Lark credentials are configured
 	if cfg.LarkAppID == "" || cfg.LarkAppSecret == "" {
 		return
 	}
@@ -77,13 +71,13 @@ func StartReportScheduler(cfg config.Config, db *store.DB) {
 				// Send previous day's report at 09:55
 				if hhmm == "09:55" {
 					yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
-					go sendReport(cfg, "daily", yesterday)
+					go sendReportWithConfig(cfg, db, "daily", yesterday)
 				}
 			case time.Friday:
 				// Generate at 17:00, send at 17:30 (same day)
 				if hhmm == "17:30" {
 					today := now.Format("2006-01-02")
-					go sendReport(cfg, "daily", today)
+					go sendReportWithConfig(cfg, db, "daily", today)
 				}
 			}
 
@@ -93,7 +87,7 @@ func StartReportScheduler(cfg config.Config, db *store.DB) {
 				lastMonday := now.AddDate(0, 0, -7)
 				lastSunday := now.AddDate(0, 0, -1)
 				weekLabel := lastMonday.Format("2006-01-02") + "_to_" + lastSunday.Format("2006-01-02")
-				go sendReport(cfg, "weekly", weekLabel)
+				go sendReportWithConfig(cfg, db, "weekly", weekLabel)
 			}
 
 			// Monthly report: 1st of month at 11:00
@@ -101,92 +95,13 @@ func StartReportScheduler(cfg config.Config, db *store.DB) {
 				// Last month's report
 				lastMonth := now.AddDate(0, -1, 0)
 				monthLabel := lastMonth.Format("2006-01")
-				go sendReport(cfg, "monthly", monthLabel)
+				go sendReportWithConfig(cfg, db, "monthly", monthLabel)
 			}
 		}
 	}()
 }
 
-func sendReport(cfg config.Config, reportType, label string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 
-	cnbClient := &cnb.Client{
-		BaseURL: cfg.CNBBaseURL,
-		Token:   cfg.CNBAppToken,
-	}
-
-	// Determine file path based on report type
-	// Path format: ai-report/{type}/report-{label}.json
-	var jsonPath string
-	switch reportType {
-	case "daily":
-		jsonPath = "ai-report/daily/report-" + label + ".json"
-	case "weekly":
-		jsonPath = "ai-report/weekly/report-" + label + ".json"
-	case "monthly":
-		jsonPath = "ai-report/monthly/report-" + label + ".json"
-	default:
-		return
-	}
-
-	// Fetch JSON from repo
-	content, err := cnbClient.GetFileContent(ctx, cfg.ReportRepo, cfg.ReportBranch, jsonPath)
-	if err != nil {
-		LogStructured("error", map[string]any{
-			"event":  "report.scheduler.fetch",
-			"type":   reportType,
-			"label":  label,
-			"path":   jsonPath,
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	var report ReportJSON
-	if err := json.Unmarshal(content, &report); err != nil {
-		LogStructured("error", map[string]any{
-			"event": "report.scheduler.parse",
-			"type":  reportType,
-			"label": label,
-			"error": err.Error(),
-		})
-		return
-	}
-
-	// Build Lark card
-	card := buildReportCard(report)
-
-	// Send to Lark
-	larkClient := lark.NewClient(cfg.LarkAppID, cfg.LarkAppSecret)
-	token, _, err := larkClient.TenantAccessToken(ctx)
-	if err != nil {
-		LogStructured("error", map[string]any{
-			"event": "report.scheduler.lark_token",
-			"error": err.Error(),
-		})
-		return
-	}
-
-	if err := larkClient.SendCardToChat(ctx, token, cfg.ReportNotifyChatID, card); err != nil {
-		LogStructured("error", map[string]any{
-			"event":   "report.scheduler.send",
-			"type":    reportType,
-			"label":   label,
-			"chat_id": cfg.ReportNotifyChatID,
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	LogStructured("info", map[string]any{
-		"event":   "report.scheduler.send",
-		"type":    reportType,
-		"label":   label,
-		"chat_id": cfg.ReportNotifyChatID,
-		"result":  "success",
-	})
-}
 
 func buildReportCard(r ReportJSON) map[string]any {
 	// Determine title and color based on type

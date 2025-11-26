@@ -1468,3 +1468,114 @@ ORDER BY created_at DESC`
 	}
 	return links, rows.Err()
 }
+
+// ReportNotifyConfig represents the report notification configuration
+type ReportNotifyConfig struct {
+	ID             int                    `json:"id"`
+	NotifyType     string                 `json:"notify_type"`      // 'chat', 'users', 'departments'
+	ChatID         string                 `json:"chat_id"`
+	UserIDs        []ReportNotifyTarget   `json:"user_ids"`
+	DepartmentIDs  []ReportNotifyTarget   `json:"department_ids"`
+	DailyEnabled   bool                   `json:"daily_enabled"`
+	WeeklyEnabled  bool                   `json:"weekly_enabled"`
+	MonthlyEnabled bool                   `json:"monthly_enabled"`
+}
+
+// ReportNotifyTarget represents a user or department target
+type ReportNotifyTarget struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetReportNotifyConfig retrieves the report notification configuration
+func (d *DB) GetReportNotifyConfig(ctx context.Context) (*ReportNotifyConfig, error) {
+	if d == nil || d.SQL == nil {
+		return nil, sql.ErrConnDone
+	}
+	const q = `
+SELECT id, notify_type, chat_id, user_ids, department_ids, daily_enabled, weekly_enabled, monthly_enabled
+FROM report_notify_configs
+WHERE id = 1
+LIMIT 1`
+	
+	var cfg ReportNotifyConfig
+	var userIDsJSON, deptIDsJSON []byte
+	err := d.SQL.QueryRowContext(ctx, q).Scan(
+		&cfg.ID,
+		&cfg.NotifyType,
+		&cfg.ChatID,
+		&userIDsJSON,
+		&deptIDsJSON,
+		&cfg.DailyEnabled,
+		&cfg.WeeklyEnabled,
+		&cfg.MonthlyEnabled,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Return default config
+			return &ReportNotifyConfig{
+				ID:             1,
+				NotifyType:     "chat",
+				ChatID:         "",
+				UserIDs:        []ReportNotifyTarget{},
+				DepartmentIDs:  []ReportNotifyTarget{},
+				DailyEnabled:   true,
+				WeeklyEnabled:  true,
+				MonthlyEnabled: true,
+			}, nil
+		}
+		return nil, err
+	}
+
+	// Parse JSON arrays
+	if len(userIDsJSON) > 0 {
+		_ = json.Unmarshal(userIDsJSON, &cfg.UserIDs)
+	}
+	if cfg.UserIDs == nil {
+		cfg.UserIDs = []ReportNotifyTarget{}
+	}
+	if len(deptIDsJSON) > 0 {
+		_ = json.Unmarshal(deptIDsJSON, &cfg.DepartmentIDs)
+	}
+	if cfg.DepartmentIDs == nil {
+		cfg.DepartmentIDs = []ReportNotifyTarget{}
+	}
+
+	return &cfg, nil
+}
+
+// SaveReportNotifyConfig saves the report notification configuration
+func (d *DB) SaveReportNotifyConfig(ctx context.Context, cfg *ReportNotifyConfig) error {
+	if d == nil || d.SQL == nil {
+		return sql.ErrConnDone
+	}
+
+	userIDsJSON, _ := json.Marshal(cfg.UserIDs)
+	deptIDsJSON, _ := json.Marshal(cfg.DepartmentIDs)
+	now := time.Now()
+
+	const q = `
+INSERT INTO report_notify_configs (id, notify_type, chat_id, user_ids, department_ids, daily_enabled, weekly_enabled, monthly_enabled, created_at, updated_at)
+VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $8)
+ON CONFLICT (id) DO UPDATE SET
+  notify_type     = EXCLUDED.notify_type,
+  chat_id         = EXCLUDED.chat_id,
+  user_ids        = EXCLUDED.user_ids,
+  department_ids  = EXCLUDED.department_ids,
+  daily_enabled   = EXCLUDED.daily_enabled,
+  weekly_enabled  = EXCLUDED.weekly_enabled,
+  monthly_enabled = EXCLUDED.monthly_enabled,
+  updated_at      = EXCLUDED.updated_at
+`
+	_, err := d.SQL.ExecContext(ctx, q,
+		cfg.NotifyType,
+		cfg.ChatID,
+		userIDsJSON,
+		deptIDsJSON,
+		cfg.DailyEnabled,
+		cfg.WeeklyEnabled,
+		cfg.MonthlyEnabled,
+		now,
+	)
+	return err
+}
