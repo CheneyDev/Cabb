@@ -473,6 +473,7 @@ collect_repo_context() {
   echo >> "${ctx_file}"
 
   # 输出提交详情（包含 numstat）
+  # 注意：使用 || true 忽略 SIGPIPE（当 head 提前退出时 git 会收到此信号）
   echo "### Commit details (numstat + message)" >> "${ctx_file}"
   if [ "${revset}" = "--all" ]; then
     git -C "${repo_path}" log --all \
@@ -480,14 +481,14 @@ collect_repo_context() {
       --date=iso-local \
       --numstat \
       --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
-      | head -n "${numstat_lines}" >> "${ctx_file}"
+      | head -n "${numstat_lines}" >> "${ctx_file}" || true
   else
     git -C "${repo_path}" log "${revset}" \
       --since="${start_ts}" --until="${end_ts}" \
       --date=iso-local \
       --numstat \
       --pretty=format:'---%ncommit %H%nauthor %an <%ae>%ndate %ad%ntitle %s%nbody %b' \
-      | head -n "${numstat_lines}" >> "${ctx_file}"
+      | head -n "${numstat_lines}" >> "${ctx_file}" || true
   fi
   echo >> "${ctx_file}"
 
