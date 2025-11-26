@@ -45,16 +45,20 @@ func (h *Handler) AdminReportNotifyConfigSave(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// AdminReportNotifyTest sends a test notification to the current user
+// AdminReportNotifyTest sends a test notification based on current config
 func (h *Handler) AdminReportNotifyTest(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Get current user's open_id from session or request
 	var req struct {
-		OpenID string `json:"open_id"`
+		OpenID string `json:"open_id"` // optional, for user mode
+		ChatID string `json:"chat_id"` // optional, for chat mode
 	}
-	if err := c.Bind(&req); err != nil || req.OpenID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "open_id is required"})
+	_ = c.Bind(&req)
+
+	// Get current config to determine test method
+	notifyCfg, err := h.db.GetReportNotifyConfig(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to get config: " + err.Error()})
 	}
 
 	// Build a test card
@@ -69,6 +73,7 @@ func (h *Handler) AdminReportNotifyTest(c echo.Context) error {
 			"elements": []map[string]any{
 				{"tag": "markdown", "content": "这是一条测试通知，用于验证报告推送功能是否正常工作。"},
 				{"tag": "markdown", "content": "**时间**: " + time.Now().Format("2006-01-02 15:04:05")},
+				{"tag": "markdown", "content": "**推送方式**: " + notifyCfg.NotifyType},
 			},
 		},
 	}
@@ -79,15 +84,49 @@ func (h *Handler) AdminReportNotifyTest(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to get lark token: " + err.Error()})
 	}
 
-	result, err := larkClient.BatchSendCard(ctx, token, []string{req.OpenID}, nil, testCard)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send test message: " + err.Error()})
-	}
+	switch notifyCfg.NotifyType {
+	case "chat":
+		chatID := req.ChatID
+		if chatID == "" {
+			chatID = notifyCfg.ChatID
+		}
+		if chatID == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "请先配置群聊 Chat ID"})
+		}
+		if err := larkClient.SendCardToChat(ctx, token, chatID, testCard); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "发送失败: " + err.Error()})
+		}
+		return c.JSON(http.StatusOK, map[string]any{"status": "ok", "method": "chat", "chat_id": chatID})
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"status":     "ok",
-		"message_id": result.MessageID,
-	})
+	case "users":
+		openID := req.OpenID
+		if openID == "" && len(notifyCfg.UserIDs) > 0 {
+			openID = notifyCfg.UserIDs[0].ID
+		}
+		if openID == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "请先选择至少一个用户"})
+		}
+		result, err := larkClient.BatchSendCard(ctx, token, []string{openID}, nil, testCard)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "发送失败: " + err.Error()})
+		}
+		return c.JSON(http.StatusOK, map[string]any{"status": "ok", "method": "users", "message_id": result.MessageID})
+
+	case "departments":
+		if len(notifyCfg.DepartmentIDs) == 0 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "请先选择至少一个部门"})
+		}
+		// Only send to first department for test
+		deptID := notifyCfg.DepartmentIDs[0].ID
+		result, err := larkClient.BatchSendCard(ctx, token, nil, []string{deptID}, testCard)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "发送失败: " + err.Error()})
+		}
+		return c.JSON(http.StatusOK, map[string]any{"status": "ok", "method": "departments", "message_id": result.MessageID, "department": notifyCfg.DepartmentIDs[0].Name})
+
+	default:
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "未知的推送方式"})
+	}
 }
 
 // AdminReportNotifySend manually triggers a report notification
