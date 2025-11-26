@@ -29,26 +29,10 @@ func (h *Handler) AdminLarkUsers(c echo.Context) error {
 		return writeError(c, http.StatusInternalServerError, "lark_token_error", "failed to get tenant token", map[string]any{"error": err.Error()})
 	}
 
-	// 3. Fetch Users (Root Department)
-	// We'll fetch up to 200 users for now to avoid performance issues
-	var allUsers []lark.User
-	pageToken := ""
-	maxUsers := 200
-
-	for {
-		users, nextToken, hasMore, err := client.FindByDepartment(ctx, token, "0", 50, pageToken)
-		if err != nil {
-			// If we fail on first page, return error. If later, return partial results.
-			if len(allUsers) == 0 {
-				return writeError(c, http.StatusInternalServerError, "lark_api_error", "failed to fetch users", map[string]any{"error": err.Error()})
-			}
-			break
-		}
-		allUsers = append(allUsers, users...)
-		if !hasMore || len(allUsers) >= maxUsers {
-			break
-		}
-		pageToken = nextToken
+	// 3. Fetch All Users (Recursive)
+	allUsers, err := client.FindAllUsers(ctx, token)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "lark_api_error", "failed to fetch users", map[string]any{"error": err.Error()})
 	}
 
 	// 4. Sort by Name

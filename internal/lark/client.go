@@ -494,6 +494,8 @@ type User struct {
 
 // FindByDepartment fetches users in a department.
 // GET /open-apis/contact/v3/users/find_by_department
+// FindByDepartment fetches users in a department.
+// GET /open-apis/contact/v3/users/find_by_department
 func (c *Client) FindByDepartment(ctx context.Context, tenantToken string, departmentID string, pageSize int, pageToken string) ([]User, string, bool, error) {
 	if tenantToken == "" {
 		return nil, "", false, errors.New("missing tenant token")
@@ -552,4 +554,138 @@ func (c *Client) FindByDepartment(ctx context.Context, tenantToken string, depar
 	}
 	
 	return result.Data.Items, result.Data.PageToken, result.Data.HasMore, nil
+}
+
+type Department struct {
+	Name             string `json:"name"`
+	DepartmentID     string `json:"department_id"`
+	OpenDepartmentID string `json:"open_department_id"`
+	ParentDepartmentID string `json:"parent_department_id"`
+}
+
+// GetChildrenDepartment fetches sub-departments.
+// GET /open-apis/contact/v3/departments/:department_id/children
+func (c *Client) GetChildrenDepartment(ctx context.Context, tenantToken string, departmentID string, fetchChild bool, pageSize int, pageToken string) ([]Department, string, bool, error) {
+	if tenantToken == "" {
+		return nil, "", false, errors.New("missing tenant token")
+	}
+	// Default to root if empty
+	if departmentID == "" {
+		departmentID = "0"
+	}
+	
+	pathID := url.PathEscape(departmentID)
+	ep := strings.TrimRight(c.base(), "/") + "/open-apis/contact/v3/departments/" + pathID + "/children"
+	
+	params := url.Values{}
+	params.Set("department_id_type", "open_department_id")
+	if fetchChild {
+		params.Set("fetch_child", "true")
+	}
+	if pageSize > 0 {
+		params.Set("page_size", fmt.Sprintf("%d", pageSize))
+	}
+	if pageToken != "" {
+		params.Set("page_token", pageToken)
+	}
+	ep += "?" + params.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, "", false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, "", false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		var er struct{ Code int `json:"code"`; Msg string `json:"msg"` }
+		_ = json.Unmarshal(body, &er)
+		return nil, "", false, fmt.Errorf("lark get children department status=%d code=%d msg=%s", resp.StatusCode, er.Code, strings.TrimSpace(er.Msg))
+	}
+
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			HasMore   bool         `json:"has_more"`
+			PageToken string       `json:"page_token"`
+			Items     []Department `json:"items"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, "", false, err
+	}
+
+	if result.Code != 0 {
+		return nil, "", false, fmt.Errorf("lark get children department failed: %s", result.Msg)
+	}
+
+	return result.Data.Items, result.Data.PageToken, result.Data.HasMore, nil
+}
+
+// FindAllUsers recursively fetches all users from all departments.
+func (c *Client) FindAllUsers(ctx context.Context, tenantToken string) ([]User, error) {
+	// 1. Get all departments (recursive)
+	var allDepts []Department
+	// Add root department manually as GetChildrenDepartment with fetch_child=true returns children, not root itself
+	allDepts = append(allDepts, Department{OpenDepartmentID: "0"})
+	
+	pageToken := ""
+	for {
+		depts, nextToken, hasMore, err := c.GetChildrenDepartment(ctx, tenantToken, "0", true, 50, pageToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch departments: %w", err)
+		}
+		allDepts = append(allDepts, depts...)
+		if !hasMore {
+			break
+		}
+		pageToken = nextToken
+	}
+
+	// 2. Fetch users for each department
+	userMap := make(map[string]User)
+	for _, dept := range allDepts {
+		deptID := dept.OpenDepartmentID
+		if deptID == "" {
+			deptID = dept.DepartmentID
+		}
+		if deptID == "" {
+			continue
+		}
+
+		userPageToken := ""
+		for {
+			users, nextToken, hasMore, err := c.FindByDepartment(ctx, tenantToken, deptID, 50, userPageToken)
+			if err != nil {
+				// Log error but continue? Or fail? For now, fail to be safe.
+				// In production, might want to skip inaccessible departments.
+				// return nil, fmt.Errorf("failed to fetch users for dept %s: %w", deptID, err)
+				// Let's just log and continue to be robust
+				fmt.Printf("Warning: failed to fetch users for dept %s: %v\n", deptID, err)
+				break 
+			}
+			for _, u := range users {
+				userMap[u.OpenID] = u
+			}
+			if !hasMore {
+				break
+			}
+			userPageToken = nextToken
+		}
+	}
+
+	// 3. Convert map to slice
+	var allUsers []User
+	for _, u := range userMap {
+		allUsers = append(allUsers, u)
+	}
+	return allUsers, nil
 }
