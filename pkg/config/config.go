@@ -28,6 +28,7 @@ type Config struct {
 	IntegrationToken   string
 	CNBBaseURL         string
 	CNBOutboundEnabled bool
+	CNBMemberRepo      string
 
 	// Optional CNB path overrides
 	CNBIssueCreatePath  string
@@ -92,6 +93,7 @@ func FromEnv() Config {
 		IntegrationToken:   os.Getenv("INTEGRATION_TOKEN"),
 		CNBBaseURL:         os.Getenv("CNB_BASE_URL"),
 		CNBOutboundEnabled: boolFromEnv("CNB_OUTBOUND_ENABLED", true),
+		CNBMemberRepo:      strFromEnv("CNB_MEMBER_REPO", "1024hub/plane-test"),
 
 		CNBIssueCreatePath:  os.Getenv("CNB_ISSUE_CREATE_PATH"),
 		CNBIssueUpdatePath:  os.Getenv("CNB_ISSUE_UPDATE_PATH"),

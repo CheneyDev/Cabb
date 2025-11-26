@@ -959,3 +959,113 @@ func (c *Client) GetFileContent(ctx context.Context, repo, ref, path string) ([]
 	}
 	return io.ReadAll(resp.Body)
 }
+
+// Member represents a CNB user member.
+type Member struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	Avatar      string `json:"avatar"`
+	AccessLevel string `json:"access_level"`
+}
+
+// InheritedMemberGroup represents a group of inherited members.
+type InheritedMemberGroup struct {
+	InheritPath string   `json:"inherit_path"`
+	Total       int      `json:"total"`
+	Users       []Member `json:"users"`
+}
+
+// ListRepoMembers lists direct members of a repo.
+func (c *Client) ListRepoMembers(ctx context.Context, repo string, page, pageSize int) ([]Member, error) {
+	if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+		return nil, errors.New("missing CNB base URL or token")
+	}
+	p, err := expand("/{repo}/-/members", repo, "")
+	if err != nil {
+		return nil, err
+	}
+	ep, err := c.join(p)
+	if err != nil {
+		return nil, err
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if u, err2 := url.Parse(ep); err2 == nil {
+		q := u.Query()
+		q.Set("page", fmt.Sprintf("%d", page))
+		q.Set("page_size", fmt.Sprintf("%d", pageSize))
+		u.RawQuery = q.Encode()
+		ep = u.String()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("cnb list members status=%d", resp.StatusCode)
+	}
+	var out []Member
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListRepoInheritedMembers lists inherited members of a repo.
+func (c *Client) ListRepoInheritedMembers(ctx context.Context, repo string, page, pageSize int) ([]InheritedMemberGroup, error) {
+	if strings.TrimSpace(c.BaseURL) == "" || strings.TrimSpace(c.Token) == "" {
+		return nil, errors.New("missing CNB base URL or token")
+	}
+	p, err := expand("/{repo}/-/inherit-members", repo, "")
+	if err != nil {
+		return nil, err
+	}
+	ep, err := c.join(p)
+	if err != nil {
+		return nil, err
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if u, err2 := url.Parse(ep); err2 == nil {
+		q := u.Query()
+		q.Set("page", fmt.Sprintf("%d", page))
+		q.Set("page_size", fmt.Sprintf("%d", pageSize))
+		u.RawQuery = q.Encode()
+		ep = u.String()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("cnb list inherited members status=%d", resp.StatusCode)
+	}
+	var out []InheritedMemberGroup
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

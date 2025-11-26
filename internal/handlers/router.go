@@ -88,6 +88,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.GET("/links/branches", h.AdminBranchIssueLinksList)
 	admin.GET("/automation/config", h.AdminAutomationGet)
 	admin.POST("/automation/config", h.AdminAutomationSave)
+	admin.GET("/cnb/members", h.AdminCNBMembers)
 
 	// Plane data APIs
 	admin.GET("/plane/workspaces", h.AdminPlaneWorkspaces)
