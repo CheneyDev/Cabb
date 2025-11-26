@@ -67,6 +67,10 @@ type Config struct {
 	CleanupThreadLinksEnabled bool
 	CleanupThreadLinksDays    int
 	CleanupThreadLinksAt      string // HH:MM in cfg.Timezone
+
+	// AI Report Scheduler
+	ReportNotifyEnabled bool   // Enable scheduled report push to Lark
+	ReportNotifyChatID  string // Lark chat ID for report notifications
 }
 
 func FromEnv() Config {
@@ -110,6 +114,9 @@ func FromEnv() Config {
 		CleanupThreadLinksEnabled: boolFromEnv("CLEANUP_THREAD_LINKS_ENABLED", true),
 		CleanupThreadLinksDays:    intFromEnv("CLEANUP_THREAD_LINKS_DAYS", 90),
 		CleanupThreadLinksAt:      strFromEnv("CLEANUP_THREAD_LINKS_AT", "03:00"),
+
+		ReportNotifyEnabled: boolFromEnv("REPORT_NOTIFY_ENABLED", false),
+		ReportNotifyChatID:  os.Getenv("REPORT_NOTIFY_CHAT_ID"),
 
 		// AI / Branch naming (enabled)
 		AIBranchAutocreateEnabled: true,

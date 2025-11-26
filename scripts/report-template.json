@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "type": "daily",
+    "label": "2024-01-01",
+    "time_range": {
+      "start": "2024-01-01 00:00:00",
+      "end": "2024-01-01 23:59:59",
+      "timezone": "Asia/Shanghai"
+    },
+    "generated_at": "2024-01-02T10:00:00+08:00"
+  },
+  "summary": "本次汇报涵盖 2 个仓库的开发进展：后端服务完成了用户系统重构，前端项目优化了首页性能。",
+  "highlights": [
+    "[backend-api] 用户认证模块重构完成，支持 OAuth2.0",
+    "[frontend-web] 首页加载时间优化 40%"
+  ],
+  "repos": [
+    {
+      "slug": "team/backend-api",
+      "display_name": "后端服务",
+      "commit_count": 8,
+      "members": [
+        {
+          "name": "张三",
+          "role": "后端架构师",
+          "commits": 5,
+          "achievements": [
+            "重构用户认证模块，接入 OAuth2.0",
+            "优化数据库连接池配置"
+          ],
+          "impact": "提升系统安全性，支持第三方登录",
+          "risks": []
+        },
+        {
+          "name": "李四",
+          "role": "后端开发",
+          "commits": 3,
+          "achievements": [
+            "新增用户资料 API",
+            "完善接口文档"
+          ],
+          "impact": "为前端提供完整的用户数据接口",
+          "risks": ["部分接口待性能测试"]
+        }
+      ]
+    },
+    {
+      "slug": "team/frontend-web",
+      "display_name": "前端项目",
+      "commit_count": 5,
+      "members": [
+        {
+          "name": "王五",
+          "role": "前端负责人",
+          "commits": 3,
+          "achievements": [
+            "首页组件懒加载改造",
+            "图片资源压缩和 CDN 配置"
+          ],
+          "impact": "首页加载时间从 3s 降至 1.8s",
+          "risks": []
+        },
+        {
+          "name": "赵六",
+          "role": "前端开发",
+          "commits": 2,
+          "achievements": [
+            "用户中心页面对接新 API"
+          ],
+          "impact": "用户可查看和编辑个人资料",
+          "risks": []
+        }
+      ]
+    }
+  ]
+}

@@ -80,6 +80,14 @@ exclude_globs="${REPORT_EXCLUDE_GLOBS:-node_modules/**;dist/**;vendor/**;*.min.*
 numstat_lines="${REPORT_NUMSTAT_LINES:-5000}"
 
 # ------------------------------------------------------------------------------
+# 输出格式配置
+# ------------------------------------------------------------------------------
+# 是否输出 JSON 格式（中间格式，供后端读取转发飞书）
+output_json="${REPORT_OUTPUT_JSON:-1}"
+# 是否输出 Markdown 格式
+output_markdown="${REPORT_OUTPUT_MARKDOWN:-1}"
+
+# ------------------------------------------------------------------------------
 # 后端 API 配置
 # ------------------------------------------------------------------------------
 # 是否从后端 API 拉取多仓库配置
@@ -185,7 +193,9 @@ fi
 mkdir -p reports tmp || true
 
 # 输出文件路径
-out_file="reports/report-${label}.md"
+json_file="reports/report-${label}.json"
+md_file="reports/report-${label}.md"
+out_file="${md_file}"  # 兼容旧逻辑
 # Git 上下文文件路径（用于 AI 输入）
 ctx_file="tmp/git-context-${label}.md"
 
@@ -666,7 +676,7 @@ done
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# try_opencode - 尝试使用 OpenCode AI 生成结构化汇报
+# try_opencode - 尝试使用 OpenCode AI 生成结构化 JSON 汇报
 # 返回：0=成功，1=失败
 # ------------------------------------------------------------------------------
 try_opencode() {
@@ -690,23 +700,36 @@ try_opencode() {
   # 从上下文文件提取提交统计摘要
   commit_summary=$(grep '本仓库在此时间范围内共有.*条提交记录' "${ctx_file}" 2>/dev/null | sed 's/\*\*//g' || echo "")
   
-  # 构建 AI Prompt（中文）
-  prompt="你是资深工程经理，需基于多个仓库的提交记录（含 numstat/补丁采样）生成中文 ${period_label} 的 Markdown 文档。\n"
-  prompt+="【重要】以下是各仓库的提交统计，请务必为每个有提交的仓库生成详细总结：\n${commit_summary}\n\n"
-  prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n"
-  prompt+="格式严格使用 Markdown（不要输出代码块标记，不要 JSON），参考以下结构：\n"
-  prompt+="# 项目工作汇报（<日期标签>)\n- 时间范围：<start> 至 <end> (<TZ>)\n- 仓库：列出本次覆盖的仓库 slug\n\n"
-  prompt+="## 概览\n简要主题、亮点、重要进展，必要时注明风险/阻塞。\n\n"
-  prompt+="## 人员汇总（按仓库分组）\n### [repo-slug] 成员名\n- 角色/主题：一句话\n- 完成要点：分条描述关键改动，包含模块/文件/风险；精炼。\n- 影响与价值：一句话说明业务/质量价值。\n- 风险与待办：如无可写"无"。\n"
-  prompt+="可有多个仓库、小节。\n\n"
-  prompt+="## 横向事项\n跨团队协作、依赖、阻塞、后续计划。\n\n"
-  prompt+="要求：\n- 结论先行，语言简练。\n- 明确标注仓库（用 [slug] 前缀或小标题）。\n- 每个仓库的提交数据都在对应的 Repo 部分，请逐一总结，不要遗漏任何有提交的仓库。\n"
-
-  # 如果存在模板文件，追加到上下文
-  if [ -f "${template_file}" ]; then
-    echo -e "\n\n# Markdown Template Hint\n" >> "${ctx_file}"
-    cat "${template_file}" >> "${ctx_file}"
+  # JSON 模板文件路径
+  local template_json="scripts/report-template.json"
+  
+  # 将模板文件追加到上下文
+  if [ -f "${template_json}" ]; then
+    echo -e "\n\n# JSON 输出模板（请严格按此结构输出）\n" >> "${ctx_file}"
+    cat "${template_json}" >> "${ctx_file}"
   fi
+  
+  # 构建 AI Prompt（输出 JSON 格式）
+  prompt="你是资深工程经理，需基于多个仓库的提交记录（含 numstat/补丁采样）生成中文 ${period_label}。\n"
+  prompt+="【重要】以下是各仓库的提交统计，请务必为每个有提交的仓库生成详细总结：\n${commit_summary}\n\n"
+  prompt+="时间范围：${start_ts} 至 ${end_ts}（${TZ}）。\n\n"
+  prompt+="【输出格式】请严格按照上下文中提供的 JSON 模板结构输出，直接输出 JSON（不要输出 markdown 代码块标记）。\n"
+  prompt+="模板展示的是多仓库场景示例，请根据实际提交数据调整：\n"
+  prompt+="- 仓库数量：根据实际涉及的仓库数量调整 repos 数组长度\n"
+  prompt+="- 成员数量：根据每个仓库的实际贡献者数量调整该仓库的 members 数组\n"
+  prompt+="- 如果只有 1 个仓库，则 repos 数组只保留 1 个元素\n\n"
+  prompt+="字段填充说明：\n"
+  prompt+="- meta.type: \"${report_type}\"\n"
+  prompt+="- meta.label: \"${label}\"\n"
+  prompt+="- meta.time_range: 使用 \"${start_ts}\" 至 \"${end_ts}\"，timezone 为 \"${TZ}\"\n"
+  prompt+="- summary: 概括所有仓库的整体进展\n"
+  prompt+="- highlights: 提炼 3-5 个重要亮点，用 [repo-slug] 前缀标注来源\n"
+  prompt+="- repos: 每个仓库包含 slug、display_name、commit_count 和 members 数组\n"
+  prompt+="- repos[].members: 该仓库下的贡献者列表\n\n"
+  prompt+="要求：\n"
+  prompt+="- 结论先行，语言简练\n"
+  prompt+="- 每个仓库的提交数据都在对应的 Repo 部分，请逐一总结，不要遗漏\n"
+  prompt+="- 确保输出是合法的 JSON，可以被 jq 解析\n"
 
   # 调试信息
   echo "[debug] ctx_file path: $(pwd)/${ctx_file}" >&2
@@ -715,9 +738,24 @@ try_opencode() {
   grep '^## Repo:' "${ctx_file}" 2>/dev/null | while read -r line; do echo "[debug] $line" >&2; done
 
   # 调用 OpenCode AI
-  if opencode run "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${out_file}.tmp" 2>"tmp/opencode.stderr"; then
-    mv "${out_file}.tmp" "${out_file}"
-    return 0
+  if opencode run "${prompt}" -m "${OPENCODE_MODEL}" -f "${ctx_file}" > "${json_file}.tmp" 2>"tmp/opencode.stderr"; then
+    # 验证 JSON 格式
+    if jq empty "${json_file}.tmp" 2>/dev/null; then
+      mv "${json_file}.tmp" "${json_file}"
+      echo "[info] JSON report generated: ${json_file}" >&2
+      return 0
+    else
+      echo "[warn] AI output is not valid JSON, attempting to extract JSON..." >&2
+      # 尝试从输出中提取 JSON（AI 可能输出了额外内容）
+      if grep -o '{.*}' "${json_file}.tmp" | jq empty 2>/dev/null; then
+        grep -o '{.*}' "${json_file}.tmp" > "${json_file}"
+        echo "[info] Extracted valid JSON from AI output" >&2
+        return 0
+      fi
+      echo "[error] Failed to extract valid JSON from AI output" >&2
+      cat "${json_file}.tmp" >&2
+      return 1
+    fi
   fi
   
   # 输出错误信息（不泄露密钥）
@@ -734,34 +772,97 @@ try_opencode() {
   return 1
 }
 
-# 尝试 AI 汇总
+# ------------------------------------------------------------------------------
+# render_markdown - 将 JSON 转换为 Markdown 格式
+# 参数：$1 - JSON 文件路径，$2 - 输出 Markdown 文件路径
+# ------------------------------------------------------------------------------
+render_markdown() {
+  local json_in="$1"
+  local md_out="$2"
+  
+  if [ ! -f "${json_in}" ]; then
+    echo "[error] JSON file not found: ${json_in}" >&2
+    return 1
+  fi
+  
+  # 使用 jq 生成完整的 Markdown
+  jq -r '
+    "# 项目工作汇报（" + .meta.label + "）\n",
+    "- 时间范围：" + .meta.time_range.start + " 至 " + .meta.time_range.end + "（" + .meta.time_range.timezone + "）",
+    "- 仓库：" + ([.repos[].slug] | join("、")) + "\n",
+    "## 概览\n",
+    .summary + "\n",
+    (if (.highlights | length) > 0 then
+      "### 亮点\n\n" + ([.highlights[] | "- " + .] | join("\n")) + "\n"
+    else "" end),
+    "## 人员汇总\n",
+    (.repos[] | 
+      "### [" + .slug + "] " + .display_name + "\n",
+      (.members[] |
+        "#### " + .name + "\n",
+        "- **角色**：" + .role,
+        "- **提交数**：" + (.commits | tostring),
+        "- **完成要点**：",
+        (.achievements[] | "  - " + .),
+        "- **影响与价值**：" + .impact,
+        "- **风险与待办**：" + (if (.risks | length) > 0 then (.risks | join("；")) else "无" end),
+        ""
+      )
+    )
+  ' "${json_in}" > "${md_out}"
+  
+  echo "[info] Markdown report generated: ${md_out}" >&2
+  return 0
+}
+
+# ==============================================================================
+# 第十部分：主流程 - AI 生成与多格式输出
+# ==============================================================================
+
+# 尝试 AI 汇总生成 JSON
+ai_success=false
 if try_opencode; then
-  echo "AI summary generated." >&2
+  echo "[info] AI JSON summary generated." >&2
+  ai_success=true
 else
-  # 回退处理
+  echo "[warn] AI summary generation failed." >&2
+fi
+
+# 如果 AI 成功，进行格式转换
+if [ "${ai_success}" = "true" ] && [ -f "${json_file}" ]; then
+  
+  # 转换为 Markdown
+  if [ "${output_markdown}" = "1" ]; then
+    if render_markdown "${json_file}" "${md_file}"; then
+      out_file="${md_file}"
+    fi
+  fi
+  
+else
+  # AI 失败的回退处理
   if [ "${require_ai}" = "1" ]; then
-    # 要求 AI 必须成功，输出错误信息并退出
     {
-      echo "# 项目工作汇报（${label})"
+      echo "# 项目工作汇报（${label}）"
       echo ""
       echo "AI 汇总生成失败。请检查 OPENCODE_API_KEY/网络后重试。"
-    } > "${out_file}"
+    } > "${md_file}"
+    out_file="${md_file}"
     exit 1
   else
-    # 允许回退，输出基础信息
     {
-      echo "# 项目工作汇报（${label})"
+      echo "# 项目工作汇报（${label}）"
       echo ""
       if ${has_commits}; then
-        echo "AI 汇总生成失败，但检测到提交。"
+        echo "AI 汇总生成失败，但检测到提交记录。"
       else
-        echo "无提交。"
+        echo "无提交记录。"
       fi
-    } > "${out_file}"
+    } > "${md_file}"
+    out_file="${md_file}"
   fi
 fi
 
-echo "report generated: ${out_file}" >&2
+echo "[info] Report generated: ${out_file}" >&2
 
 # ==============================================================================
 # 第十部分：汇报发布
