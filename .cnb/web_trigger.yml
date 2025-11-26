@@ -29,7 +29,7 @@ report_timeframe_input: &report_timeframe_input
 branch:
   - reg: "^ma"
     buttons:
-      - name: <!!!生产-开始构建!!!>
+      - name: 构建新版本
         description: 构建到生产环境
         event: web_trigger_release
         env:
@@ -39,15 +39,6 @@ branch:
         inputs:
           SERVICES_LIST: *services_list_input
   - buttons:
-      - name: <!!!测试-开始构建!!!>
-        description: 构建到测试环境
-        event: web_trigger_test
-        env:
-          RUNNER_ARCH: cnb:arch:amd64
-          ENV_URL: "https://cnb.cool/1024hub/Deploy/PlaneCabbConf/-/blob/develop/env.yml"
-          BRANCH: "develop"
-        inputs:
-          SERVICES_LIST: *services_list_input
       - name: 生成汇报
         description: 汇总 git 提交并生成工作汇报
         event: web_trigger_daily_report
