@@ -77,6 +77,7 @@ func (h *Handler) MagicLinkSend(c echo.Context) error {
 	var req struct {
 		OpenID string `json:"open_id"`
 		Name   string `json:"name"`
+		Origin string `json:"origin"`
 	}
 	if err := c.Bind(&req); err != nil {
 		return writeError(c, http.StatusBadRequest, "invalid_json", "请求格式错误", nil)
@@ -101,23 +102,13 @@ func (h *Handler) MagicLinkSend(c echo.Context) error {
 		return writeError(c, http.StatusInternalServerError, "db_error", "保存令牌失败", map[string]any{"error": err.Error()})
 	}
 
-	// Build magic link URL
-	baseURL := h.cfg.FrontendBaseURL
+	// Build magic link URL - prefer origin from request, then config, then infer
+	baseURL := strings.TrimSpace(req.Origin)
 	if baseURL == "" {
-		// Try to infer from request headers (X-Forwarded-Host or Host)
-		scheme := "https"
-		if fwdProto := c.Request().Header.Get("X-Forwarded-Proto"); fwdProto != "" {
-			scheme = fwdProto
-		}
-		host := c.Request().Header.Get("X-Forwarded-Host")
-		if host == "" {
-			host = c.Request().Host
-		}
-		if host != "" {
-			baseURL = scheme + "://" + host
-		} else {
-			baseURL = "http://localhost:3000"
-		}
+		baseURL = h.cfg.FrontendBaseURL
+	}
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
 	}
 	magicLink := strings.TrimRight(baseURL, "/") + "/api/auth/magic-link/verify?token=" + token
 
