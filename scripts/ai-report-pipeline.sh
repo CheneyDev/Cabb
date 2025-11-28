@@ -927,6 +927,13 @@ publish_report() {
   mkdir -p "${target_subdir}"
   cp -f "${OLDPWD}/${out_file}" "${target_subdir}/${target_filename}"
   
+  # 同时发布 JSON 文件（后端飞书推送需要）
+  json_target_filename="${target_filename%.md}.json"
+  if [ -f "${OLDPWD}/${json_file}" ]; then
+    cp -f "${OLDPWD}/${json_file}" "${target_subdir}/${json_target_filename}"
+    echo "[info] JSON file published: ${target_subdir}/${json_target_filename}" >&2
+  fi
+  
   # 配置 Git 用户
   git config user.name "cabb-report-bot"
   git config user.email "bot@cabb.local"
