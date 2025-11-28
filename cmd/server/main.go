@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -51,7 +53,11 @@ func main() {
 		}
 	}
 
-	handlers.RegisterRoutes(e, cfg, db)
+	// Initialize log broadcaster
+	broadcaster := handlers.NewLogBroadcaster()
+	log.SetOutput(io.MultiWriter(os.Stdout, broadcaster))
+
+	handlers.RegisterRoutes(e, cfg, db, broadcaster)
 
 	// Start background schedulers
 	handlers.StartCleanupScheduler(cfg, db)

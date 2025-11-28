@@ -13,7 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
+func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB, broadcaster *LogBroadcaster) {
 	// Initialize a lightweight in-memory deduper (5 minutes TTL)
 	d := NewDeduper(5 * time.Minute)
 
@@ -92,6 +92,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB) {
 	admin.GET("/plane/members", h.AdminPlaneMembers)
 	admin.GET("/lark/users", h.AdminLarkUsers)
 	admin.GET("/lark/departments", h.AdminLarkDepartments)
+	admin.GET("/logs/stream", broadcaster.ServeWS)
 
 	// Report notification
 	admin.GET("/report/notify/config", h.AdminReportNotifyConfigGet)
