@@ -126,11 +126,19 @@ func (h *Handler) sessionFromRequest(c echo.Context) (*store.AdminSessionWithUse
 	if !hHasDB(h) {
 		return nil, errNoSession
 	}
+	token := ""
 	cookie, err := c.Cookie(h.sessionCookieName)
-	if err != nil || cookie == nil || strings.TrimSpace(cookie.Value) == "" {
+	if err == nil && cookie != nil && strings.TrimSpace(cookie.Value) != "" {
+		token = strings.TrimSpace(cookie.Value)
+	}
+	// Fallback to query param "token" (useful for WebSockets)
+	if token == "" {
+		token = c.QueryParam("token")
+	}
+
+	if token == "" {
 		return nil, errNoSession
 	}
-	token := strings.TrimSpace(cookie.Value)
 	sess, err := h.db.GetAdminSessionWithUser(c.Request().Context(), token)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

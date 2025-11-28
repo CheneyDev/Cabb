@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -19,9 +20,10 @@ var (
 
 // LogBroadcaster implements io.Writer to capture logs and broadcast them to WebSocket clients.
 type LogBroadcaster struct {
-	clients   map[*websocket.Conn]bool
-	broadcast chan []byte
-	mu        sync.Mutex
+	clients     map[*websocket.Conn]bool
+	broadcast   chan []byte
+	mu          sync.Mutex
+	clientCount int32
 }
 
 // NewLogBroadcaster creates a new LogBroadcaster.
@@ -36,6 +38,11 @@ func NewLogBroadcaster() *LogBroadcaster {
 
 // Write implements io.Writer. It writes the log data to the broadcast channel.
 func (lb *LogBroadcaster) Write(p []byte) (n int, err error) {
+	// Optimization: If no clients are connected, skip everything.
+	if atomic.LoadInt32(&lb.clientCount) == 0 {
+		return len(p), nil
+	}
+
 	// Make a copy of the slice to avoid race conditions if the underlying array is modified
 	// although for log.Logger it's usually fine.
 	// We also want to ensure we don't block the logger if no one is listening or channel is full.
@@ -64,6 +71,7 @@ func (lb *LogBroadcaster) run() {
 				log.Printf("websocket write error: %v", err)
 				client.Close()
 				delete(lb.clients, client)
+				atomic.AddInt32(&lb.clientCount, -1)
 			}
 		}
 		lb.mu.Unlock()
@@ -80,6 +88,7 @@ func (lb *LogBroadcaster) ServeWS(c echo.Context) error {
 
 	lb.mu.Lock()
 	lb.clients[ws] = true
+	atomic.AddInt32(&lb.clientCount, 1)
 	lb.mu.Unlock()
 
 	// Keep the connection alive until client disconnects
@@ -91,7 +100,10 @@ func (lb *LogBroadcaster) ServeWS(c echo.Context) error {
 	}
 
 	lb.mu.Lock()
-	delete(lb.clients, ws)
+	if _, ok := lb.clients[ws]; ok {
+		delete(lb.clients, ws)
+		atomic.AddInt32(&lb.clientCount, -1)
+	}
 	lb.mu.Unlock()
 
 	return nil

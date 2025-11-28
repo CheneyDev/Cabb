@@ -37,6 +37,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB, broadcaster *
 		sessionTTL:          ttl,
 		sessionCookieSecure: cfg.AdminSessionSecure,
 		aiNamer:             varNamer,
+		broadcaster:         broadcaster,
 	}
 
 	// Health
@@ -92,7 +93,8 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB, broadcaster *
 	admin.GET("/plane/members", h.AdminPlaneMembers)
 	admin.GET("/lark/users", h.AdminLarkUsers)
 	admin.GET("/lark/departments", h.AdminLarkDepartments)
-	admin.GET("/logs/stream", broadcaster.ServeWS)
+	// Move logs stream out of admin group to handle auth manually (for query param support)
+	e.GET("/admin/logs/stream", h.ServeLogs)
 
 	// Report notification
 	admin.GET("/report/notify/config", h.AdminReportNotifyConfigGet)
@@ -129,6 +131,7 @@ type Handler struct {
 	aiNamer             interface {
 		SuggestBranchName(ctx context.Context, title, description string) (string, string, error)
 	}
+	broadcaster *LogBroadcaster
 }
 
 // initBranchNamer wires an AI-based branch namer if enabled and credentials are present.
