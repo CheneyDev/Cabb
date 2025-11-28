@@ -55,6 +55,7 @@ type Config struct {
 
 	// Optional: redirect backend root to frontend
 	FrontendBaseURL string
+	WebBaseURL      string
 
 	// Admin console auth
 	AdminSessionCookie     string
@@ -105,6 +106,7 @@ func FromEnv() Config {
 		EncryptionKey: os.Getenv("ENCRYPTION_KEY"),
 
 		FrontendBaseURL: os.Getenv("FRONTEND_BASE_URL"),
+		WebBaseURL:      os.Getenv("WEB_BASE_URL"),
 
 		AdminSessionCookie:     strFromEnv("ADMIN_SESSION_COOKIE", "pi_admin_session"),
 		AdminSessionTTLHours:   intFromEnv("ADMIN_SESSION_TTL_HOURS", 12),

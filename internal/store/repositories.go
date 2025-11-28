@@ -540,7 +540,7 @@ func (d *DB) GetCNBManagedLabelIDs(ctx context.Context, planeProjectID, cnbRepoI
 
 // User mappings
 type UserMapping struct {
-	PlaneUserID string
+	PlaneUserID sql.NullString
 	CNBUserID   sql.NullString
 	LarkUserID  sql.NullString
 	GitUsername sql.NullString

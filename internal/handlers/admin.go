@@ -265,7 +265,7 @@ func (h *Handler) AdminUsersList(c echo.Context) error {
 	out := make([]map[string]any, 0, len(items))
 	for _, m := range items {
 		out = append(out, map[string]any{
-			"plane_user_id": m.PlaneUserID,
+			"plane_user_id": nullString(m.PlaneUserID),
 			"cnb_user_id":   nullString(m.CNBUserID),
 			"lark_user_id":  nullString(m.LarkUserID),
 			"git_username":  nullString(m.GitUsername),

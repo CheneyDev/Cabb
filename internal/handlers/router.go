@@ -63,6 +63,12 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB, broadcaster *
 	e.POST("/webhooks/lark/interactivity", h.LarkInteractivity)
 	e.POST("/webhooks/lark/commands", h.LarkCommands)
 
+	// Public auth APIs (no login required)
+	publicAuth := e.Group("/api/auth")
+	publicAuth.GET("/lark-users", h.PublicLarkUsers)
+	publicAuth.POST("/magic-link", h.MagicLinkSend)
+	publicAuth.GET("/magic-link/verify", h.MagicLinkVerify)
+
 	// Admin auth
 	auth := e.Group("/admin/auth")
 	auth.POST("/login", h.AdminLogin)

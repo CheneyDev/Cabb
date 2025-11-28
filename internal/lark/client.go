@@ -807,6 +807,43 @@ func (c *Client) GetDepartment(ctx context.Context, tenantToken, departmentID st
 	return &result.Data.Department, nil
 }
 
+// SendCardToUser sends an interactive card message to a single user via open_id.
+// POST /open-apis/im/v1/messages?receive_id_type=open_id
+func (c *Client) SendCardToUser(ctx context.Context, tenantToken, openID string, card map[string]any) error {
+	if tenantToken == "" {
+		return errors.New("missing tenant token")
+	}
+	if strings.TrimSpace(openID) == "" {
+		return errors.New("missing open_id")
+	}
+	ep := strings.TrimRight(c.base(), "/") + "/open-apis/im/v1/messages?receive_id_type=open_id"
+	contentJSON, _ := json.Marshal(card)
+	payload := map[string]any{
+		"receive_id": openID,
+		"msg_type":   "interactive",
+		"content":    string(contentJSON),
+	}
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		var er struct{ Code int `json:"code"`; Msg string `json:"msg"` }
+		_ = json.Unmarshal(body, &er)
+		return fmt.Errorf("lark send card to user status=%d code=%d msg=%s", resp.StatusCode, er.Code, strings.TrimSpace(er.Msg))
+	}
+	return nil
+}
+
 // ListAllDepartments fetches all departments recursively from root.
 func (c *Client) ListAllDepartments(ctx context.Context, tenantToken string) ([]Department, error) {
 	var allDepts []Department
