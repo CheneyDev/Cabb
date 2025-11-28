@@ -544,7 +544,6 @@ type UserMapping struct {
 	CNBUserID   sql.NullString
 	LarkUserID  sql.NullString
 	DisplayName sql.NullString
-	ConnectedAt sql.NullTime
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -606,6 +605,25 @@ func (d *DB) FindCNBUserIDsByPlaneUsers(ctx context.Context, planeUserIDs []stri
 	return out, nil
 }
 
+// FindLarkUserIDsByNames maps display names (Git author names) to Lark user IDs via user_mappings.
+// Returns a map of display_name -> lark_user_id for names that have mappings.
+func (d *DB) FindLarkUserIDsByNames(ctx context.Context, names []string) (map[string]string, error) {
+	if d == nil || d.SQL == nil || len(names) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(names))
+	const q = `SELECT lark_user_id FROM user_mappings WHERE display_name=$1 AND lark_user_id IS NOT NULL AND lark_user_id != '' LIMIT 1`
+	for _, name := range names {
+		var id sql.NullString
+		if err := d.SQL.QueryRowContext(ctx, q, name).Scan(&id); err == nil {
+			if id.Valid && id.String != "" {
+				out[name] = id.String
+			}
+		}
+	}
+	return out, nil
+}
+
 // ListUserMappings returns paginated user mapping rows for admin screens.
 // limit defaults to 50 and is capped at 200 to avoid overwhelming the UI.
 func (d *DB) ListUserMappings(ctx context.Context, planeUserID, cnbUserID, search string, limit int) ([]UserMapping, error) {
@@ -637,7 +655,7 @@ func (d *DB) ListUserMappings(ctx context.Context, planeUserID, cnbUserID, searc
 		args = append(args, like, like, like)
 		idx += 3
 	}
-	q := "SELECT plane_user_id::text, cnb_user_id, lark_user_id, display_name, connected_at, created_at, updated_at FROM user_mappings " + where + " ORDER BY updated_at DESC LIMIT $" + itoa(idx)
+	q := "SELECT plane_user_id::text, cnb_user_id, lark_user_id, display_name, created_at, updated_at FROM user_mappings " + where + " ORDER BY updated_at DESC LIMIT $" + itoa(idx)
 	args = append(args, limit)
 	rows, err := d.SQL.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -647,12 +665,22 @@ func (d *DB) ListUserMappings(ctx context.Context, planeUserID, cnbUserID, searc
 	var out []UserMapping
 	for rows.Next() {
 		var m UserMapping
-		if err := rows.Scan(&m.PlaneUserID, &m.CNBUserID, &m.LarkUserID, &m.DisplayName, &m.ConnectedAt, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		if err := rows.Scan(&m.PlaneUserID, &m.CNBUserID, &m.LarkUserID, &m.DisplayName, &m.CreatedAt, &m.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// DeleteUserMapping removes a user mapping by plane_user_id (hard delete).
+func (d *DB) DeleteUserMapping(ctx context.Context, planeUserID string) error {
+	if d == nil || d.SQL == nil {
+		return sql.ErrConnDone
+	}
+	const q = `DELETE FROM user_mappings WHERE plane_user_id=$1::uuid`
+	_, err := d.SQL.ExecContext(ctx, q, planeUserID)
+	return err
 }
 
 func (d *DB) CreateIssueLink(ctx context.Context, planeIssueID, cnbRepoID, cnbIssueID string) (bool, error) {

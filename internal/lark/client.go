@@ -506,7 +506,7 @@ func (c *Client) FindByDepartment(ctx context.Context, tenantToken string, depar
 	params := url.Values{}
 	params.Set("department_id", departmentID)
 	params.Set("department_id_type", "open_department_id") // Default
-	params.Set("user_id_type", "open_id") // Default
+	params.Set("user_id_type", "open_id") // Default, compatible with person_list component
 	if pageSize > 0 {
 		params.Set("page_size", fmt.Sprintf("%d", pageSize))
 	}

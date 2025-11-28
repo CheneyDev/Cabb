@@ -255,6 +255,27 @@ func sendReportWithConfig(cfg config.Config, db *store.DB, reportType, label str
 		return
 	}
 
+	// Collect all member names and query Lark user IDs
+	var allNames []string
+	for _, repo := range report.Repos {
+		for _, m := range repo.Members {
+			if m.Name != "" {
+				allNames = append(allNames, m.Name)
+			}
+		}
+	}
+	larkUserMap, _ := db.FindLarkUserIDsByNames(ctx, allNames)
+
+	// Fill in LarkUserID for each member
+	for i := range report.Repos {
+		for j := range report.Repos[i].Members {
+			name := report.Repos[i].Members[j].Name
+			if larkID, ok := larkUserMap[name]; ok {
+				report.Repos[i].Members[j].LarkUserID = larkID
+			}
+		}
+	}
+
 	// Build card
 	card := buildReportCard(report)
 

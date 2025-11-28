@@ -269,7 +269,6 @@ func (h *Handler) AdminUsersList(c echo.Context) error {
 			"cnb_user_id":   nullString(m.CNBUserID),
 			"lark_user_id":  nullString(m.LarkUserID),
 			"display_name":  nullString(m.DisplayName),
-			"connected_at":  nullTimeValue(m.ConnectedAt),
 			"created_at":    m.CreatedAt.UTC().Format(time.RFC3339),
 			"updated_at":    m.UpdatedAt.UTC().Format(time.RFC3339),
 		})
@@ -301,6 +300,21 @@ func (h *Handler) AdminUsers(c echo.Context) error {
 		}
 	}
 	return c.JSON(http.StatusOK, map[string]any{"result": "ok", "count": len(req.Mappings)})
+}
+
+// AdminUsersDelete handles DELETE /admin/mappings/users/:plane_user_id
+func (h *Handler) AdminUsersDelete(c echo.Context) error {
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	planeUserID := c.Param("plane_user_id")
+	if planeUserID == "" {
+		return writeError(c, http.StatusBadRequest, "missing_id", "缺少 plane_user_id 参数", nil)
+	}
+	if err := h.db.DeleteUserMapping(c.Request().Context(), planeUserID); err != nil {
+		return writeError(c, http.StatusInternalServerError, "delete_failed", "删除失败", map[string]any{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"result": "ok", "deleted": planeUserID})
 }
 
 func (h *Handler) AdminChannelProject(c echo.Context) error {

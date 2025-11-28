@@ -76,6 +76,7 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB, broadcaster *
 	admin.POST("/mappings/pr-states", h.AdminPRStates)
 	admin.GET("/mappings/users", h.AdminUsersList)
 	admin.POST("/mappings/users", h.AdminUsers)
+	admin.DELETE("/mappings/users/:plane_user_id", h.AdminUsersDelete)
 	admin.POST("/mappings/labels", h.AdminLabels)
 	admin.POST("/mappings", h.AdminMappings)
 	admin.GET("/mappings", h.AdminMappingsList)

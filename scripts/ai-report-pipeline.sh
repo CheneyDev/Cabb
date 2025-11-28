@@ -795,19 +795,17 @@ render_markdown() {
     (if (.highlights | length) > 0 then
       "### 亮点\n\n" + ([.highlights[] | "- " + .] | join("\n")) + "\n"
     else "" end),
-    "## 人员汇总\n",
+    "## 仓库汇总\n",
     (.repos[] | 
       "### [" + .slug + "] " + .display_name + "\n",
+      (if .brief then "**简述**：" + .brief + "\n" else "" end),
+      "**主要贡献者**：\n",
       (.members[] |
-        "#### " + .name + "\n",
-        "- **角色**：" + .role,
-        "- **提交数**：" + (.commits | tostring),
-        "- **完成要点**：",
-        (.achievements[] | "  - " + .),
-        "- **影响与价值**：" + .impact,
-        "- **风险与待办**：" + (if (.risks | length) > 0 then (.risks | join("；")) else "无" end),
+        "#### " + .name + "（" + (.commits | tostring) + " 次提交）\n",
+        (.achievements[] | "- " + .),
         ""
-      )
+      ),
+      (if .impact then "**影响与价值**：" + .impact + "\n" else "" end)
     )
   ' "${json_in}" > "${md_out}"
   

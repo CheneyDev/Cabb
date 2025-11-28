@@ -25,14 +25,14 @@ type ReportJSON struct {
 	Repos      []struct {
 		Slug        string `json:"slug"`
 		DisplayName string `json:"display_name"`
+		Brief       string `json:"brief"`
 		CommitCount int    `json:"commit_count"`
+		Impact      string `json:"impact"`
 		Members     []struct {
 			Name         string   `json:"name"`
-			Role         string   `json:"role"`
+			LarkUserID   string   `json:"lark_user_id,omitempty"`
 			Commits      int      `json:"commits"`
 			Achievements []string `json:"achievements"`
-			Impact       string   `json:"impact"`
-			Risks        []string `json:"risks"`
 		} `json:"members"`
 	} `json:"repos"`
 }
@@ -104,97 +104,287 @@ func StartReportScheduler(cfg config.Config, db *store.DB) {
 
 
 func buildReportCard(r ReportJSON) map[string]any {
-	// Determine title and color based on type
-	var titlePrefix, headerColor string
+	// Determine title based on type
+	var titlePrefix string
 	switch r.Meta.Type {
 	case "daily":
-		titlePrefix = "📋 日报"
-		headerColor = "blue"
+		titlePrefix = "项目开发日报"
 	case "weekly":
-		titlePrefix = "📊 周报"
-		headerColor = "green"
+		titlePrefix = "项目开发周报"
 	case "monthly":
-		titlePrefix = "📈 月报"
-		headerColor = "purple"
+		titlePrefix = "项目开发月报"
 	default:
-		titlePrefix = "📋 汇报"
-		headerColor = "blue"
+		titlePrefix = "项目开发汇报"
+	}
+
+	// Parse time range for header tags
+	startDate := r.Meta.TimeRange.Start
+	endDate := r.Meta.TimeRange.End
+	if len(startDate) > 10 {
+		startDate = startDate[:10]
+	}
+	if len(endDate) > 10 {
+		endDate = endDate[:10]
+	}
+
+	// Build brief summary for each repo
+	var briefSummary strings.Builder
+	for _, repo := range r.Repos {
+		briefSummary.WriteString("• **")
+		briefSummary.WriteString(repo.DisplayName)
+		briefSummary.WriteString("** ：")
+		if repo.Brief != "" {
+			briefSummary.WriteString(repo.Brief)
+		} else if len(repo.Members) == 0 {
+			briefSummary.WriteString("无提交记录")
+		} else {
+			briefSummary.WriteString("有 ")
+			briefSummary.WriteString(strings.TrimSpace(strings.Split(strings.TrimPrefix(repo.Slug, "/"), "/")[len(strings.Split(repo.Slug, "/"))-1]))
+			briefSummary.WriteString(" 次提交")
+		}
+		briefSummary.WriteString("\n")
 	}
 
 	// Build highlights content
-	var highlights strings.Builder
+	var highlightsContent strings.Builder
 	for _, h := range r.Highlights {
-		highlights.WriteString("• ")
-		highlights.WriteString(h)
-		highlights.WriteString("\n")
+		highlightsContent.WriteString("- ")
+		highlightsContent.WriteString(h)
+		highlightsContent.WriteString("\n")
 	}
-	highlightsStr := strings.TrimSpace(highlights.String())
+	highlightsStr := strings.TrimSpace(highlightsContent.String())
 	if highlightsStr == "" {
 		highlightsStr = "无"
 	}
 
-	// Build members content (limit to 2000 chars)
-	var members strings.Builder
-	for _, repo := range r.Repos {
-		members.WriteString("**[")
-		members.WriteString(repo.Slug)
-		members.WriteString("]** ")
-		members.WriteString(repo.DisplayName)
-		members.WriteString("\n")
-		for _, m := range repo.Members {
-			members.WriteString("• ")
-			members.WriteString(m.Name)
-			members.WriteString("：")
-			members.WriteString(strings.Join(m.Achievements, "；"))
-			members.WriteString("\n")
-		}
-		if members.Len() > 1800 {
-			members.WriteString("...")
-			break
-		}
+	// Build body elements
+	elements := []map[string]any{
+		{
+			"tag":     "markdown",
+			"content": "### <font color='violet'>开发进展</font>",
+		},
+		{
+			"tag":       "markdown",
+			"content":   strings.TrimSpace(briefSummary.String()),
+			"text_size": "normal_v2",
+		},
+		{
+			"tag":        "column_set",
+			"flex_mode":  "stretch",
+			"horizontal_spacing": "8px",
+			"columns": []map[string]any{
+				{
+					"tag":              "column",
+					"width":            "weighted",
+					"weight":           1,
+					"background_style": "blue-50",
+					"padding":          "12px 12px 12px 12px",
+					"vertical_spacing": "4px",
+					"elements": []map[string]any{
+						{
+							"tag":       "markdown",
+							"content":   "**<font color='blue'>关键进展</font>**",
+							"text_size": "normal_v2",
+							"icon": map[string]any{
+								"tag":   "standard_icon",
+								"token": "hot_outlined",
+								"color": "grey",
+							},
+						},
+						{
+							"tag":     "markdown",
+							"content": highlightsStr,
+						},
+					},
+				},
+			},
+		},
+		{"tag": "hr", "margin": "12px 0px 0px 0px"},
 	}
-	membersStr := strings.TrimSpace(members.String())
-	if membersStr == "" {
-		membersStr = "无提交记录"
+
+	// Add repo sections
+	for _, repo := range r.Repos {
+		// Repo title
+		elements = append(elements, map[string]any{
+			"tag":     "markdown",
+			"content": "### <font color='violet'>" + repo.DisplayName + "</font>",
+		})
+
+		// Build member elements with person_list
+		memberElements := []map[string]any{
+			{
+				"tag":       "markdown",
+				"content":   "**<font color='violet'>主要贡献者</font>**",
+				"text_size": "normal_v2",
+				"margin":    "0px 0px 8px 0px",
+				"icon": map[string]any{
+					"tag":   "standard_icon",
+					"token": "group_outlined",
+					"color": "grey",
+				},
+			},
+		}
+
+		// Add each member
+		for _, m := range repo.Members {
+			// Build achievements string
+			var achievements strings.Builder
+			for _, a := range m.Achievements {
+				achievements.WriteString("- ")
+				achievements.WriteString(a)
+				achievements.WriteString("\n")
+			}
+			achievementsStr := strings.TrimSpace(achievements.String())
+			if achievementsStr == "" {
+				achievementsStr = "- 无详细记录"
+			}
+
+			// Person column (with or without person_list)
+			personColumn := map[string]any{
+				"tag":            "column",
+				"width":          "weighted",
+				"weight":         1,
+				"vertical_align": "top",
+				"elements":       []map[string]any{},
+			}
+
+			if m.LarkUserID != "" {
+				// Use person_list component if we have Lark user ID
+				personColumn["elements"] = []map[string]any{
+					{
+						"tag":  "person_list",
+						"size": "small",
+						"persons": []map[string]any{
+							{"id": m.LarkUserID},
+						},
+						"show_avatar": true,
+						"show_name":   true,
+					},
+				}
+			} else {
+				// Fallback to markdown with name
+				personColumn["elements"] = []map[string]any{
+					{
+						"tag":       "markdown",
+						"content":   "**" + m.Name + "**",
+						"text_size": "normal_v2",
+					},
+				}
+			}
+
+			// Achievements column
+			achievementsColumn := map[string]any{
+				"tag":            "column",
+				"width":          "weighted",
+				"weight":         5,
+				"vertical_align": "top",
+				"elements": []map[string]any{
+					{
+						"tag":       "markdown",
+						"content":   achievementsStr,
+						"text_size": "normal_v2",
+					},
+					{"tag": "hr", "margin": "0px 0px 0px 0px"},
+				},
+			}
+
+			memberElements = append(memberElements, map[string]any{
+				"tag":                "column_set",
+				"horizontal_spacing": "8px",
+				"columns":            []map[string]any{personColumn, achievementsColumn},
+			})
+		}
+
+		// Add impact if present
+		if repo.Impact != "" {
+			memberElements = append(memberElements,
+				map[string]any{
+					"tag":       "markdown",
+					"content":   "**<font color='violet'>影响与价值</font>**",
+					"text_size": "normal_v2",
+					"margin":    "8px 0px 0px 0px",
+					"icon": map[string]any{
+						"tag":   "standard_icon",
+						"token": "safe-settings_outlined",
+						"color": "grey",
+					},
+				},
+				map[string]any{
+					"tag":       "markdown",
+					"content":   repo.Impact,
+					"text_size": "normal_v2",
+				},
+			)
+		}
+
+		// Wrap in column_set
+		elements = append(elements, map[string]any{
+			"tag":        "column_set",
+			"flex_mode":  "stretch",
+			"horizontal_spacing": "12px",
+			"columns": []map[string]any{
+				{
+					"tag":              "column",
+					"width":            "weighted",
+					"weight":           2,
+					"vertical_spacing": "4px",
+					"elements":         memberElements,
+				},
+			},
+		})
+
+		elements = append(elements, map[string]any{"tag": "hr", "margin": "12px 0px 0px 0px"})
 	}
 
 	return map[string]any{
 		"schema": "2.0",
 		"config": map[string]any{
-			"wide_screen_mode": true,
+			"update_multi": true,
+			"style": map[string]any{
+				"text_size": map[string]any{
+					"normal_v2": map[string]any{
+						"default": "normal",
+						"pc":      "normal",
+						"mobile":  "heading",
+					},
+				},
+			},
 		},
 		"header": map[string]any{
 			"title": map[string]any{
 				"tag":     "plain_text",
-				"content": titlePrefix + "（" + r.Meta.Label + "）",
+				"content": titlePrefix,
 			},
-			"template": headerColor,
+			"text_tag_list": []map[string]any{
+				{
+					"tag":   "text_tag",
+					"text":  map[string]any{"tag": "plain_text", "content": startDate},
+					"color": "blue",
+				},
+				{
+					"tag":   "text_tag",
+					"text":  map[string]any{"tag": "plain_text", "content": "-"},
+					"color": "blue",
+				},
+				{
+					"tag":   "text_tag",
+					"text":  map[string]any{"tag": "plain_text", "content": endDate},
+					"color": "blue",
+				},
+			},
+			"template": "blue",
+			"icon": map[string]any{
+				"tag":   "standard_icon",
+				"token": "code_outlined",
+			},
+			"padding": "12px 12px 12px 12px",
 		},
 		"body": map[string]any{
-			"elements": []map[string]any{
-				{
-					"tag":     "markdown",
-					"content": "**时间范围**：" + r.Meta.TimeRange.Start + " 至 " + r.Meta.TimeRange.End,
-				},
-				{
-					"tag":     "markdown",
-					"content": "**概览**\n" + r.Summary,
-				},
-				{
-					"tag": "hr",
-				},
-				{
-					"tag":     "markdown",
-					"content": "**亮点**\n" + highlightsStr,
-				},
-				{
-					"tag": "hr",
-				},
-				{
-					"tag":     "markdown",
-					"content": "**工作汇总**\n" + membersStr,
-				},
-			},
+			"direction":          "vertical",
+			"horizontal_spacing": "8px",
+			"vertical_spacing":   "8px",
+			"padding":            "8px 12px 8px 12px",
+			"elements":           elements,
 		},
 	}
 }
