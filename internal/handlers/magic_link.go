@@ -104,7 +104,20 @@ func (h *Handler) MagicLinkSend(c echo.Context) error {
 	// Build magic link URL
 	baseURL := h.cfg.FrontendBaseURL
 	if baseURL == "" {
-		baseURL = "http://localhost:3000"
+		// Try to infer from request headers (X-Forwarded-Host or Host)
+		scheme := "https"
+		if fwdProto := c.Request().Header.Get("X-Forwarded-Proto"); fwdProto != "" {
+			scheme = fwdProto
+		}
+		host := c.Request().Header.Get("X-Forwarded-Host")
+		if host == "" {
+			host = c.Request().Host
+		}
+		if host != "" {
+			baseURL = scheme + "://" + host
+		} else {
+			baseURL = "http://localhost:3000"
+		}
 	}
 	magicLink := strings.TrimRight(baseURL, "/") + "/api/auth/magic-link/verify?token=" + token
 
