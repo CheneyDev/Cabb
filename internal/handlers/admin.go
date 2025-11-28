@@ -292,8 +292,9 @@ func (h *Handler) AdminUsers(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "invalid_json", "解析失败", nil)
 	}
 	for _, m := range req.Mappings {
-		if m.CNBUserID == "" || m.PlaneUserID == "" {
-			return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 cnb_user_id/plane_user_id", nil)
+		// At least one identifier field is required
+		if m.CNBUserID == "" && m.PlaneUserID == "" && m.GitUsername == "" {
+			return writeError(c, http.StatusBadRequest, "missing_fields", "至少需要填写 cnb_user_id、plane_user_id 或 git_username 其中之一", nil)
 		}
 		if err := h.db.UpsertUserMapping(c.Request().Context(), m.PlaneUserID, m.CNBUserID, m.LarkUserID, m.GitUsername); err != nil {
 			return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})

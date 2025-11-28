@@ -552,16 +552,42 @@ func (d *DB) UpsertUserMapping(ctx context.Context, planeUserID, cnbUserID, lark
 	if d == nil || d.SQL == nil {
 		return sql.ErrConnDone
 	}
-	const upd = `UPDATE user_mappings SET plane_user_id=$1::uuid, lark_user_id=$4, git_username=COALESCE($3, git_username), updated_at=now() WHERE cnb_user_id=$2`
-	res, err := d.SQL.ExecContext(ctx, upd, planeUserID, cnbUserID, nullIfEmpty(gitUsername), nullIfEmpty(larkUserID))
-	if err != nil {
-		return err
+	// Try update by cnb_user_id first (if provided)
+	if cnbUserID != "" {
+		const upd = `UPDATE user_mappings SET plane_user_id=$1::uuid, lark_user_id=$4, git_username=COALESCE($3, git_username), updated_at=now() WHERE cnb_user_id=$2`
+		res, err := d.SQL.ExecContext(ctx, upd, nullIfEmpty(planeUserID), cnbUserID, nullIfEmpty(gitUsername), nullIfEmpty(larkUserID))
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			return nil
+		}
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
-		return nil
+	// Try update by plane_user_id (if provided and cnb update didn't match)
+	if planeUserID != "" {
+		const upd = `UPDATE user_mappings SET cnb_user_id=COALESCE($2, cnb_user_id), lark_user_id=$4, git_username=COALESCE($3, git_username), updated_at=now() WHERE plane_user_id=$1::uuid`
+		res, err := d.SQL.ExecContext(ctx, upd, planeUserID, nullIfEmpty(cnbUserID), nullIfEmpty(gitUsername), nullIfEmpty(larkUserID))
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			return nil
+		}
 	}
+	// Try update by git_username (if provided and other updates didn't match)
+	if gitUsername != "" {
+		const upd = `UPDATE user_mappings SET plane_user_id=COALESCE($1::uuid, plane_user_id), cnb_user_id=COALESCE($2, cnb_user_id), lark_user_id=$4, updated_at=now() WHERE git_username=$3`
+		res, err := d.SQL.ExecContext(ctx, upd, nullIfEmpty(planeUserID), nullIfEmpty(cnbUserID), gitUsername, nullIfEmpty(larkUserID))
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			return nil
+		}
+	}
+	// Insert new record
 	const ins = `INSERT INTO user_mappings (plane_user_id, cnb_user_id, git_username, lark_user_id, created_at, updated_at) VALUES ($1::uuid,$2,$3,$4,now(),now())`
-	_, err = d.SQL.ExecContext(ctx, ins, planeUserID, cnbUserID, nullIfEmpty(gitUsername), nullIfEmpty(larkUserID))
+	_, err := d.SQL.ExecContext(ctx, ins, nullIfEmpty(planeUserID), nullIfEmpty(cnbUserID), nullIfEmpty(gitUsername), nullIfEmpty(larkUserID))
 	return err
 }
 
