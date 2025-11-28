@@ -488,7 +488,10 @@ type User struct {
 	Nickname    string `json:"nickname"`
 	Email       string `json:"email"`
 	Avatar      struct {
-		Avatar72 string `json:"avatar_72"`
+		Avatar72     string `json:"avatar_72"`
+		Avatar240    string `json:"avatar_240"`
+		Avatar640    string `json:"avatar_640"`
+		AvatarOrigin string `json:"avatar_origin"`
 	} `json:"avatar"`
 }
 

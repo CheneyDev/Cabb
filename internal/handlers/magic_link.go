@@ -46,8 +46,15 @@ func (h *Handler) PublicLarkUsers(c echo.Context) error {
 
 	var result []MaskedLarkUser
 	for _, u := range allUsers {
-		avatar := ""
-		if u.Avatar.Avatar72 != "" {
+		// Prefer larger avatar: origin > 640 > 240 > 72
+		avatar := u.Avatar.AvatarOrigin
+		if avatar == "" {
+			avatar = u.Avatar.Avatar640
+		}
+		if avatar == "" {
+			avatar = u.Avatar.Avatar240
+		}
+		if avatar == "" {
 			avatar = u.Avatar.Avatar72
 		}
 		result = append(result, MaskedLarkUser{
