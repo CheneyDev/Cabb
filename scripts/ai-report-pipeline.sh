@@ -723,7 +723,7 @@ try_opencode() {
   prompt+="- meta.label: \"${label}\"\n"
   prompt+="- meta.time_range: 使用 \"${start_ts}\" 至 \"${end_ts}\"，timezone 为 \"${TZ}\"\n"
   prompt+="- summary: 概括所有仓库的整体进展\n"
-  prompt+="- highlights: 提炼 3-5 个重要亮点，用 [repo-slug] 前缀标注来源\n"
+  prompt+="- highlights: 提炼 3-5 个重要亮点，用 [display_name] 前缀标注来源（如 [Cabb 前端]）\n"
   prompt+="- repos: 每个仓库包含 slug、display_name、commit_count 和 members 数组\n"
   prompt+="- repos[].members: 该仓库下的贡献者列表\n\n"
   prompt+="要求：\n"
