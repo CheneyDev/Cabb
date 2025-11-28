@@ -411,24 +411,8 @@ func buildReportCard(r ReportJSON) map[string]any {
 				"tag":     "plain_text",
 				"content": "",
 			},
-			"text_tag_list": []map[string]any{
-				{
-					"tag":   "text_tag",
-					"text":  map[string]any{"tag": "plain_text", "content": startDate},
-					"color": "blue",
-				},
-				{
-					"tag":   "text_tag",
-					"text":  map[string]any{"tag": "plain_text", "content": "-"},
-					"color": "blue",
-				},
-				{
-					"tag":   "text_tag",
-					"text":  map[string]any{"tag": "plain_text", "content": endDate},
-					"color": "blue",
-				},
-			},
-			"template": "blue",
+			"text_tag_list": buildDateTags(r.Meta.Type, startDate, endDate),
+			"template":      "blue",
 			"icon": map[string]any{
 				"tag":   "standard_icon",
 				"token": "code_outlined",
@@ -443,6 +427,38 @@ func buildReportCard(r ReportJSON) map[string]any {
 			"vertical_align":     "top",
 			"padding":            "8px 12px 8px 12px",
 			"elements":           elements,
+		},
+	}
+}
+
+// buildDateTags returns date tags for the card header based on report type
+func buildDateTags(reportType, startDate, endDate string) []map[string]any {
+	if reportType == "daily" {
+		// Daily report: single date tag
+		return []map[string]any{
+			{
+				"tag":   "text_tag",
+				"text":  map[string]any{"tag": "plain_text", "content": startDate},
+				"color": "blue",
+			},
+		}
+	}
+	// Weekly/Monthly report: date range tags
+	return []map[string]any{
+		{
+			"tag":   "text_tag",
+			"text":  map[string]any{"tag": "plain_text", "content": startDate},
+			"color": "blue",
+		},
+		{
+			"tag":   "text_tag",
+			"text":  map[string]any{"tag": "plain_text", "content": "-"},
+			"color": "blue",
+		},
+		{
+			"tag":   "text_tag",
+			"text":  map[string]any{"tag": "plain_text", "content": endDate},
+			"color": "blue",
 		},
 	}
 }

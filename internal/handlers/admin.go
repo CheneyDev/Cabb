@@ -268,7 +268,7 @@ func (h *Handler) AdminUsersList(c echo.Context) error {
 			"plane_user_id": m.PlaneUserID,
 			"cnb_user_id":   nullString(m.CNBUserID),
 			"lark_user_id":  nullString(m.LarkUserID),
-			"display_name":  nullString(m.DisplayName),
+			"git_username":  nullString(m.GitUsername),
 			"created_at":    m.CreatedAt.UTC().Format(time.RFC3339),
 			"updated_at":    m.UpdatedAt.UTC().Format(time.RFC3339),
 		})
@@ -285,7 +285,7 @@ func (h *Handler) AdminUsers(c echo.Context) error {
 			CNBUserID   string `json:"cnb_user_id"`
 			PlaneUserID string `json:"plane_user_id"`
 			LarkUserID  string `json:"lark_user_id"`
-			DisplayName string `json:"display_name"`
+			GitUsername string `json:"git_username"`
 		} `json:"mappings"`
 	}
 	if err := c.Bind(&req); err != nil {
@@ -295,7 +295,7 @@ func (h *Handler) AdminUsers(c echo.Context) error {
 		if m.CNBUserID == "" || m.PlaneUserID == "" {
 			return writeError(c, http.StatusBadRequest, "missing_fields", "缺少 cnb_user_id/plane_user_id", nil)
 		}
-		if err := h.db.UpsertUserMapping(c.Request().Context(), m.PlaneUserID, m.CNBUserID, m.LarkUserID, m.DisplayName); err != nil {
+		if err := h.db.UpsertUserMapping(c.Request().Context(), m.PlaneUserID, m.CNBUserID, m.LarkUserID, m.GitUsername); err != nil {
 			return writeError(c, http.StatusBadGateway, "save_failed", "保存失败", map[string]any{"error": err.Error()})
 		}
 	}

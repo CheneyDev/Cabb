@@ -559,16 +559,7 @@ func (h *Handler) handlePlaneIssueComment(env planeWebhookEnvelope, deliveryID s
         txt := commentHTML
         txt = strings.ReplaceAll(txt, "<br>", "\n")
         txt = stripTags(txt)
-        // Prefer mapped display name; fallback to Plane actor display name
-        actorName := ""
-        if id := strings.TrimSpace(env.Activity.Actor.ID); id != "" && hHasDB(h) {
-            if name, err := h.db.FindDisplayNameByPlaneUserID(ctx, id); err == nil && strings.TrimSpace(name) != "" {
-                actorName = strings.TrimSpace(name)
-            }
-        }
-        if actorName == "" {
-            actorName = strings.TrimSpace(env.Activity.Actor.DisplayName)
-        }
+        actorName := strings.TrimSpace(env.Activity.Actor.DisplayName)
         if actorName == "" {
             actorName = "Plane 用户"
         }
