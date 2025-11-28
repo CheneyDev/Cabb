@@ -27,6 +27,7 @@ type ReportJSON struct {
 		DisplayName string `json:"display_name"`
 		Brief       string `json:"brief"`
 		CommitCount int    `json:"commit_count"`
+		HasCommits  bool   `json:"has_commits"`
 		Impact      string `json:"impact"`
 		Members     []struct {
 			Name         string   `json:"name"`
@@ -104,17 +105,21 @@ func StartReportScheduler(cfg config.Config, db *store.DB) {
 
 
 func buildReportCard(r ReportJSON) map[string]any {
-	// Determine title based on type
-	var titlePrefix string
+	// Determine title and section label based on report type
+	var titlePrefix, highlightsLabel string
 	switch r.Meta.Type {
 	case "daily":
 		titlePrefix = "项目开发日报"
+		highlightsLabel = "今日要点"
 	case "weekly":
 		titlePrefix = "项目开发周报"
+		highlightsLabel = "本周亮点"
 	case "monthly":
 		titlePrefix = "项目开发月报"
+		highlightsLabel = "本月里程碑"
 	default:
 		titlePrefix = "项目开发汇报"
+		highlightsLabel = "关键进展"
 	}
 
 	// Parse time range for header tags
@@ -127,22 +132,46 @@ func buildReportCard(r ReportJSON) map[string]any {
 		endDate = endDate[:10]
 	}
 
-	// Build brief summary for each repo
-	var briefSummary strings.Builder
+	// Filter repos with commits only
+	var activeRepos []struct {
+		Slug        string `json:"slug"`
+		DisplayName string `json:"display_name"`
+		Brief       string `json:"brief"`
+		CommitCount int    `json:"commit_count"`
+		HasCommits  bool   `json:"has_commits"`
+		Impact      string `json:"impact"`
+		Members     []struct {
+			Name         string   `json:"name"`
+			LarkUserID   string   `json:"lark_user_id,omitempty"`
+			Commits      int      `json:"commits"`
+			Achievements []string `json:"achievements"`
+		} `json:"members"`
+	}
 	for _, repo := range r.Repos {
+		// Include repo only if it has commits (check HasCommits flag, CommitCount, or Members)
+		if repo.HasCommits || repo.CommitCount > 0 || len(repo.Members) > 0 {
+			activeRepos = append(activeRepos, repo)
+		}
+	}
+
+	// Build brief summary for active repos only
+	var briefSummary strings.Builder
+	for _, repo := range activeRepos {
 		briefSummary.WriteString("• **")
 		briefSummary.WriteString(repo.DisplayName)
-		briefSummary.WriteString("** ：")
+		briefSummary.WriteString("**：")
 		if repo.Brief != "" {
 			briefSummary.WriteString(repo.Brief)
-		} else if len(repo.Members) == 0 {
-			briefSummary.WriteString("无提交记录")
 		} else {
 			briefSummary.WriteString("有 ")
-			briefSummary.WriteString(strings.TrimSpace(strings.Split(strings.TrimPrefix(repo.Slug, "/"), "/")[len(strings.Split(repo.Slug, "/"))-1]))
+			briefSummary.WriteString(intToStr(repo.CommitCount))
 			briefSummary.WriteString(" 次提交")
 		}
 		briefSummary.WriteString("\n")
+	}
+	briefStr := strings.TrimSpace(briefSummary.String())
+	if briefStr == "" {
+		briefStr = "本周期内无提交记录"
 	}
 
 	// Build highlights content
@@ -160,18 +189,25 @@ func buildReportCard(r ReportJSON) map[string]any {
 	// Build body elements
 	elements := []map[string]any{
 		{
-			"tag":     "markdown",
-			"content": "### <font color='violet'>开发进展</font>",
+			"tag":       "markdown",
+			"content":   "### <font color='violet'>开发进展</font>",
+			"text_align": "left",
+			"text_size": "normal",
+			"margin":    "0px 0px 0px 0px",
 		},
 		{
 			"tag":       "markdown",
-			"content":   strings.TrimSpace(briefSummary.String()),
+			"content":   briefStr,
+			"text_align": "left",
 			"text_size": "normal_v2",
+			"margin":    "0px 0px 0px 0px",
 		},
 		{
-			"tag":        "column_set",
-			"flex_mode":  "stretch",
+			"tag":                "column_set",
+			"flex_mode":          "stretch",
 			"horizontal_spacing": "8px",
+			"horizontal_align":   "left",
+			"margin":             "0px 0px 0px 0px",
 			"columns": []map[string]any{
 				{
 					"tag":              "column",
@@ -179,11 +215,17 @@ func buildReportCard(r ReportJSON) map[string]any {
 					"weight":           1,
 					"background_style": "blue-50",
 					"padding":          "12px 12px 12px 12px",
+					"direction":        "vertical",
+					"horizontal_spacing": "8px",
 					"vertical_spacing": "4px",
+					"horizontal_align": "left",
+					"vertical_align":   "top",
+					"margin":           "0px 0px 0px 0px",
 					"elements": []map[string]any{
 						{
 							"tag":       "markdown",
-							"content":   "**<font color='blue'>关键进展</font>**",
+							"content":   "**<font color='blue'>" + highlightsLabel + "</font>**",
+							"text_align": "left",
 							"text_size": "normal_v2",
 							"icon": map[string]any{
 								"tag":   "standard_icon",
@@ -202,12 +244,13 @@ func buildReportCard(r ReportJSON) map[string]any {
 		{"tag": "hr", "margin": "12px 0px 0px 0px"},
 	}
 
-	// Add repo sections
-	for _, repo := range r.Repos {
+	// Add repo sections (only for repos with commits)
+	for _, repo := range activeRepos {
 		// Repo title
 		elements = append(elements, map[string]any{
 			"tag":     "markdown",
 			"content": "### <font color='violet'>" + repo.DisplayName + "</font>",
+			"margin":  "0px 0px 0px 0px",
 		})
 
 		// Build member elements with person_list
@@ -215,6 +258,7 @@ func buildReportCard(r ReportJSON) map[string]any {
 			{
 				"tag":       "markdown",
 				"content":   "**<font color='violet'>主要贡献者</font>**",
+				"text_align": "left",
 				"text_size": "normal_v2",
 				"margin":    "0px 0px 8px 0px",
 				"icon": map[string]any{
@@ -240,30 +284,22 @@ func buildReportCard(r ReportJSON) map[string]any {
 			}
 
 			// Person column (with or without person_list)
-			personColumn := map[string]any{
-				"tag":            "column",
-				"width":          "weighted",
-				"weight":         1,
-				"vertical_align": "top",
-				"elements":       []map[string]any{},
-			}
-
+			var personElements []map[string]any
 			if m.LarkUserID != "" {
-				// Use person_list component if we have Lark user ID
-				personColumn["elements"] = []map[string]any{
+				personElements = []map[string]any{
 					{
-						"tag":  "person_list",
-						"size": "small",
+						"tag":         "person_list",
+						"size":        "small",
+						"show_avatar": true,
+						"show_name":   true,
+						"margin":      "0px 0px 0px 0px",
 						"persons": []map[string]any{
 							{"id": m.LarkUserID},
 						},
-						"show_avatar": true,
-						"show_name":   true,
 					},
 				}
 			} else {
-				// Fallback to markdown with name
-				personColumn["elements"] = []map[string]any{
+				personElements = []map[string]any{
 					{
 						"tag":       "markdown",
 						"content":   "**" + m.Name + "**",
@@ -272,26 +308,35 @@ func buildReportCard(r ReportJSON) map[string]any {
 				}
 			}
 
-			// Achievements column
-			achievementsColumn := map[string]any{
-				"tag":            "column",
-				"width":          "weighted",
-				"weight":         5,
-				"vertical_align": "top",
-				"elements": []map[string]any{
-					{
-						"tag":       "markdown",
-						"content":   achievementsStr,
-						"text_size": "normal_v2",
-					},
-					{"tag": "hr", "margin": "0px 0px 0px 0px"},
-				},
-			}
-
 			memberElements = append(memberElements, map[string]any{
 				"tag":                "column_set",
 				"horizontal_spacing": "8px",
-				"columns":            []map[string]any{personColumn, achievementsColumn},
+				"horizontal_align":   "left",
+				"margin":             "0px 0px 0px 0px",
+				"columns": []map[string]any{
+					{
+						"tag":            "column",
+						"width":          "weighted",
+						"weight":         1,
+						"vertical_align": "top",
+						"elements":       personElements,
+					},
+					{
+						"tag":            "column",
+						"width":          "weighted",
+						"weight":         5,
+						"vertical_align": "top",
+						"elements": []map[string]any{
+							{
+								"tag":       "markdown",
+								"content":   achievementsStr,
+								"text_align": "left",
+								"text_size": "normal_v2",
+							},
+							{"tag": "hr", "margin": "0px 0px 0px 0px"},
+						},
+					},
+				},
 			})
 		}
 
@@ -301,6 +346,7 @@ func buildReportCard(r ReportJSON) map[string]any {
 				map[string]any{
 					"tag":       "markdown",
 					"content":   "**<font color='violet'>影响与价值</font>**",
+					"text_align": "left",
 					"text_size": "normal_v2",
 					"margin":    "8px 0px 0px 0px",
 					"icon": map[string]any{
@@ -312,22 +358,28 @@ func buildReportCard(r ReportJSON) map[string]any {
 				map[string]any{
 					"tag":       "markdown",
 					"content":   repo.Impact,
+					"text_align": "left",
 					"text_size": "normal_v2",
+					"margin":    "0px 0px 0px 0px",
 				},
 			)
 		}
 
 		// Wrap in column_set
 		elements = append(elements, map[string]any{
-			"tag":        "column_set",
-			"flex_mode":  "stretch",
+			"tag":                "column_set",
+			"flex_mode":          "stretch",
 			"horizontal_spacing": "12px",
+			"horizontal_align":   "left",
+			"margin":             "0px 0px 0px 0px",
 			"columns": []map[string]any{
 				{
 					"tag":              "column",
 					"width":            "weighted",
 					"weight":           2,
 					"vertical_spacing": "4px",
+					"horizontal_align": "left",
+					"vertical_align":   "top",
 					"elements":         memberElements,
 				},
 			},
@@ -354,6 +406,10 @@ func buildReportCard(r ReportJSON) map[string]any {
 			"title": map[string]any{
 				"tag":     "plain_text",
 				"content": titlePrefix,
+			},
+			"subtitle": map[string]any{
+				"tag":     "plain_text",
+				"content": "",
 			},
 			"text_tag_list": []map[string]any{
 				{
@@ -383,8 +439,26 @@ func buildReportCard(r ReportJSON) map[string]any {
 			"direction":          "vertical",
 			"horizontal_spacing": "8px",
 			"vertical_spacing":   "8px",
+			"horizontal_align":   "left",
+			"vertical_align":     "top",
 			"padding":            "8px 12px 8px 12px",
 			"elements":           elements,
 		},
 	}
+}
+
+// intToStr converts int to string without importing strconv
+func intToStr(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	if n < 0 {
+		return "-" + intToStr(-n)
+	}
+	var digits []byte
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
 }

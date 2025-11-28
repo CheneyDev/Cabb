@@ -20,6 +20,7 @@
       "display_name": "后端服务",
       "brief": "完成了用户系统重构和数据库优化",
       "commit_count": 8,
+      "has_commits": true,
       "impact": "提升系统安全性和性能，支持第三方登录",
       "members": [
         {
@@ -45,6 +46,7 @@
       "display_name": "前端项目",
       "brief": "优化了首页性能和用户中心页面",
       "commit_count": 5,
+      "has_commits": true,
       "impact": "首页加载时间从 3s 降至 1.8s，提升用户体验",
       "members": [
         {
@@ -63,6 +65,15 @@
           ]
         }
       ]
+    },
+    {
+      "slug": "team/docs",
+      "display_name": "文档项目",
+      "brief": "",
+      "commit_count": 0,
+      "has_commits": false,
+      "impact": "",
+      "members": []
     }
   ]
 }
