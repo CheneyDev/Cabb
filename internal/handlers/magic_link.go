@@ -268,6 +268,13 @@ func buildMagicLinkCard(name, link string, expiresAt time.Time) map[string]any {
 					"tag":     "markdown",
 					"content": "⏰ 链接有效期至 **" + expiresStr + "**，请尽快使用。\n\n如非本人操作，请忽略此消息。",
 				},
+				{
+					"tag": "hr",
+				},
+				{
+					"tag":     "markdown",
+					"content": "按钮无法点击？复制以下链接到浏览器打开：\n" + link,
+				},
 			},
 		},
 	}
