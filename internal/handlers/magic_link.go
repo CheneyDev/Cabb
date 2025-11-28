@@ -236,16 +236,27 @@ func buildMagicLinkCard(name, link string, expiresAt time.Time) map[string]any {
 					"content": "你好 **" + name + "**，\n\n点击下方按钮登录 Cabb 后台管理系统。",
 				},
 				{
-					"tag": "action",
-					"actions": []map[string]any{
+					"tag":            "column_set",
+					"flex_mode":      "none",
+					"background_style": "default",
+					"columns": []map[string]any{
 						{
-							"tag": "button",
-							"text": map[string]any{
-								"tag":     "plain_text",
-								"content": "立即登录",
+							"tag":    "column",
+							"width":  "weighted",
+							"weight": 1,
+							"elements": []map[string]any{
+								{
+									"tag": "button",
+									"text": map[string]any{
+										"tag":     "plain_text",
+										"content": "立即登录",
+									},
+									"type": "primary",
+									"multi_url": map[string]any{
+										"url": link,
+									},
+								},
 							},
-							"type": "primary",
-							"url":  link,
 						},
 					},
 				},
