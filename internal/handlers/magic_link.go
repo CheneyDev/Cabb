@@ -288,8 +288,8 @@ func buildMagicLinkCard(name, link string, expiresAt time.Time) map[string]any {
 }
 
 // maskName masks a name for privacy.
-// Chinese: 王宝哥 -> 王XX
-// English: Cheney -> ChXXXX
+// Chinese: 王宝哥 -> XX哥 (keep last character)
+// English: Cheney -> XXXXey (keep last 2 characters)
 func maskName(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -303,20 +303,20 @@ func maskName(name string) string {
 
 	// Check if first character is Chinese
 	if isChinese(runes[0]) {
-		// Chinese name: keep first character
+		// Chinese name: keep last character
 		if len(runes) == 1 {
-			return string(runes[0]) + "X"
+			return "X" + string(runes[0])
 		}
-		return string(runes[0]) + strings.Repeat("X", min(len(runes)-1, 2))
+		return strings.Repeat("X", min(len(runes)-1, 2)) + string(runes[len(runes)-1])
 	}
 
-	// English/other name: keep first 2 characters
+	// English/other name: keep last 2 characters
 	if len(runes) <= 2 {
-		return string(runes[0]) + "X"
+		return "X" + string(runes[len(runes)-1])
 	}
 	keepLen := 2
 	maskLen := min(len(runes)-keepLen, 4)
-	return string(runes[:keepLen]) + strings.Repeat("X", maskLen)
+	return strings.Repeat("X", maskLen) + string(runes[len(runes)-keepLen:])
 }
 
 func isChinese(r rune) bool {
