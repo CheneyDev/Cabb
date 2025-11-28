@@ -1,14 +1,19 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
 
 	"cabb/internal/lark"
+	"cabb/internal/store"
+	"cabb/pkg/config"
 
 	"github.com/labstack/echo/v4"
 )
@@ -23,39 +28,43 @@ type MaskedLarkUser struct {
 
 // PublicLarkUsers returns a list of Lark users with masked names for login page.
 // GET /api/auth/lark-users (no auth required)
+// Reads from cache for fast response.
 func (h *Handler) PublicLarkUsers(c echo.Context) error {
-	if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
-		return writeError(c, http.StatusServiceUnavailable, "lark_not_configured", "飞书未配置", nil)
-	}
-
-	client := &lark.Client{
-		AppID:     h.cfg.LarkAppID,
-		AppSecret: h.cfg.LarkAppSecret,
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
 	}
 
 	ctx := c.Request().Context()
-	token, _, err := client.TenantAccessToken(ctx)
-	if err != nil {
-		return writeError(c, http.StatusInternalServerError, "lark_token_error", "获取飞书凭证失败", nil)
+
+	// Read from cache
+	cached, err := h.db.ListLarkUsersCache(ctx)
+	if err != nil && err != sql.ErrNoRows {
+		return writeError(c, http.StatusInternalServerError, "db_error", "读取缓存失败", nil)
 	}
 
-	allUsers, err := client.FindAllUsers(ctx, token)
-	if err != nil {
-		return writeError(c, http.StatusInternalServerError, "lark_api_error", "获取用户列表失败", nil)
+	// If cache is empty, try to refresh (async, return empty for now or wait briefly)
+	if len(cached) == 0 {
+		// Try a quick refresh if Lark is configured
+		if h.cfg.LarkAppID != "" && h.cfg.LarkAppSecret != "" {
+			go RefreshLarkUsersCache(h.cfg, h.db)
+		}
+		return c.JSON(http.StatusOK, map[string]any{
+			"items": []MaskedLarkUser{},
+			"total": 0,
+		})
 	}
 
 	var result []MaskedLarkUser
-	for _, u := range allUsers {
-		// Prefer larger avatar: origin > 640 > 240 > 72
-		avatar := u.Avatar.AvatarOrigin
+	for _, u := range cached {
+		avatar := u.AvatarOrigin.String
 		if avatar == "" {
-			avatar = u.Avatar.Avatar640
+			avatar = u.Avatar640.String
 		}
 		if avatar == "" {
-			avatar = u.Avatar.Avatar240
+			avatar = u.Avatar240.String
 		}
 		if avatar == "" {
-			avatar = u.Avatar.Avatar72
+			avatar = u.Avatar72.String
 		}
 		result = append(result, MaskedLarkUser{
 			OpenID:     u.OpenID,
@@ -69,6 +78,125 @@ func (h *Handler) PublicLarkUsers(c echo.Context) error {
 		"items": result,
 		"total": len(result),
 	})
+}
+
+// AdminRefreshLarkUsersCache manually refreshes the Lark users cache.
+// POST /admin/lark/users/refresh
+func (h *Handler) AdminRefreshLarkUsersCache(c echo.Context) error {
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+	if h.cfg.LarkAppID == "" || h.cfg.LarkAppSecret == "" {
+		return writeError(c, http.StatusServiceUnavailable, "lark_not_configured", "飞书未配置", nil)
+	}
+
+	count, err := RefreshLarkUsersCache(h.cfg, h.db)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "refresh_failed", "刷新失败", map[string]any{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"status":  "ok",
+		"message": "刷新成功",
+		"count":   count,
+	})
+}
+
+// AdminLarkUsersCacheStatus returns the cache status.
+// GET /admin/lark/users/cache-status
+func (h *Handler) AdminLarkUsersCacheStatus(c echo.Context) error {
+	if !hHasDB(h) {
+		return writeError(c, http.StatusServiceUnavailable, "db_unavailable", "数据库未配置", nil)
+	}
+
+	ctx := c.Request().Context()
+	count, _ := h.db.GetLarkUsersCacheCount(ctx)
+	lastUpdated, _ := h.db.GetLarkUsersCacheLastUpdated(ctx)
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"count":        count,
+		"last_updated": lastUpdated,
+	})
+}
+
+// RefreshLarkUsersCache fetches all users from Lark and updates the cache.
+func RefreshLarkUsersCache(cfg config.Config, db *store.DB) (int, error) {
+	if cfg.LarkAppID == "" || cfg.LarkAppSecret == "" {
+		return 0, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	client := &lark.Client{
+		AppID:     cfg.LarkAppID,
+		AppSecret: cfg.LarkAppSecret,
+	}
+
+	token, _, err := client.TenantAccessToken(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	allUsers, err := client.FindAllUsers(ctx, token)
+	if err != nil {
+		return 0, err
+	}
+
+	// Sort by name for consistent ordering
+	sort.Slice(allUsers, func(i, j int) bool {
+		return strings.ToLower(allUsers[i].Name) < strings.ToLower(allUsers[j].Name)
+	})
+
+	// Convert to cache format
+	var cacheUsers []store.LarkUserCache
+	for i, u := range allUsers {
+		cacheUsers = append(cacheUsers, store.LarkUserCache{
+			OpenID:       u.OpenID,
+			Name:         u.Name,
+			EnName:       sql.NullString{String: u.EnName, Valid: u.EnName != ""},
+			AvatarOrigin: sql.NullString{String: u.Avatar.AvatarOrigin, Valid: u.Avatar.AvatarOrigin != ""},
+			Avatar640:    sql.NullString{String: u.Avatar.Avatar640, Valid: u.Avatar.Avatar640 != ""},
+			Avatar240:    sql.NullString{String: u.Avatar.Avatar240, Valid: u.Avatar.Avatar240 != ""},
+			Avatar72:     sql.NullString{String: u.Avatar.Avatar72, Valid: u.Avatar.Avatar72 != ""},
+			SortOrder:    i,
+		})
+	}
+
+	if err := db.RefreshLarkUsersCache(ctx, cacheUsers); err != nil {
+		return 0, err
+	}
+
+	return len(cacheUsers), nil
+}
+
+// StartLarkUsersCacheScheduler starts the daily refresh scheduler.
+func StartLarkUsersCacheScheduler(cfg config.Config, db *store.DB) {
+	if cfg.LarkAppID == "" || cfg.LarkAppSecret == "" {
+		return
+	}
+
+	go func() {
+		loc := time.Local
+		if tz := strings.TrimSpace(cfg.Timezone); tz != "" {
+			if l, err := time.LoadLocation(tz); err == nil {
+				loc = l
+			}
+		}
+
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			now := time.Now().In(loc)
+			hhmm := now.Format("15:04")
+
+			// Refresh at 03:00 every day
+			if hhmm == "03:00" {
+				RefreshLarkUsersCache(cfg, db)
+			}
+		}
+	}()
 }
 
 // MagicLinkSend sends a magic link to a Lark user.

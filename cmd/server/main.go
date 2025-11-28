@@ -62,6 +62,7 @@ func main() {
 	// Start background schedulers
 	handlers.StartCleanupScheduler(cfg, db)
 	handlers.StartReportScheduler(cfg, db)
+	handlers.StartLarkUsersCacheScheduler(cfg, db)
 
 	log.Printf("plane-integration %s listening on %s", version.Version, cfg.Address())
 	if err := e.StartServer(srv); err != nil {

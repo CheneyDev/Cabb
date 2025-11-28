@@ -99,6 +99,8 @@ func RegisterRoutes(e *echo.Echo, cfg config.Config, db *store.DB, broadcaster *
 	admin.GET("/cnb/members", h.AdminCNBMembers)
 	admin.GET("/plane/members", h.AdminPlaneMembers)
 	admin.GET("/lark/users", h.AdminLarkUsers)
+	admin.POST("/lark/users/refresh", h.AdminRefreshLarkUsersCache)
+	admin.GET("/lark/users/cache-status", h.AdminLarkUsersCacheStatus)
 	admin.GET("/lark/departments", h.AdminLarkDepartments)
 	// Move logs stream out of admin group to handle auth manually (for query param support)
 	e.GET("/admin/logs/stream", h.ServeLogs)
