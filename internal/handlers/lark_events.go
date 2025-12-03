@@ -1032,7 +1032,7 @@ func buildLarkBotHelpCard(boundIssueMarkdown string, repoBranchMarkdown string) 
 			"margin": "0px 0px 0px 0px",
 		})
 	}
-	helpURL := "https://github.com/CheneyDev/Cabb#%E9%A3%9E%E4%B9%A6%E9%9B%86%E6%88%90"
+	helpURL := "https://nexseaai.feishu.cn/docx/X2rddD0HFosnIWxAnSvckLXkndh"
 	bodyElements = append(bodyElements, map[string]any{
 		"tag": "button",
 		"text": map[string]any{
