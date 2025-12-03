@@ -190,14 +190,32 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 		}
 	}
 
+	LogStructured("info", map[string]any{
+		"event":      "lark.event.received",
+		"event_type": env.Header.EventType,
+		"event_id":   env.Header.EventID,
+	})
+
 	switch strings.ToLower(env.Header.EventType) {
 	case "im.message.receive_v1":
 		var ev larkMessageEvent
 		if err := json.Unmarshal(env.Event, &ev); err != nil {
+			LogStructured("error", map[string]any{"event": "lark.message.parse_error", "error": err.Error()})
 			return c.NoContent(http.StatusBadRequest)
 		}
+		LogStructured("info", map[string]any{
+			"event":          "lark.message.parsed",
+			"chat_type":      ev.Message.ChatType,
+			"chat_id":        ev.Message.ChatID,
+			"message_type":   ev.Message.MessageType,
+			"content_raw":    ev.Message.Content,
+			"mentions_count": len(ev.Message.Mentions),
+			"root_id":        ev.Message.RootID,
+			"message_id":     ev.Message.MessageID,
+		})
 		// Only handle group for now
 		if strings.ToLower(ev.Message.ChatType) != "group" {
+			LogStructured("info", map[string]any{"event": "lark.message.skip", "reason": "not_group", "chat_type": ev.Message.ChatType})
 			return c.NoContent(http.StatusOK)
 		}
 		// Parse text
@@ -205,6 +223,7 @@ func (h *Handler) LarkEvents(c echo.Context) error {
 		_ = json.Unmarshal([]byte(ev.Message.Content), &txt)
 		text := strings.TrimSpace(txt.Text)
 		if text == "" {
+			LogStructured("info", map[string]any{"event": "lark.message.skip", "reason": "empty_text", "content_raw": ev.Message.Content})
 			return c.NoContent(http.StatusOK)
 		}
 		lower := strings.ToLower(text)
